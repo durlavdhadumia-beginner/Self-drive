@@ -39,9 +39,9 @@
             </div>
             <div class="bg-white shadow-sm rounded-4 px-4 py-3">
                 <div class="small text-uppercase text-muted fw-semibold">Trip summary</div>
-                <div class="fw-semibold">City: {{ city or detected_city or '—' }}</div>
-                <div class="text-muted">Start: {{ start_time or '—' }}</div>
-                <div class="text-muted">End: {{ end_time or '—' }}</div>
+                <div class="fw-semibold">City: {{ city or detected_city or '-' }}</div>
+                <div class="text-muted">Start: {{ start_time or '-' }}</div>
+                <div class="text-muted">End: {{ end_time or '-' }}</div>
             </div>
         </div>
 
@@ -131,7 +131,7 @@
                                 <div class="d-flex justify-content-between align-items-start mb-2">
                                     <div>
                                         <h3 class="h5 mb-1">{{ car.name }}</h3>
-                                        <div class="text-muted small"><i class="bi bi-geo-alt"></i> {{ car.city or detected_city or 'Nearby' }} · {{ car.distance_km }} km away</div>
+                                        <div class="text-muted small"><i class="bi bi-geo-alt"></i> {{ car.city or detected_city or 'Nearby' }} * {{ car.distance_km }} km away</div>
                                     </div>
                                     <span class="badge {{ 'bg-success' if car.status == 'Available' else 'bg-secondary' }}">{{ car.status }}</span>
                                 </div>
@@ -139,7 +139,7 @@
                                     <span class="rating"><i class="bi bi-star-fill"></i> {{ '%.1f'|format(car.rating or 4.5) }}</span>
                                     <span class="text-muted small">Hosted by {{ car.owner_username }}</span>
                                 </div>
-                                <p class="text-muted small mb-3">{{ car.description or 'Flexible cancellation · Sanitised & ready · Unlimited kms packages available' }}</p>
+                                <p class="text-muted small mb-3">{{ car.description or 'Flexible cancellation * Sanitised & ready * Unlimited kms packages available' }}</p>
                                 <div class="d-flex gap-3 text-muted small mb-4">
                                     <span><i class="bi bi-fuel-pump"></i> {{ car.fuel_type or 'Petrol' }}</span>
                                     <span><i class="bi bi-gear-wide-connected"></i> {{ car.transmission or 'Manual' }}</span>
@@ -150,13 +150,13 @@
                                         <div class="d-flex justify-content-between align-items-center">
                                             <div>
                                                 <div class="fw-semibold">?{{ pricing_info.total|round|int }} estimated</div>
-                                                <div class="text-muted small">{{ pricing_info.hours }} hrs · Base ?{{ pricing_info.base_amount|round }}{% if pricing_info.discount %} · Discount ?{{ pricing_info.discount|round }}{% endif %}</div>
+                                                <div class="text-muted small">{{ pricing_info.hours }} hrs * Base ?{{ pricing_info.base_amount|round }}{% if pricing_info.discount %} * Discount ?{{ pricing_info.discount|round }}{% endif %}</div>
                                             </div>
                                             <div class="text-muted small">From ?{{ (car.rate_per_hour * 4)|round|int }} / day</div>
                                         </div>
                                         <div class="mt-2 text-muted small">Suggested packs:
                                             {% for pack in pricing_info.packages %}
-                                                <span class="badge bg-success-subtle text-success fw-semibold">{{ pack.label }} · ?{{ pack.price|round|int }}</span>
+                                                <span class="badge bg-success-subtle text-success fw-semibold">{{ pack.label }} * ?{{ pack.price|round|int }}</span>
                                             {% endfor %}
                                         </div>
                                     </div>
@@ -295,7 +295,7 @@
                 const marker = L.marker([car.latitude, car.longitude]);
                 marker.bindPopup(`
                     <strong>${car.name}</strong><br>
-                    ${car.distance_km} km away · ${car.seats} seats<br>
+                    ${car.distance_km} km away * ${car.seats} seats<br>
                     ?${(car.rate_per_hour * 4).toFixed(0)} / day approx
                 `);
                 marker.addTo(carLayer);
@@ -310,7 +310,7 @@
         if (useLocationBtn && navigator.geolocation) {
             useLocationBtn.addEventListener('click', () => {
                 useLocationBtn.disabled = true;
-                useLocationBtn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Locating…';
+                useLocationBtn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Locating...';
                 navigator.geolocation.getCurrentPosition((position) => {
                     const { latitude, longitude } = position.coords;
                     focusOn(latitude, longitude);
