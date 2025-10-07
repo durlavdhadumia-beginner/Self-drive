@@ -1,0 +1,43 @@
+﻿{% extends "base.html" %}
+{% block title %}Create Account | DriveNow{% endblock %}
+{% block content %}
+<section class="py-5" style="background:linear-gradient(135deg, rgba(10,92,54,0.08), rgba(13,159,92,0.04));">
+    <div class="container">
+        <div class="row justify-content-center">
+            <div class="col-md-7 col-lg-6">
+                <div class="card card-zoom">
+                    <div class="card-body p-5">
+                        <h1 class="h3 fw-bold mb-3">Create your DriveNow account</h1>
+                        <p class="text-muted">Choose whether you want to rent cars, host your own, or both—just like Zoomcar's dual-role experience.</p>
+                        {% if error %}
+                            <div class="alert alert-danger" role="alert">{{ error }}</div>
+                        {% endif %}
+                        <form method="post" novalidate class="row g-3 mt-2">
+                            <div class="col-12">
+                                <label for="username" class="form-label">Username</label>
+                                <input type="text" class="form-control form-control-lg" id="username" name="username" required autofocus>
+                            </div>
+                            <div class="col-12">
+                                <label for="password" class="form-label">Password</label>
+                                <input type="password" class="form-control form-control-lg" id="password" name="password" required>
+                            </div>
+                            <div class="col-12">
+                                <label for="role" class="form-label">I am signing up as</label>
+                                <select class="form-select form-select-lg" id="role" name="role">
+                                    <option value="renter">Renter (book self-drive cars)</option>
+                                    <option value="owner">Host / owner (list my cars)</option>
+                                    <option value="both">Both renter and host</option>
+                                </select>
+                            </div>
+                            <div class="col-12 d-grid">
+                                <button type="submit" class="btn btn-success btn-lg">Create account</button>
+                            </div>
+                        </form>
+                        <p class="text-center text-muted mt-3 mb-0">Already with us? <a href="{{ url_for('login') }}">Sign in</a></p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+{% endblock %}

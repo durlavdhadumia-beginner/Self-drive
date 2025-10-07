@@ -1,0 +1,352 @@
+﻿{% extends "base.html" %}
+{% block title %}Find Cars | DriveNow{% endblock %}
+{% block head %}
+    {{ super() }}
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+          integrity="sha256-p4bM3Dprb8kJkIBlEYwH2Rn8B4QTFwPp2d9f7Hf0+4M=" crossorigin=""/>
+    <style>
+        #map {
+            height: 420px;
+            border-radius: 1rem;
+            overflow: hidden;
+            box-shadow: 0 25px 45px rgba(15, 118, 110, 0.12);
+        }
+        .leaflet-container {
+            font-family: "Inter", sans-serif;
+        }
+        .car-card {
+            border: none;
+            border-radius: 1.25rem;
+            overflow: hidden;
+            box-shadow: 0 20px 40px rgba(15, 118, 110, 0.08);
+        }
+        .car-card img {
+            height: 190px;
+            object-fit: cover;
+        }
+        .rating {
+            color: #facc15;
+        }
+    </style>
+{% endblock %}
+{% block content %}
+<section class="py-4">
+    <div class="container">
+        <div class="d-flex flex-column flex-lg-row justify-content-between align-items-start align-items-lg-center gap-3 mb-4">
+            <div>
+                <h1 class="h3 fw-bold mb-1">Select your pickup point</h1>
+                <p class="text-muted mb-0">Drag the pin or tap the map. We'll surface cars with real-time availability, similar to Zoomcar's quick booking experience.</p>
+            </div>
+            <div class="bg-white shadow-sm rounded-4 px-4 py-3">
+                <div class="small text-uppercase text-muted fw-semibold">Trip summary</div>
+                <div class="fw-semibold">City: {{ city or detected_city or '—' }}</div>
+                <div class="text-muted">Start: {{ start_time or '—' }}</div>
+                <div class="text-muted">End: {{ end_time or '—' }}</div>
+            </div>
+        </div>
+
+        {% if detected_city %}
+            <div class="alert alert-success" role="alert">
+                We detected <strong>{{ detected_city }}</strong> based on your map selection. Adjust if you prefer another city.
+            </div>
+        {% endif %}
+
+        <div class="card card-zoom mb-5">
+            <div class="card-body">
+                <form method="post" id="search-form" class="row g-3 align-items-end">
+                    <input type="hidden" name="city" value="{{ city or detected_city or '' }}">
+                    <input type="hidden" name="start_time" id="start-field" value="{{ start_time or '' }}">
+                    <input type="hidden" name="end_time" id="end-field" value="{{ end_time or '' }}">
+                    <input type="hidden" name="latitude" id="latitude-field" value="{{ latitude if latitude is not none else '' }}">
+                    <input type="hidden" name="longitude" id="longitude-field" value="{{ longitude if longitude is not none else '' }}">
+                    <div class="col-12">
+                        <div id="map"></div>
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label" for="radius">Radius (km)</label>
+                        <input type="number" class="form-control form-control-lg" name="radius" id="radius" min="1" max="200" step="1" value="{{ radius or 10 }}">
+                    </div>
+                    <div class="col-md-5">
+                        <div class="bg-light border rounded-4 px-3 py-2 h-100 d-flex flex-column justify-content-center" id="selected-location">
+                            {% if latitude is not none and longitude is not none %}
+                                <span class="fw-semibold text-success">Pickup pinned</span>
+                                <span class="text-muted small">{{ '%.5f'|format(latitude) }}, {{ '%.5f'|format(longitude) }}</span>
+                            {% else %}
+                                <span class="fw-semibold text-muted">No pickup chosen</span>
+                                <span class="text-muted small">Tap the map or use your current location.</span>
+                            {% endif %}
+                        </div>
+                    </div>
+                    <div class="col-md-3 d-grid">
+                        <button type="button" class="btn btn-outline-success" id="use-location"><i class="bi bi-geo-alt"></i> Use my current location</button>
+                        <button type="submit" class="btn btn-success btn-lg mt-2">Update results</button>
+                    </div>
+                </form>
+                {% if error %}
+                    <div class="alert alert-warning mt-3 mb-0" role="alert">{{ error }}</div>
+                {% endif %}
+            </div>
+        </div>
+
+        {% if cars %}
+            <div class="d-flex justify-content-between align-items-center mb-3">
+                <h2 class="h4 fw-semibold mb-0">Available near you</h2>
+                <span class="text-muted small">Showing {{ cars|length }} cars within {{ radius or 10 }} km</span>
+            </div>
+            <div class="alert alert-success" role="alert">
+                Promo codes you can try: {% for code, discount in promo_codes.items() %}<strong>{{ code }}</strong> ({{ (discount * 100)|round|int }}% off){% if not loop.last %}, {% endif %}{% endfor %}.
+            </div>
+            <div class="row row-cols-1 row-cols-md-2 g-4">
+                {% for car in cars %}
+                    {% set pricing_info = pricing.get(car.id) %}
+                    <div class="col">
+                        <div class="card car-card h-100">
+                            {% set gallery = car.images or ([car.image_url] if car.image_url else []) %}
+                            {% if gallery %}
+                                {% if gallery|length == 1 %}
+                                    <img src="{{ url_for('static', filename=gallery[0]) if gallery[0].startswith('uploads/') else gallery[0] }}" class="card-img-top" alt="{{ car.name }}">
+                                {% else %}
+                                    <div id="carousel-{{ car.id }}" class="carousel slide" data-bs-ride="carousel">
+                                        <div class="carousel-inner">
+                                            {% for image in gallery %}
+                                                <div class="carousel-item {% if loop.first %}active{% endif %}">
+                                                    <img src="{{ url_for('static', filename=image) if image.startswith('uploads/') else image }}" class="d-block w-100" alt="{{ car.name }}">
+                                                </div>
+                                            {% endfor %}
+                                        </div>
+                                        <button class="carousel-control-prev" type="button" data-bs-target="#carousel-{{ car.id }}" data-bs-slide="prev">
+                                            <span class="carousel-control-prev-icon" aria-hidden="true"></span>
+                                            <span class="visually-hidden">Previous</span>
+                                        </button>
+                                        <button class="carousel-control-next" type="button" data-bs-target="#carousel-{{ car.id }}" data-bs-slide="next">
+                                            <span class="carousel-control-next-icon" aria-hidden="true"></span>
+                                            <span class="visually-hidden">Next</span>
+                                        </button>
+                                    </div>
+                                {% endif %}
+                            {% else %}
+                                <img src="https://images.unsplash.com/photo-1525562723836-dca67a71d5f2?auto=format&fit=crop&w=900&q=80" class="card-img-top" alt="{{ car.name }}">
+                            {% endif %}
+                            <div class="card-body d-flex flex-column">
+                                <div class="d-flex justify-content-between align-items-start mb-2">
+                                    <div>
+                                        <h3 class="h5 mb-1">{{ car.name }}</h3>
+                                        <div class="text-muted small"><i class="bi bi-geo-alt"></i> {{ car.city or detected_city or 'Nearby' }} · {{ car.distance_km }} km away</div>
+                                    </div>
+                                    <span class="badge {{ 'bg-success' if car.status == 'Available' else 'bg-secondary' }}">{{ car.status }}</span>
+                                </div>
+                                <div class="d-flex align-items-center gap-2 mb-3">
+                                    <span class="rating"><i class="bi bi-star-fill"></i> {{ '%.1f'|format(car.rating or 4.5) }}</span>
+                                    <span class="text-muted small">Hosted by {{ car.owner_username }}</span>
+                                </div>
+                                <p class="text-muted small mb-3">{{ car.description or 'Flexible cancellation · Sanitised & ready · Unlimited kms packages available' }}</p>
+                                <div class="d-flex gap-3 text-muted small mb-4">
+                                    <span><i class="bi bi-fuel-pump"></i> {{ car.fuel_type or 'Petrol' }}</span>
+                                    <span><i class="bi bi-gear-wide-connected"></i> {{ car.transmission or 'Manual' }}</span>
+                                    <span><i class="bi bi-people-fill"></i> {{ car.seats }} seats</span>
+                                </div>
+                                {% if pricing_info %}
+                                    <div class="p-3 bg-light rounded-4 mb-3">
+                                        <div class="d-flex justify-content-between align-items-center">
+                                            <div>
+                                                <div class="fw-semibold">₹{{ pricing_info.total|round|int }} estimated</div>
+                                                <div class="text-muted small">{{ pricing_info.hours }} hrs · Base ₹{{ pricing_info.base_amount|round }}{% if pricing_info.discount %} · Discount ₹{{ pricing_info.discount|round }}{% endif %}</div>
+                                            </div>
+                                            <div class="text-muted small">From ₹{{ (car.rate_per_hour * 4)|round|int }} / day</div>
+                                        </div>
+                                        <div class="mt-2 text-muted small">Suggested packs:
+                                            {% for pack in pricing_info.packages %}
+                                                <span class="badge bg-success-subtle text-success fw-semibold">{{ pack.label }} · ₹{{ pack.price|round|int }}</span>
+                                            {% endfor %}
+                                        </div>
+                                    </div>
+                                {% endif %}
+                                <div class="mt-auto">
+                                    {% if car.status == 'Available' %}
+                                        <form method="post" action="{{ url_for('rent_car', car_id=car.id) }}" class="row g-2">
+                                            <input type="hidden" name="start_time" value="{{ start_time or '' }}">
+                                            <input type="hidden" name="end_time" value="{{ end_time or '' }}">
+                                            <div class="col-12">
+                                                <label class="form-label small text-muted" for="promo-{{ car.id }}">Promo code (optional)</label>
+                                                <input type="text" class="form-control" id="promo-{{ car.id }}" name="promo_code" placeholder="e.g. ZOOM10">
+                                            </div>
+                                            <div class="col-12 d-grid">
+                                                <button type="submit" class="btn btn-success">Reserve instantly</button>
+                                            </div>
+                                        </form>
+                                    {% else %}
+                                        <button class="btn btn-outline-secondary w-100" disabled>Currently unavailable</button>
+                                    {% endif %}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                {% endfor %}
+            </div>
+        {% elif latitude is not none and longitude is not none and not error %}
+            <div class="alert alert-info" role="alert">
+                No cars matched the current search. Try increasing the radius or choosing a different location.
+            </div>
+        {% else %}
+            <div class="alert alert-secondary" role="alert">
+                Select a pickup spot on the map to see cars nearby.
+            </div>
+        {% endif %}
+    </div>
+</section>
+{% endblock %}
+{% block scripts %}
+    {{ super() }}
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+            integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+    <script>
+        const mapElement = document.getElementById('map');
+        const latitudeField = document.getElementById('latitude-field');
+        const longitudeField = document.getElementById('longitude-field');
+        const radiusInput = document.getElementById('radius');
+        const useLocationBtn = document.getElementById('use-location');
+        const selectedText = document.getElementById('selected-location');
+        const searchForm = document.getElementById('search-form');
+        const startField = document.getElementById('start-field');
+        const endField = document.getElementById('end-field');
+        const initialLat = {{ latitude if latitude is not none else 'null' }};
+        const initialLng = {{ longitude if longitude is not none else 'null' }};
+        const initialRadius = {{ radius or 10 }};
+        const carsData = {{ cars_payload|tojson|safe }};
+
+        const DEFAULT_VIEW = { lat: 20.5937, lng: 78.9629, zoom: 5 };
+        const map = L.map(mapElement, { zoomControl: true });
+
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            maxZoom: 18,
+            attribution: '&copy; <a href="https://www.openstreetmap.org">OpenStreetMap</a> contributors'
+        }).addTo(map);
+
+        let locationMarker = null;
+        let radiusCircle = null;
+        const carLayer = L.layerGroup().addTo(map);
+
+        function focusOn(lat, lng, zoom = 13) {
+            map.setView([lat, lng], zoom);
+        }
+
+        function updateSelectedLocation(lat, lng) {
+            latitudeField.value = lat;
+            longitudeField.value = lng;
+            selectedText.innerHTML = `
+                <span class="fw-semibold text-success">Pickup pinned</span>
+                <span class="text-muted small d-block">${lat.toFixed(5)}, ${lng.toFixed(5)}</span>`;
+            if (!locationMarker) {
+                locationMarker = L.marker([lat, lng], { draggable: true }).addTo(map);
+                locationMarker.on('dragend', (event) => {
+                    const pos = event.target.getLatLng();
+                    updateSelectedLocation(pos.lat, pos.lng);
+                    redrawRadius();
+                });
+            } else {
+                locationMarker.setLatLng([lat, lng]);
+            }
+            redrawRadius();
+        }
+
+        function redrawRadius() {
+            const lat = parseFloat(latitudeField.value);
+            const lng = parseFloat(longitudeField.value);
+            const km = parseFloat(radiusInput.value || initialRadius);
+            if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
+                if (radiusCircle) {
+                    radiusCircle.remove();
+                    radiusCircle = null;
+                }
+                return;
+            }
+            const radiusMeters = km * 1000;
+            if (!radiusCircle) {
+                radiusCircle = L.circle([lat, lng], {
+                    radius: radiusMeters,
+                    color: '#0d9f5c',
+                    weight: 2,
+                    fillColor: '#34d399',
+                    fillOpacity: 0.15,
+                }).addTo(map);
+            } else {
+                radiusCircle.setLatLng([lat, lng]);
+                radiusCircle.setRadius(radiusMeters);
+            }
+        }
+
+        map.on('click', (event) => {
+            updateSelectedLocation(event.latlng.lat, event.latlng.lng);
+            focusOn(event.latlng.lat, event.latlng.lng);
+        });
+
+        radiusInput.addEventListener('change', redrawRadius);
+        radiusInput.addEventListener('input', redrawRadius);
+
+        if (Number.isFinite(initialLat) && Number.isFinite(initialLng)) {
+            focusOn(initialLat, initialLng);
+            updateSelectedLocation(initialLat, initialLng);
+        } else {
+            focusOn(DEFAULT_VIEW.lat, DEFAULT_VIEW.lng, DEFAULT_VIEW.zoom);
+        }
+
+        if (carsData && carsData.length) {
+            carsData.forEach((car) => {
+                const marker = L.marker([car.latitude, car.longitude]);
+                marker.bindPopup(`
+                    <strong>${car.name}</strong><br>
+                    ${car.distance_km} km away · ${car.seats} seats<br>
+                    ₹${(car.rate_per_hour * 4).toFixed(0)} / day approx
+                `);
+                marker.addTo(carLayer);
+            });
+            const bounds = L.latLngBounds(carsData.map(car => [car.latitude, car.longitude]));
+            if (locationMarker) {
+                bounds.extend(locationMarker.getLatLng());
+            }
+            map.fitBounds(bounds.pad(0.2));
+        }
+
+        if (useLocationBtn && navigator.geolocation) {
+            useLocationBtn.addEventListener('click', () => {
+                useLocationBtn.disabled = true;
+                useLocationBtn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Locating…';
+                navigator.geolocation.getCurrentPosition((position) => {
+                    const { latitude, longitude } = position.coords;
+                    focusOn(latitude, longitude);
+                    updateSelectedLocation(latitude, longitude);
+                    useLocationBtn.innerHTML = '<i class="bi bi-geo-alt"></i> Location set';
+                    useLocationBtn.classList.remove('btn-outline-success');
+                    useLocationBtn.classList.add('btn-success');
+                    useLocationBtn.disabled = false;
+                }, () => {
+                    alert('Unable to fetch location. Please allow access or click on the map.');
+                    useLocationBtn.innerHTML = '<i class="bi bi-geo-alt"></i> Use my current location';
+                    useLocationBtn.disabled = false;
+                });
+            });
+        } else if (useLocationBtn) {
+            useLocationBtn.style.display = 'none';
+        }
+
+        searchForm.addEventListener('submit', (event) => {
+            if (!latitudeField.value || !longitudeField.value) {
+                event.preventDefault();
+                alert('Please select a pickup location on the map before searching.');
+            }
+        });
+
+        if (startField && !startField.value) {
+            const now = new Date();
+            now.setMinutes(0, 0, 0);
+            const pad = (value) => value.toString().padStart(2, '0');
+            const format = (date) => `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
+            const start = new Date(now.getTime() + 60 * 60 * 1000);
+            const end = new Date(start.getTime() + 4 * 60 * 60 * 1000);
+            startField.value = format(start);
+            if (endField && !endField.value) {
+                endField.value = format(end);
+            }
+        }
+    </script>
+{% endblock %}

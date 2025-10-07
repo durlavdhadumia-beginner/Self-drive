@@ -1,0 +1,66 @@
+﻿{% extends "base.html" %}
+{% block title %}My Trips | DriveNow{% endblock %}
+{% block content %}
+<section class="py-5">
+    <div class="container">
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <div>
+                <h1 class="h3 fw-bold mb-1">My upcoming & past trips</h1>
+                <p class="text-muted mb-0">Manage bookings, view pickup details, and cancel if plans change.</p>
+            </div>
+            <a href="{{ url_for('search') }}" class="btn btn-success"><i class="bi bi-plus-circle"></i> Book another car</a>
+        </div>
+
+        {% if rentals %}
+            <div class="row row-cols-1 row-cols-md-2 g-4">
+                {% for rental in rentals %}
+                    <div class="col">
+                        <div class="card card-zoom h-100">
+                            <img src="{{ rental['image_url'] or 'https://images.unsplash.com/photo-1542362567-b07e54358753?auto=format&fit=crop&w=900&q=80' }}" class="card-img-top" alt="{{ rental['brand'] }} {{ rental['model'] }}" style="height: 200px; object-fit: cover;">
+                            <div class="card-body d-flex flex-column">
+                                <div class="d-flex justify-content-between align-items-center mb-2">
+                                    <h2 class="h5 mb-0">{{ rental['brand'] }} {{ rental['model'] }}</h2>
+                                    <span class="badge
+                                        {% if rental['status'] == 'booked' %}bg-info
+                                        {% elif rental['status'] == 'active' %}bg-success
+                                        {% elif rental['status'] == 'completed' %}bg-secondary
+                                        {% else %}bg-warning text-dark
+                                        {% endif %}">
+                                        {{ rental['status']|capitalize }}
+                                    </span>
+                                </div>
+                                <p class="text-muted small mb-2">Licence plate: {{ rental['licence_plate'] }}</p>
+                                <div class="d-flex flex-column gap-1 text-muted small mb-3">
+                                    <span><i class="bi bi-calendar-event"></i> Start: {{ rental['start_time'] }}</span>
+                                    <span><i class="bi bi-calendar-check"></i> End: {{ rental['end_time'] or 'TBD' }}</span>
+                                </div>
+                                <div class="bg-light rounded-4 px-3 py-2 mb-3">
+                                    <div class="fw-semibold">₹{{ (rental['total_amount'] or 0)|round(2) }}</div>
+                                    <div class="text-muted small">
+                                        {% if rental['discount_amount'] %}
+                                            Includes ₹{{ rental['discount_amount']|round(2) }} off with code {{ rental['promo_code'] or 'N/A' }}
+                                        {% else %}
+                                            Promo code: {{ rental['promo_code'] or 'Not applied' }}
+                                        {% endif %}
+                                    </div>
+                                </div>
+                                {% if rental['status'] in ('booked', 'active') %}
+                                    <form method="post" class="d-grid" action="{{ url_for('cancel_rental', rental_id=rental['id']) }}">
+                                        <button type="submit" class="btn btn-outline-danger">Cancel booking</button>
+                                    </form>
+                                {% else %}
+                                    <span class="text-muted small">No actions available</span>
+                                {% endif %}
+                            </div>
+                        </div>
+                    </div>
+                {% endfor %}
+            </div>
+        {% else %}
+            <div class="alert alert-secondary" role="alert">
+                You have no trips yet. Head back to the <a href="{{ url_for('search') }}" class="alert-link">search page</a> and reserve your first car.
+            </div>
+        {% endif %}
+    </div>
+</section>
+{% endblock %}

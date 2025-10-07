@@ -1,0 +1,197 @@
+﻿{% extends "base.html" %}
+{% block title %}DriveNow | Self-Drive Car Rentals{% endblock %}
+{% block content %}
+<section class="py-5" style="background:linear-gradient(120deg, rgba(13,159,92,0.12), rgba(10,92,54,0.08));">
+    <div class="container py-4">
+        <div class="row align-items-center g-5">
+            <div class="col-lg-6">
+                <span class="badge-zoom mb-3">India's favourite self-drive style experience</span>
+                <h1 class="display-5 fw-bold mb-3">Hit the road with premium self-drive cars across your city.</h1>
+                <p class="fs-5 text-secondary mb-4">
+                    Browse SUVs, hatchbacks, EVs and more. Flexible packages, curated add-ons, and instant confirmation—just like Zoomcar.
+                </p>
+                <ul class="list-unstyled text-secondary mb-4">
+                    <li class="mb-2"><i class="bi bi-check-circle-fill text-success"></i> 24x7 on-road support</li>
+                    <li class="mb-2"><i class="bi bi-check-circle-fill text-success"></i> Fuel-efficient & sanitised cars</li>
+                    <li class="mb-2"><i class="bi bi-check-circle-fill text-success"></i> Zero paperwork at pickup</li>
+                </ul>
+            </div>
+            <div class="col-lg-6">
+                <div class="card card-zoom">
+                    <div class="card-body">
+                        <h2 class="h4 fw-semibold mb-3">Book your next drive</h2>
+                        <form action="{{ url_for('search') }}" method="get" id="hero-search" class="row g-3">
+                            <div class="col-12">
+                                <label for="city" class="form-label">City</label>
+                                <input list="cities" class="form-control form-control-lg" id="city" name="city" placeholder="e.g. Bengaluru" required>
+                                <datalist id="cities">
+                                    {% for city in cities %}
+                                        <option value="{{ city }}"></option>
+                                    {% endfor %}
+                                </datalist>
+                            </div>
+                            <div class="col-md-6">
+                                <label for="start_time" class="form-label">Trip start</label>
+                                <input type="datetime-local" class="form-control" id="start_time" name="start_time" required>
+                            </div>
+                            <div class="col-md-6">
+                                <label for="end_time" class="form-label">Trip end</label>
+                                <input type="datetime-local" class="form-control" id="end_time" name="end_time" required>
+                            </div>
+                            <div class="col-md-6">
+                                <label for="radius" class="form-label">Search radius (km)</label>
+                                <input type="number" class="form-control" id="radius" name="radius" value="10" min="1" max="200">
+                            </div>
+                            <div class="col-md-6 d-flex align-items-end">
+                                <button type="button" class="btn btn-outline-success w-100" id="detect-location">
+                                    <i class="bi bi-geo-alt"></i> Use my location
+                                </button>
+                            </div>
+                            <input type="hidden" name="latitude" id="search-lat">
+                            <input type="hidden" name="longitude" id="search-lng">
+                            <div class="col-12 d-grid">
+                                <button type="submit" class="btn btn-success btn-lg">Search cars</button>
+                            </div>
+                        </form>
+                        <p class="small text-muted mt-3 mb-0">You'll refine your pickup spot on the next screen using our interactive map.</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+
+<section class="py-5">
+    <div class="container">
+        <h2 class="section-title">Popular categories</h2>
+        <div class="row row-cols-1 row-cols-md-3 g-4">
+            <div class="col">
+                <div class="card card-zoom h-100">
+                    <img src="https://images.unsplash.com/photo-1549923746-c502d488b3ea?auto=format&fit=crop&w=900&q=80" class="card-img-top" alt="SUV">
+                    <div class="card-body">
+                        <h3 class="h5">Adventure-ready SUVs</h3>
+                        <p class="text-muted mb-0">Spacious rides with roof carriers, perfect for getaways around Ooty, Coorg or Lonavala.</p>
+                    </div>
+                </div>
+            </div>
+            <div class="col">
+                <div class="card card-zoom h-100">
+                    <img src="https://images.unsplash.com/photo-1517940310602-9601d0b1f13c?auto=format&fit=crop&w=900&q=80" class="card-img-top" alt="Hatchback">
+                    <div class="card-body">
+                        <h3 class="h5">City-smart hatchbacks</h3>
+                        <p class="text-muted mb-0">Easy parking, unbeatable mileage. Great for daily errands and short hops.</p>
+                    </div>
+                </div>
+            </div>
+            <div class="col">
+                <div class="card card-zoom h-100">
+                    <img src="https://images.unsplash.com/photo-1619767886558-efdc259cde1a?auto=format&fit=crop&w=900&q=80" class="card-img-top" alt="EV">
+                    <div class="card-body">
+                        <h3 class="h5">Future-forward EVs</h3>
+                        <p class="text-muted mb-0">Go green with zero-emission drives. Charging support across leading Indian cities.</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+
+<section class="py-5" style="background:#fff;">
+    <div class="container">
+        <div class="row align-items-center g-5">
+            <div class="col-lg-6">
+                <img src="https://images.unsplash.com/photo-1529429617124-aee1ca0c99ce?auto=format&fit=crop&w=1100&q=80" alt="Car owner" class="img-fluid rounded-4 shadow">
+            </div>
+            <div class="col-lg-6">
+                <h2 class="section-title">Earn as a DriveNow Host</h2>
+                <p class="text-secondary fs-5">List your idle car, manage availability, track GPS, and earn up to ₹45,000 per month. We do verifications, you enjoy the earnings.</p>
+                <div class="d-flex flex-column flex-sm-row gap-3">
+                    <a href="{{ url_for('register') }}" class="btn btn-success btn-lg">Start hosting</a>
+                    <a href="{{ url_for('owner_cars') if g.user and has_role('owner') else url_for('login') }}" class="btn btn-outline-success btn-lg">View host dashboard</a>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+
+<section class="py-5">
+    <div class="container">
+        <h2 class="section-title">Why travellers love DriveNow</h2>
+        <div class="row row-cols-1 row-cols-md-3 g-4">
+            <div class="col">
+                <div class="card card-zoom h-100">
+                    <div class="card-body">
+                        <h3 class="h5 mb-2"><i class="bi bi-speedometer2 text-success"></i> Flexible packages</h3>
+                        <p class="text-muted mb-0">Choose hourly, full-day, or multi-day rentals. Modify schedules anytime from your trips page.</p>
+                    </div>
+                </div>
+            </div>
+            <div class="col">
+                <div class="card card-zoom h-100">
+                    <div class="card-body">
+                        <h3 class="h5 mb-2"><i class="bi bi-shield-check text-success"></i> All-round protection</h3>
+                        <p class="text-muted mb-0">Damage waiver plans, GPS tracking, and safety alerts help you drive worry-free.</p>
+                    </div>
+                </div>
+            </div>
+            <div class="col">
+                <div class="card card-zoom h-100">
+                    <div class="card-body">
+                        <h3 class="h5 mb-2"><i class="bi bi-lightning-charge text-success"></i> Instant confirmation</h3>
+                        <p class="text-muted mb-0">Real-time availability lets you book in seconds. No phone calls or manual approvals.</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+{% endblock %}
+{% block scripts %}
+{{ super() }}
+<script>
+    const detectBtn = document.getElementById('detect-location');
+    const latField = document.getElementById('search-lat');
+    const lngField = document.getElementById('search-lng');
+    const startField = document.getElementById('start_time');
+    const endField = document.getElementById('end_time');
+
+    function pad(value) {
+        return value.toString().padStart(2, '0');
+    }
+
+    function formatDate(date) {
+        return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
+    }
+
+    if (startField && !startField.value) {
+        const now = new Date();
+        now.setMinutes(0, 0, 0);
+        const start = new Date(now.getTime() + 60 * 60 * 1000);
+        const end = new Date(start.getTime() + 4 * 60 * 60 * 1000);
+        startField.value = formatDate(start);
+        if (endField && !endField.value) {
+            endField.value = formatDate(end);
+        }
+    }
+
+    if (detectBtn && navigator.geolocation) {
+        detectBtn.addEventListener('click', () => {
+            detectBtn.disabled = true;
+            detectBtn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Locating…';
+            navigator.geolocation.getCurrentPosition((position) => {
+                latField.value = position.coords.latitude.toFixed(6);
+                lngField.value = position.coords.longitude.toFixed(6);
+                detectBtn.innerHTML = '<i class="bi bi-geo-alt"></i> Location set';
+                detectBtn.classList.remove('btn-outline-success');
+                detectBtn.classList.add('btn-success');
+            }, () => {
+                alert('Unable to detect location. Please allow access or set it later on the map.');
+                detectBtn.innerHTML = '<i class="bi bi-geo-alt"></i> Use my location';
+                detectBtn.disabled = false;
+            });
+        });
+    } else if (detectBtn) {
+        detectBtn.style.display = 'none';
+    }
+</script>
+{% endblock %}
