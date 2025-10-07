@@ -1,4 +1,4 @@
-ï»¿{% extends "base.html" %}
+{% extends "base.html" %}
 {% block title %}Find Cars | DriveNow{% endblock %}
 {% block head %}
     {{ super() }}
@@ -39,9 +39,9 @@
             </div>
             <div class="bg-white shadow-sm rounded-4 px-4 py-3">
                 <div class="small text-uppercase text-muted fw-semibold">Trip summary</div>
-                <div class="fw-semibold">City: {{ city or detected_city or 'â€”' }}</div>
-                <div class="text-muted">Start: {{ start_time or 'â€”' }}</div>
-                <div class="text-muted">End: {{ end_time or 'â€”' }}</div>
+                <div class="fw-semibold">City: {{ city or detected_city or '—' }}</div>
+                <div class="text-muted">Start: {{ start_time or '—' }}</div>
+                <div class="text-muted">End: {{ end_time or '—' }}</div>
             </div>
         </div>
 
@@ -104,13 +104,13 @@
                             {% set gallery = car.images or ([car.image_url] if car.image_url else []) %}
                             {% if gallery %}
                                 {% if gallery|length == 1 %}
-                                    <img src="{{ url_for('static', filename=gallery[0]) if gallery[0].startswith('uploads/') else gallery[0] }}" class="card-img-top" alt="{{ car.name }}">
+                                    <img src="{{ (gallery[0] if gallery[0].lower().startswith('http') else url_for('serve_upload', filename=gallery[0])) }}" class="card-img-top" alt="{{ car.name }}">
                                 {% else %}
                                     <div id="carousel-{{ car.id }}" class="carousel slide" data-bs-ride="carousel">
                                         <div class="carousel-inner">
                                             {% for image in gallery %}
                                                 <div class="carousel-item {% if loop.first %}active{% endif %}">
-                                                    <img src="{{ url_for('static', filename=image) if image.startswith('uploads/') else image }}" class="d-block w-100" alt="{{ car.name }}">
+                                                    <img src="{{ (image if image.lower().startswith('http') else url_for('serve_upload', filename=image)) }}" class="d-block w-100" alt="{{ car.name }}">
                                                 </div>
                                             {% endfor %}
                                         </div>
@@ -131,7 +131,7 @@
                                 <div class="d-flex justify-content-between align-items-start mb-2">
                                     <div>
                                         <h3 class="h5 mb-1">{{ car.name }}</h3>
-                                        <div class="text-muted small"><i class="bi bi-geo-alt"></i> {{ car.city or detected_city or 'Nearby' }} Â· {{ car.distance_km }} km away</div>
+                                        <div class="text-muted small"><i class="bi bi-geo-alt"></i> {{ car.city or detected_city or 'Nearby' }} · {{ car.distance_km }} km away</div>
                                     </div>
                                     <span class="badge {{ 'bg-success' if car.status == 'Available' else 'bg-secondary' }}">{{ car.status }}</span>
                                 </div>
@@ -139,7 +139,7 @@
                                     <span class="rating"><i class="bi bi-star-fill"></i> {{ '%.1f'|format(car.rating or 4.5) }}</span>
                                     <span class="text-muted small">Hosted by {{ car.owner_username }}</span>
                                 </div>
-                                <p class="text-muted small mb-3">{{ car.description or 'Flexible cancellation Â· Sanitised & ready Â· Unlimited kms packages available' }}</p>
+                                <p class="text-muted small mb-3">{{ car.description or 'Flexible cancellation · Sanitised & ready · Unlimited kms packages available' }}</p>
                                 <div class="d-flex gap-3 text-muted small mb-4">
                                     <span><i class="bi bi-fuel-pump"></i> {{ car.fuel_type or 'Petrol' }}</span>
                                     <span><i class="bi bi-gear-wide-connected"></i> {{ car.transmission or 'Manual' }}</span>
@@ -149,14 +149,14 @@
                                     <div class="p-3 bg-light rounded-4 mb-3">
                                         <div class="d-flex justify-content-between align-items-center">
                                             <div>
-                                                <div class="fw-semibold">â‚¹{{ pricing_info.total|round|int }} estimated</div>
-                                                <div class="text-muted small">{{ pricing_info.hours }} hrs Â· Base â‚¹{{ pricing_info.base_amount|round }}{% if pricing_info.discount %} Â· Discount â‚¹{{ pricing_info.discount|round }}{% endif %}</div>
+                                                <div class="fw-semibold">?{{ pricing_info.total|round|int }} estimated</div>
+                                                <div class="text-muted small">{{ pricing_info.hours }} hrs · Base ?{{ pricing_info.base_amount|round }}{% if pricing_info.discount %} · Discount ?{{ pricing_info.discount|round }}{% endif %}</div>
                                             </div>
-                                            <div class="text-muted small">From â‚¹{{ (car.rate_per_hour * 4)|round|int }} / day</div>
+                                            <div class="text-muted small">From ?{{ (car.rate_per_hour * 4)|round|int }} / day</div>
                                         </div>
                                         <div class="mt-2 text-muted small">Suggested packs:
                                             {% for pack in pricing_info.packages %}
-                                                <span class="badge bg-success-subtle text-success fw-semibold">{{ pack.label }} Â· â‚¹{{ pack.price|round|int }}</span>
+                                                <span class="badge bg-success-subtle text-success fw-semibold">{{ pack.label }} · ?{{ pack.price|round|int }}</span>
                                             {% endfor %}
                                         </div>
                                     </div>
@@ -295,8 +295,8 @@
                 const marker = L.marker([car.latitude, car.longitude]);
                 marker.bindPopup(`
                     <strong>${car.name}</strong><br>
-                    ${car.distance_km} km away Â· ${car.seats} seats<br>
-                    â‚¹${(car.rate_per_hour * 4).toFixed(0)} / day approx
+                    ${car.distance_km} km away · ${car.seats} seats<br>
+                    ?${(car.rate_per_hour * 4).toFixed(0)} / day approx
                 `);
                 marker.addTo(carLayer);
             });
@@ -310,7 +310,7 @@
         if (useLocationBtn && navigator.geolocation) {
             useLocationBtn.addEventListener('click', () => {
                 useLocationBtn.disabled = true;
-                useLocationBtn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Locatingâ€¦';
+                useLocationBtn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Locating…';
                 navigator.geolocation.getCurrentPosition((position) => {
                     const { latitude, longitude } = position.coords;
                     focusOn(latitude, longitude);

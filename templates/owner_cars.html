@@ -1,4 +1,4 @@
-﻿{% extends "base.html" %}
+{% extends "base.html" %}
 {% block title %}Host Dashboard | DriveNow{% endblock %}
 {% block content %}
 <section class="py-5">
@@ -26,7 +26,7 @@
                                         <div class="d-flex justify-content-between align-items-start mb-3">
                                             <div>
                                                 <h3 class="h5 mb-1">{{ car['name'] or car['brand'] ~ ' ' ~ car['model'] }}</h3>
-                                                <p class="text-muted small mb-0">{{ car['brand'] }} {{ car['model'] }} · {{ car['city'] or 'City not set' }}</p>
+                                                <p class="text-muted small mb-0">{{ car['brand'] }} {{ car['model'] }} � {{ car['city'] or 'City not set' }}</p>
                                             </div>
                                             <span class="badge {{ 'bg-success' if car['is_available'] else 'bg-secondary' }}">
                                                 {{ 'Available' if car['is_available'] else 'Unavailable' }}
@@ -35,15 +35,15 @@
                                         {% if car['images'] %}
                                             <div class="d-flex flex-wrap gap-2 mb-3">
                                                 {% for image in car['images'] %}
-                                                    <img src="{{ url_for('static', filename=image) if image.startswith('uploads/') else image }}" alt="{{ car['name'] }}" class="rounded" style="width:96px;height:64px;object-fit:cover;">
+                                                    <img src="{{ (image if image.lower().startswith('http') else url_for('serve_upload', filename=image)) }}" alt="{{ car['name'] }}" class="rounded" style="width:96px;height:64px;object-fit:cover;">
                                                 {% endfor %}
                                             </div>
                                         {% endif %}
                                         <div class="row text-muted small mb-3">
                                             <div class="col-sm-6">Licence: {{ car['licence_plate'] }}</div>
                                             <div class="col-sm-6">Seats: {{ car['seats'] }}</div>
-                                            <div class="col-sm-6">Hourly rate: ₹{{ '%.0f'|format(car['rate_per_hour']) }}</div>
-                                            <div class="col-sm-6">Daily rate: ₹{{ '%.0f'|format(car['daily_rate']) }}</div>
+                                            <div class="col-sm-6">Hourly rate: ?{{ '%.0f'|format(car['rate_per_hour']) }}</div>
+                                            <div class="col-sm-6">Daily rate: ?{{ '%.0f'|format(car['daily_rate']) }}</div>
                                             <div class="col-sm-6">Fuel type: {{ car['fuel_type'] or 'NA' }}</div>
                                             <div class="col-sm-6">Transmission: {{ car['transmission'] or 'NA' }}</div>
                                         </div>
@@ -106,11 +106,11 @@
                                 <input type="number" class="form-control" id="seats" name="seats" min="1" max="12" value="5">
                             </div>
                             <div class="col-md-4">
-                                <label class="form-label" for="rate_per_hour">Rate/hr (₹)</label>
+                                <label class="form-label" for="rate_per_hour">Rate/hr (?)</label>
                                 <input type="number" step="0.5" class="form-control" id="rate_per_hour" name="rate_per_hour" value="350">
                             </div>
                             <div class="col-md-4">
-                                <label class="form-label" for="daily_rate">Rate/day (₹)</label>
+                                <label class="form-label" for="daily_rate">Rate/day (?)</label>
                                 <input type="number" step="0.5" class="form-control" id="daily_rate" name="daily_rate" placeholder="Auto-calculated if blank">
                             </div>
                             <div class="col-md-6">
@@ -151,7 +151,7 @@
                                         <div class="d-flex justify-content-between align-items-center">
                                             <div>
                                                 <div class="fw-semibold">{{ rental['brand'] }} {{ rental['model'] }}</div>
-                                                <div class="text-muted small">Renter: {{ rental['renter_username'] }} · Started {{ rental['start_time'] }}</div>
+                                                <div class="text-muted small">Renter: {{ rental['renter_username'] }} � Started {{ rental['start_time'] }}</div>
                                             </div>
                                             <form method="post" action="{{ url_for('owner_complete_rental', rental_id=rental['id']) }}">
                                                 <button type="submit" class="btn btn-sm btn-outline-success">Mark completed</button>
