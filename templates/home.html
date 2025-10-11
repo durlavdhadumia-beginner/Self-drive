@@ -28,20 +28,20 @@
                         <h2 class="h4 fw-semibold mb-3">Host performance snapshot</h2>
                         <div class="row g-4 text-muted small">
                             <div class="col-sm-6">
-                                <div class="fw-semibold text-success fs-3 mb-1">{{ rentals|selectattr('status','equalto','active')|list|length or 0 }}</div>
+                                <div class="fw-semibold text-success fs-3 mb-1">{{ owner_stats.active_trips if owner_stats else 0 }}</div>
                                 <p class="mb-0">Trips currently live</p>
                             </div>
                             <div class="col-sm-6">
-                                <div class="fw-semibold text-success fs-3 mb-1">{{ pending_payments|length or 0 }}</div>
+                                <div class="fw-semibold text-success fs-3 mb-1">{{ owner_stats.awaiting_payouts if owner_stats else 0 }}</div>
                                 <p class="mb-0">Payouts awaiting release</p>
                             </div>
                             <div class="col-sm-6">
-                                <div class="fw-semibold text-success fs-3 mb-1">95%</div>
+                                <div class="fw-semibold text-success fs-3 mb-1">{{ 100 - commission_rate }}%</div>
                                 <p class="mb-0">Average host take-home per trip</p>
                             </div>
                             <div class="col-sm-6">
-                                <div class="fw-semibold text-success fs-3 mb-1">4.8★</div>
-                                <p class="mb-0">Community rating across hosted rides</p>
+                                <div class="fw-semibold text-success fs-3 mb-1">&#8377; {{ owner_stats.take_home_estimate if owner_stats else 0 }}</div>
+                                <p class="mb-0">Approximate payout queued</p>
                             </div>
                         </div>
                         <hr class="my-4">
@@ -53,6 +53,20 @@
         </div>
     </div>
 </section>
+
+{% if owner_stats and owner_stats.awaiting_payouts %}
+<div class="container my-4">
+    <div class="alert alert-info d-flex flex-column flex-lg-row justify-content-between align-items-lg-center gap-2 mb-0">
+        <div>
+            <strong>{{ owner_stats.awaiting_payouts }} payout{% if owner_stats.awaiting_payouts != 1 %}s{% endif %} pending.</strong>
+            CarRentalNTravel receives each customer payment, retains a {{ commission_rate }}% service fee, and schedules the remaining balance straight to your account.
+        </div>
+        <div class="text-muted small">
+            Amount queued: &#8377; {{ owner_stats.awaiting_total }} · Expected take-home: &#8377; {{ owner_stats.take_home_estimate }}
+        </div>
+    </div>
+</div>
+{% endif %}
 
 <section class="py-5">
     <div class="container">
@@ -110,7 +124,7 @@
                                 <input list="cities" class="form-control form-control-lg" id="city" name="city" placeholder="e.g. Bengaluru" required>
                                 <datalist id="cities">
                                     {% for city in cities %}
-                                        <option value="{{ city }}"></option>
+                                        <option value="{{ city.name }}">{{ city.name }}{% if city.state %}, {{ city.state }}{% endif %}</option>
                                     {% endfor %}
                                 </datalist>
                             </div>

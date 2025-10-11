@@ -130,6 +130,14 @@ def init_db() -> None:
             FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
         );
 
+        CREATE TABLE IF NOT EXISTS cities (
+            id INTEGER PRIMARY KEY,
+            name TEXT NOT NULL,
+            state TEXT,
+            latitude REAL,
+            longitude REAL
+        );
+
         CREATE TABLE IF NOT EXISTS user_payout_details (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             user_id INTEGER NOT NULL UNIQUE,
@@ -318,6 +326,10 @@ def init_db() -> None:
             db.execute(statement)
         except sqlite3.OperationalError:
             pass
+    db.commit()
+    db.execute(
+        "CREATE INDEX IF NOT EXISTS idx_cities_name ON cities(name COLLATE NOCASE)"
+    )
     db.commit()
     db.execute(
         "INSERT OR IGNORE INTO company_payout_config (id, updated_at) VALUES (1, ?)",
@@ -1288,11 +1300,50 @@ def home() -> str:
         context = build_admin_dashboard_context()
         return render_template("admin_dashboard.html", **context)
     db = get_db()
-    cities = [row[0] for row in db.execute(
-        "SELECT DISTINCT city FROM cars WHERE city <> '' ORDER BY city").fetchall()]
+    city_rows = db.execute(
+        "SELECT name, state FROM cities ORDER BY name"
+    ).fetchall()
+    if city_rows:
+        cities = [
+            {"name": row["name"], "state": row["state"] or ""}
+            for row in city_rows
+        ]
+    else:
+        fallback_rows = db.execute(
+            "SELECT DISTINCT city FROM cars WHERE city <> '' ORDER BY city"
+        ).fetchall()
+        cities = [{"name": row[0], "state": ""} for row in fallback_rows]
     vehicle_types = [row[0] for row in db.execute(
         "SELECT DISTINCT vehicle_type FROM cars WHERE vehicle_type <> '' ORDER BY vehicle_type").fetchall()]
-    return render_template("home.html", cities=cities, vehicle_types=vehicle_types)
+    owner_stats = None
+    commission_rate_pct = int(COMPANY_COMMISSION_RATE * 100)
+    if g.user and has_role("owner"):
+        stats_row = db.execute(
+            """
+            SELECT
+                SUM(CASE WHEN rentals.status = 'active' THEN 1 ELSE 0 END) AS active_trips,
+                SUM(CASE WHEN rentals.payment_status = 'awaiting_payment' THEN 1 ELSE 0 END) AS awaiting_payouts,
+                SUM(CASE WHEN rentals.payment_status = 'awaiting_payment' THEN rentals.total_amount ELSE 0 END) AS awaiting_total
+            FROM rentals
+            JOIN cars ON cars.id = rentals.car_id
+            WHERE cars.owner_id = ?
+            """,
+            (g.user["id"],),
+        ).fetchone()
+        awaiting_total = stats_row["awaiting_total"] or 0
+        owner_stats = {
+            "active_trips": stats_row["active_trips"] or 0,
+            "awaiting_payouts": stats_row["awaiting_payouts"] or 0,
+            "awaiting_total": round(awaiting_total, 2),
+            "take_home_estimate": round(awaiting_total * (1 - COMPANY_COMMISSION_RATE), 2),
+        }
+    return render_template(
+        "home.html",
+        cities=cities,
+        vehicle_types=vehicle_types,
+        owner_stats=owner_stats,
+        commission_rate=commission_rate_pct,
+    )
 
 
 @app.route("/search", methods=["GET", "POST"])
