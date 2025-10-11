@@ -1,0 +1,60 @@
+{% extends "base.html" %}
+{% block title %}Admin | Users{% endblock %}
+{% block content %}
+<section class="py-5">
+    <div class="container">
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <div>
+                <h1 class="h4 fw-bold mb-1">Users register</h1>
+                <p class="text-muted mb-0">View customers, hosts, document counts, and verification status.</p>
+            </div>
+            <a href="{{ url_for('admin_dashboard') }}" class="btn btn-outline-secondary">Back to dashboard</a>
+        </div>
+        <div class="card card-zoom">
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table class="table align-middle">
+                        <thead>
+                            <tr>
+                                <th>#</th>
+                                <th>User</th>
+                                <th>Role</th>
+                                <th>Contact</th>
+                                <th>Docs</th>
+                                <th>Vehicles</th>
+                                <th>Trips</th>
+                                <th class="text-end">Verification</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for user in users %}
+                                <tr>
+                                    <td>{{ user['id'] }}</td>
+                                    <td>
+                                        <div class="fw-semibold">{{ user['username'] }}</div>
+                                        {% if user['is_admin'] %}<span class="badge bg-success-subtle text-success">Admin</span>{% endif %}
+                                    </td>
+                                    <td class="text-muted">{{ user['role']|capitalize }}</td>
+                                    <td class="text-muted small">{{ user['full_name'] or '—' }}<br>{{ user['phone'] or '—' }}</td>
+                                    <td>{{ user['doc_count'] }}</td>
+                                    <td>{{ user['vehicle_count'] }}</td>
+                                    <td>{{ user['trip_count'] }}</td>
+                                    <td class="text-end">
+                                        {% if user['profile_verified_at'] %}
+                                            <span class="badge bg-success-subtle text-success">Verified {{ user['profile_verified_at'] }}</span>
+                                        {% else %}
+                                            <form method="post" action="{{ url_for('admin_verify_user', user_id=user['id']) }}" class="d-inline">
+                                                <button type="submit" class="btn btn-sm btn-outline-success">Mark verified</button>
+                                            </form>
+                                        {% endif %}
+                                    </td>
+                                </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+{% endblock %}

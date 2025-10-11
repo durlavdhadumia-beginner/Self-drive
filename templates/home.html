@@ -1,25 +1,109 @@
 ﻿{% extends "base.html" %}
-{% block title %}DriveNow | Self-Drive Car Rentals{% endblock %}
+{% block title %}CarRentalNTravel | Self-Drive & Hosting{% endblock %}
+{% set is_owner = g.user and has_role('owner') %}
 {% block content %}
+{% if is_owner %}
+<section class="py-5" style="background:linear-gradient(120deg, rgba(13,159,92,0.18), rgba(10,92,54,0.12));">
+    <div class="container py-4">
+        <div class="row align-items-center g-5">
+            <div class="col-lg-6">
+                <span class="badge-zoom mb-3 text-uppercase">Grow with CarRentalNTravel</span>
+                <h1 class="display-5 fw-bold mb-3">Turn parked cars into a steady, trackable income stream.</h1>
+                <p class="fs-5 text-secondary mb-4">
+                    Publish your vehicles in minutes, screen every booking with verified renters, and let our payouts team credit 95% of every trip straight to your account.
+                </p>
+                <ul class="list-unstyled text-secondary mb-4">
+                    <li class="mb-2"><i class="bi bi-check-circle-fill text-success"></i> Real-time dashboards for live, upcoming, and completed trips.</li>
+                    <li class="mb-2"><i class="bi bi-check-circle-fill text-success"></i> Automated commission deductions with transparent earnings breakdowns.</li>
+                    <li class="mb-2"><i class="bi bi-check-circle-fill text-success"></i> Ready-to-use communication templates and instant notifications.</li>
+                </ul>
+                <div class="d-flex flex-column flex-sm-row gap-3">
+                    <a href="{{ url_for('owner_cars') }}" class="btn btn-success btn-lg"><i class="bi bi-speedometer2"></i> Go to host dashboard</a>
+                    <a href="{{ url_for('profile') }}" class="btn btn-outline-success btn-lg"><i class="bi bi-person-badge"></i> Complete payout details</a>
+                </div>
+            </div>
+            <div class="col-lg-6">
+                <div class="card card-zoom h-100">
+                    <div class="card-body">
+                        <h2 class="h4 fw-semibold mb-3">Host performance snapshot</h2>
+                        <div class="row g-4 text-muted small">
+                            <div class="col-sm-6">
+                                <div class="fw-semibold text-success fs-3 mb-1">{{ rentals|selectattr('status','equalto','active')|list|length or 0 }}</div>
+                                <p class="mb-0">Trips currently live</p>
+                            </div>
+                            <div class="col-sm-6">
+                                <div class="fw-semibold text-success fs-3 mb-1">{{ pending_payments|length or 0 }}</div>
+                                <p class="mb-0">Payouts awaiting release</p>
+                            </div>
+                            <div class="col-sm-6">
+                                <div class="fw-semibold text-success fs-3 mb-1">95%</div>
+                                <p class="mb-0">Average host take-home per trip</p>
+                            </div>
+                            <div class="col-sm-6">
+                                <div class="fw-semibold text-success fs-3 mb-1">4.8★</div>
+                                <p class="mb-0">Community rating across hosted rides</p>
+                            </div>
+                        </div>
+                        <hr class="my-4">
+                        <p class="text-muted mb-2">Need inspiration? Explore our host playbook for pricing ideas, vehicle photography tips, and seasonal demand insights.</p>
+                        <a href="{{ url_for('owner_cars') }}#host-tips" class="btn btn-outline-success btn-sm">View hosting playbook</a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+
+<section class="py-5">
+    <div class="container">
+        <h2 class="section-title">Why hosts choose CarRentalNTravel</h2>
+        <div class="row row-cols-1 row-cols-md-3 g-4">
+            <div class="col">
+                <div class="card card-zoom h-100">
+                    <div class="card-body">
+                        <h3 class="h5 fw-semibold">Seamless earnings</h3>
+                        <p class="text-muted mb-0">We collect payments, retain a 5% service fee, and schedule the remaining 95% straight to your verified bank account or UPI ID.</p>
+                    </div>
+                </div>
+            </div>
+            <div class="col">
+                <div class="card card-zoom h-100">
+                    <div class="card-body">
+                        <h3 class="h5 fw-semibold">Insights that matter</h3>
+                        <p class="text-muted mb-0">Live tracking, distance analytics, and payout history help you optimise pricing and availability with confidence.</p>
+                    </div>
+                </div>
+            </div>
+            <div class="col">
+                <div class="card card-zoom h-100">
+                    <div class="card-body">
+                        <h3 class="h5 fw-semibold">Trusted renters</h3>
+                        <p class="text-muted mb-0">Every renter completes a secure KYC flow, and you decide who drives your vehicle with instant accept/decline controls.</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+{% else %}
 <section class="py-5" style="background:linear-gradient(120deg, rgba(13,159,92,0.12), rgba(10,92,54,0.08));">
     <div class="container py-4">
         <div class="row align-items-center g-5">
             <div class="col-lg-6">
                 <span class="badge-zoom mb-3">India's favourite self-drive style experience</span>
-                <h1 class="display-5 fw-bold mb-3">Hit the road with premium self-drive cars across your city.</h1>
+                <h1 class="display-5 fw-bold mb-3">Hit the road with premium self-drive vehicles across your city.</h1>
                 <p class="fs-5 text-secondary mb-4">
-                    Browse SUVs, hatchbacks, EVs and more. Flexible packages, curated add-ons, and instant confirmation—just like Zoomcar.
+                    Browse SUVs, compact rides, motorcycles, EVs and more. Flexible packages, curated add-ons, and instant confirmation.
                 </p>
                 <ul class="list-unstyled text-secondary mb-4">
-                    <li class="mb-2"><i class="bi bi-check-circle-fill text-success"></i> 24x7 on-road support</li>
-                    <li class="mb-2"><i class="bi bi-check-circle-fill text-success"></i> Fuel-efficient & sanitised cars</li>
+                    <li class="mb-2"><i class="bi bi-check-circle-fill text-success"></i> Fuel-efficient & sanitised vehicles</li>
                     <li class="mb-2"><i class="bi bi-check-circle-fill text-success"></i> Zero paperwork at pickup</li>
                 </ul>
             </div>
             <div class="col-lg-6">
                 <div class="card card-zoom">
                     <div class="card-body">
-                        <h2 class="h4 fw-semibold mb-3">Book your next drive</h2>
+                        <h2 class="h4 fw-semibold mb-3">Plan your next drive</h2>
                         <form action="{{ url_for('search') }}" method="get" id="hero-search" class="row g-3">
                             <div class="col-12">
                                 <label for="city" class="form-label">City</label>
@@ -42,18 +126,100 @@
                                 <label for="radius" class="form-label">Search radius (km)</label>
                                 <input type="number" class="form-control" id="radius" name="radius" value="10" min="1" max="200">
                             </div>
-                            <div class="col-md-6 d-flex align-items-end">
-                                <button type="button" class="btn btn-outline-success w-100" id="detect-location">
-                                    <i class="bi bi-geo-alt"></i> Use my location
-                                </button>
+                            {% set popular_types = ['SUV', 'Compact', 'Sedan', 'Hatchback', 'Motorcycle', 'Scooter', 'Pickup', 'Electric'] %}
+                            <div class="col-md-6">
+                                <label class="form-label" for="vehicle_type">Vehicle type</label>
+                                <select class="form-select" id="vehicle_type" name="vehicle_types">
+                                    <option value="">Any vehicle</option>
+                                    {% for label in popular_types %}
+                                        <option value="{{ label }}">{{ label }}</option>
+                                    {% endfor %}
+                                    {% for v in vehicle_types %}
+                                        {% if v and v not in popular_types %}
+                                            <option value="{{ v }}">{{ v }}</option>
+                                        {% endif %}
+                                    {% endfor %}
+                                </select>
                             </div>
-                            <input type="hidden" name="latitude" id="search-lat">
-                            <input type="hidden" name="longitude" id="search-lng">
-                            <div class="col-12 d-grid">
-                                <button type="submit" class="btn btn-success btn-lg">Search cars</button>
+                            <div class="col-md-6">
+                                <label class="form-label" for="price_unit">Rate type (&#8377;/hr or &#8377;/day)</label>
+                                <select class="form-select" id="price_unit" name="price_unit">
+                                    <option value="hour" selected>Per hour</option>
+                                    <option value="day">Per day</option>
+                                </select>
+                            </div>
+                            <div class="col-md-6 d-flex gap-3">
+                                <div class="flex-grow-1">
+                                    <label class="form-label" for="price_min">Min rate</label>
+                                    <input type="number" class="form-control" id="price_min" name="price_min" min="0" step="50">
+                                </div>
+                                <div class="flex-grow-1">
+                                    <label class="form-label" for="price_max">Max rate</label>
+                                    <input type="number" class="form-control" id="price_max" name="price_max" min="0" step="50">
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label" for="seat_min">Seats (min)</label>
+                                <input type="number" class="form-control" id="seat_min" name="seat_min" min="2" max="12">
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label" for="seat_max">Seats (max)</label>
+                                <input type="number" class="form-control" id="seat_max" name="seat_max" min="2" max="12">
+                            </div>
+                            <div class="col-12">
+                                <div class="form-check">
+                                    <input class="form-check-input" type="checkbox" value="on" id="search-gps" name="require_gps">
+                                    <label class="form-check-label" for="search-gps">
+                                        Show only vehicles with GPS tracking
+                                    </label>
+                                </div>
+                            </div>
+                            <input type="hidden" id="search-lat" name="latitude">
+                            <input type="hidden" id="search-lng" name="longitude">
+                            <div class="col-12 d-flex flex-column flex-sm-row gap-3">
+                                <button type="submit" class="btn btn-success btn-lg flex-grow-1">Search cars</button>
+                                <button type="button" id="detect-location" class="btn btn-outline-success flex-grow-1"><i class="bi bi-geo-alt"></i> Use my location</button>
                             </div>
                         </form>
-                        <p class="small text-muted mt-3 mb-0">You'll refine your pickup spot on the next screen using our interactive map.</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+
+<section class="py-5">
+    <div class="container">
+        <div class="row g-4 align-items-center">
+            <div class="col-lg-5">
+                <h2 class="section-title">Own a vehicle? Earn more with your vehicle</h2>
+                <p class="text-muted mb-4">List your car or motorcycle in minutes, get instant booking alerts, and track every trip from a single dashboard. Verified IDs, GPS tracking, and admin support keep hosts protected.</p>
+                <ul class="list-unstyled text-muted mb-4">
+                    <li class="mb-2"><i class="bi bi-check-circle-fill text-success"></i> Upload up to eight photos per vehicle and set your own pricing.</li>
+                    <li class="mb-2"><i class="bi bi-check-circle-fill text-success"></i> Owners can extend trips on the fly and view payment status in real time.</li>
+                    <li class="mb-2"><i class="bi bi-check-circle-fill text-success"></i> Dedicated admin team validates documents and ensures timely payouts.</li>
+                </ul>
+                <a href="{{ url_for('owner_cars') }}" class="btn btn-outline-success btn-lg">Start hosting</a>
+            </div>
+            <div class="col-lg-7">
+                <div class="card card-zoom">
+                    <div class="card-body">
+                        <h2 class="h5 fw-semibold mb-3">Live trip snapshot</h2>
+                        <p class="text-muted small">Get realtime status of your fleet's location across every trip.</p>
+                        <div class="d-flex gap-4 text-muted small">
+                            <div>
+                                <div class="fw-bold h4 text-success mb-0">38</div>
+                                <span>Trips active today</span>
+                            </div>
+                            <div>
+                                <div class="fw-bold h4 text-success mb-0">12m</div>
+                                <span>Average payout / month</span>
+                            </div>
+                            <div>
+                                <div class="fw-bold h4 text-success mb-0">4.8 rating</div>
+                                <span>Host satisfaction</span>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -79,72 +245,23 @@
                     <img src="https://images.unsplash.com/photo-1517940310602-9601d0b1f13c?auto=format&fit=crop&w=900&q=80" class="card-img-top" alt="Hatchback">
                     <div class="card-body">
                         <h3 class="h5">City-smart hatchbacks</h3>
-                        <p class="text-muted mb-0">Easy parking, unbeatable mileage. Great for daily errands and short hops.</p>
+                        <p class="text-muted mb-0">Easy parking, fuel efficient and weekend-friendly drives for two.</p>
                     </div>
                 </div>
             </div>
             <div class="col">
                 <div class="card card-zoom h-100">
-                    <img src="https://images.unsplash.com/photo-1619767886558-efdc259cde1a?auto=format&fit=crop&w=900&q=80" class="card-img-top" alt="EV">
+                    <img src="https://images.unsplash.com/photo-1605559424843-9e4c5640da3c?auto=format&fit=crop&w=900&q=80" class="card-img-top" alt="EV">
                     <div class="card-body">
-                        <h3 class="h5">Future-forward EVs</h3>
-                        <p class="text-muted mb-0">Go green with zero-emission drives. Charging support across leading Indian cities.</p>
+                        <h3 class="h5">Electric favourites</h3>
+                        <p class="text-muted mb-0">Zero-emission city runs with charging support and fast-pass tolls.</p>
                     </div>
                 </div>
             </div>
         </div>
     </div>
 </section>
-
-<section class="py-5" style="background:#fff;">
-    <div class="container">
-        <div class="row align-items-center g-5">
-            <div class="col-lg-6">
-                <img src="https://images.unsplash.com/photo-1529429617124-aee1ca0c99ce?auto=format&fit=crop&w=1100&q=80" alt="Car owner" class="img-fluid rounded-4 shadow">
-            </div>
-            <div class="col-lg-6">
-                <h2 class="section-title">Earn as a DriveNow Host</h2>
-                <p class="text-secondary fs-5">List your idle car, manage availability, track GPS, and earn up to ₹45,000 per month. We do verifications, you enjoy the earnings.</p>
-                <div class="d-flex flex-column flex-sm-row gap-3">
-                    <a href="{{ url_for('register') }}" class="btn btn-success btn-lg">Start hosting</a>
-                    <a href="{{ url_for('owner_cars') if g.user and has_role('owner') else url_for('login') }}" class="btn btn-outline-success btn-lg">View host dashboard</a>
-                </div>
-            </div>
-        </div>
-    </div>
-</section>
-
-<section class="py-5">
-    <div class="container">
-        <h2 class="section-title">Why travellers love DriveNow</h2>
-        <div class="row row-cols-1 row-cols-md-3 g-4">
-            <div class="col">
-                <div class="card card-zoom h-100">
-                    <div class="card-body">
-                        <h3 class="h5 mb-2"><i class="bi bi-speedometer2 text-success"></i> Flexible packages</h3>
-                        <p class="text-muted mb-0">Choose hourly, full-day, or multi-day rentals. Modify schedules anytime from your trips page.</p>
-                    </div>
-                </div>
-            </div>
-            <div class="col">
-                <div class="card card-zoom h-100">
-                    <div class="card-body">
-                        <h3 class="h5 mb-2"><i class="bi bi-shield-check text-success"></i> All-round protection</h3>
-                        <p class="text-muted mb-0">Damage waiver plans, GPS tracking, and safety alerts help you drive worry-free.</p>
-                    </div>
-                </div>
-            </div>
-            <div class="col">
-                <div class="card card-zoom h-100">
-                    <div class="card-body">
-                        <h3 class="h5 mb-2"><i class="bi bi-lightning-charge text-success"></i> Instant confirmation</h3>
-                        <p class="text-muted mb-0">Real-time availability lets you book in seconds. No phone calls or manual approvals.</p>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
-</section>
+{% endif %}
 {% endblock %}
 {% block scripts %}
 {{ super() }}
@@ -177,7 +294,7 @@
     if (detectBtn && navigator.geolocation) {
         detectBtn.addEventListener('click', () => {
             detectBtn.disabled = true;
-            detectBtn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Locating…';
+            detectBtn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Locating...';
             navigator.geolocation.getCurrentPosition((position) => {
                 latField.value = position.coords.latitude.toFixed(6);
                 lngField.value = position.coords.longitude.toFixed(6);

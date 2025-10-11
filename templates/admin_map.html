@@ -1,0 +1,66 @@
+{% extends "base.html" %}
+{% block title %}Admin | Live Map{% endblock %}
+{% block head %}
+    {{ super() }}
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4bM3Dprb8kJkIBlEYwH2Rn8B4QTFwPp2d9f7Hf0+4M=" crossorigin=""/>
+    <style>
+        #admin-map {
+            height: 480px;
+            border-radius: 1rem;
+            overflow: hidden;
+            box-shadow: 0 20px 40px rgba(15, 118, 110, 0.1);
+        }
+    </style>
+{% endblock %}
+{% block content %}
+<section class="py-5">
+    <div class="container">
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <div>
+                <h1 class="h4 fw-bold mb-1">Live vehicle map</h1>
+                <p class="text-muted mb-0">View all listed vehicles and highlight those currently on trips.</p>
+            </div>
+            <a href="{{ url_for('admin_dashboard') }}" class="btn btn-outline-secondary">Back to dashboard</a>
+        </div>
+        <div id="admin-map"></div>
+    </div>
+</section>
+{% endblock %}
+{% block scripts %}
+    {{ super() }}
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+    <script>
+        const map = L.map('admin-map').setView([20.5937, 78.9629], 5);
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            maxZoom: 18,
+            attribution: '&copy; <a href="https://www.openstreetmap.org">OpenStreetMap</a> contributors'
+        }).addTo(map);
+
+        const listings = {{ vehicles|tojson|safe }};
+        const activeIds = new Set({{ active_vehicle_ids|tojson|safe }});
+        if (listings.length) {
+            const bounds = L.latLngBounds();
+            listings.forEach((vehicle) => {
+                if (!vehicle.latitude || !vehicle.longitude) {
+                    return;
+                }
+                const marker = L.marker([vehicle.latitude, vehicle.longitude], {
+                    icon: activeIds.has(vehicle.id) ? L.icon({
+                        iconUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png',
+                        iconSize: [25, 41],
+                        iconAnchor: [12, 41],
+                        popupAnchor: [0, -30],
+                        className: 'marker-active'
+                    }) : undefined
+                });
+                const popup = `<strong>${vehicle.name}</strong><br>${vehicle.vehicle_type || 'Vehicle'} - ${vehicle.city || 'City not set'}<br>Hosted by ${vehicle.owner_username}`;
+                marker.bindPopup(popup);
+                marker.addTo(map);
+                bounds.extend([vehicle.latitude, vehicle.longitude]);
+            });
+            if (bounds.isValid()) {
+                map.fitBounds(bounds.pad(0.2));
+            }
+        }
+    </script>
+{% endblock %}

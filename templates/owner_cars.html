@@ -1,25 +1,79 @@
-{% extends "base.html" %}
+﻿{% extends "base.html" %}
 {% block title %}Host Dashboard | DriveNow{% endblock %}
 {% block content %}
 <section class="py-5">
     <div class="container">
-        <div
-            class="d-flex flex-column flex-lg-row justify-content-between align-items-start align-items-lg-center gap-3 mb-4">
+        <div class="d-flex flex-column flex-lg-row justify-content-between align-items-start align-items-lg-center gap-3 mb-4">
             <div>
                 <h1 class="h3 fw-bold mb-1">Host dashboard</h1>
-                <p class="text-muted mb-0">Track your fleet, update availability, and close trips.</p>
+                <p class="text-muted mb-0">Track your fleet, respond to bookings, and close trips.</p>
             </div>
-            <div class="bg-white shadow-sm rounded-4 px-4 py-3">
-                <div class="small text-uppercase text-muted fw-semibold">Active rentals</div>
-                <div class="fw-bold fs-4 text-success">{{ rentals|length }}</div>
+            <div class="bg-white shadow-sm rounded-4 px-4 py-3 d-flex gap-4">
+                <div>
+                    <div class="small text-uppercase text-muted fw-semibold">Active rentals</div>
+                    <div class="fw-bold fs-5 text-success">{{ rentals|selectattr('status', 'equalto', 'active')|list|length }}</div>
+                </div>
+                <div>
+                    <div class="small text-uppercase text-muted fw-semibold">Pending requests</div>
+                    <div class="fw-bold fs-5 text-success">{{ rentals|selectattr('owner_response', 'equalto', 'pending')|list|length }}</div>
+                </div>
             </div>
         </div>
 
+        <div class="card card-zoom mb-4">
+            <div class="card-body">
+                <h2 class="h5 fw-semibold mb-3">Need to raise a complaint or share feedback?</h2>
+                <p class="text-muted small mb-3">Flag concerns about renters, vehicle condition on return, payouts, or any platform issues. Our support desk will step in quickly.</p>
+                <form class="row g-3 align-items-end" method="post" action="{{ url_for('submit_feedback') }}">
+                    <input type="hidden" name="redirect_endpoint" value="owner_cars">
+                    <input type="hidden" name="feedback_role" value="owner">
+                    <div class="col-md-4">
+                        <label class="form-label small" for="host-feedback-trip">Booking (optional)</label>
+                        <select class="form-select" id="host-feedback-trip" name="rental_id">
+                            <option value="" selected>General platform feedback</option>
+                            {% for rental in rentals %}
+                                <option value="{{ rental['id'] }}">
+                                    {{ rental['car_name'] }} with {{ rental['renter_username'] }} ({{ rental['start_time'] }} to {{ rental['end_time'] or 'TBD' }})
+                                </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label small" for="host-feedback-category">Category</label>
+                        <select class="form-select" id="host-feedback-category" name="category">
+                            <option value="Platform issue">Platform issue</option>
+                            <option value="Vehicle damage">Vehicle damage</option>
+                            <option value="Late return">Late return</option>
+                            <option value="Payment concern">Payment concern</option>
+                            <option value="Renter conduct">Renter conduct</option>
+                            <option value="Other">Other</option>
+                        </select>
+                    </div>
+                    <div class="col-md-5">
+                        <label class="form-label small" for="host-feedback-description">Describe the issue</label>
+                        <textarea class="form-control" id="host-feedback-description" name="description" rows="2" placeholder="Provide context so we can assist" required></textarea>
+                    </div>
+                    <div class="col-12 text-end">
+                        <button type="submit" class="btn btn-outline-success">Send to support</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        {% if pending_payments %}
+        <div class="alert alert-info d-flex flex-column flex-lg-row justify-content-between align-items-lg-center gap-2 mb-4">
+            {% set pending_total = pending_payments|sum(attribute='total_amount') %}
+            <div>
+                <strong>{{ pending_payments|length }} payout{% if pending_payments|length > 1 %}s{% endif %} pending.</strong> DriveNow receives each customer payment, retains a 5% service fee, and then schedules the remaining 95% for your account.
+            </div>
+            <div class="text-muted small">Latest request total: Rs {{ pending_total|round|int }} - Your take-home: Rs {{ (pending_total * (1 - commission_rate / 100))|round(2) }}</div>
+        </div>
+        {% endif %}
         <div class="row g-4">
             <div class="col-lg-7">
                 <div class="card card-zoom h-100">
                     <div class="card-body">
-                        <h2 class="h5 fw-semibold mb-3">My listed cars</h2>
+                        <h2 class="h5 fw-semibold mb-3">My listed vehicles</h2>
                         {% if cars %}
                         <div class="list-group list-group-flush">
                             {% for car in cars %}
@@ -27,8 +81,7 @@
                                 <div class="d-flex justify-content-between align-items-start mb-3">
                                     <div>
                                         <h3 class="h5 mb-1">{{ car['name'] or car['brand'] ~ ' ' ~ car['model'] }}</h3>
-                                        <p class="text-muted small mb-0">{{ car['brand'] }} {{ car['model'] }} � {{
-                                            car['city'] or 'City not set' }}</p>
+                                        <p class="text-muted small mb-0">{{ car['brand'] }} {{ car['model'] }} - {{ car['city'] or 'City not set' }}</p>
                                     </div>
                                     <span class="badge {{ 'bg-success' if car['is_available'] else 'bg-secondary' }}">
                                         {{ 'Available' if car['is_available'] else 'Unavailable' }}
@@ -46,22 +99,19 @@
                                 <div class="row text-muted small mb-3">
                                     <div class="col-sm-6">Licence: {{ car['licence_plate'] }}</div>
                                     <div class="col-sm-6">Seats: {{ car['seats'] }}</div>
-                                    <div class="col-sm-6">Hourly rate: ?{{ '%.0f'|format(car['rate_per_hour']) }}</div>
-                                    <div class="col-sm-6">Daily rate: ?{{ '%.0f'|format(car['daily_rate']) }}</div>
+                                    <div class="col-sm-6">Hourly rate: Rs {{ '%.0f'|format(car['rate_per_hour']) }}</div>
+                                    <div class="col-sm-6">Daily rate: Rs {{ '%.0f'|format(car['daily_rate']) }}</div>
                                     <div class="col-sm-6">Fuel type: {{ car['fuel_type'] or 'NA' }}</div>
                                     <div class="col-sm-6">Transmission: {{ car['transmission'] or 'NA' }}</div>
                                 </div>
                                 <div class="d-flex flex-wrap gap-3 align-items-center">
-                                    <form method="post"
-                                        action="{{ url_for('owner_toggle_availability', car_id=car['id']) }}">
+                                    <form method="post" action="{{ url_for('owner_toggle_availability', car_id=car['id']) }}">
                                         <button type="submit"
                                             class="btn btn-sm {{ 'btn-outline-secondary' if car['is_available'] else 'btn-outline-success' }}">
-                                            {% if car['is_available'] %}Mark unavailable{% else %}Mark available{% endif
-                                            %}
+                                            {% if car['is_available'] %}Mark unavailable{% else %}Mark available{% endif %}
                                         </button>
                                     </form>
-                                    <form method="post"
-                                        action="{{ url_for('owner_update_location', car_id=car['id']) }}"
+                                    <form method="post" action="{{ url_for('owner_update_location', car_id=car['id']) }}"
                                         class="d-flex flex-wrap gap-2">
                                         <input type="text" class="form-control form-control-sm" name="latitude"
                                             placeholder="Latitude" required>
@@ -74,22 +124,32 @@
                             {% endfor %}
                         </div>
                         {% else %}
-                        <p class="text-muted mb-0">You haven't listed any cars yet. Use the form to add your first
-                            vehicle.</p>
+                        <p class="text-muted mb-0">You have not listed any cars yet. Add your first car to start hosting.</p>
                         {% endif %}
                     </div>
                 </div>
             </div>
-            <div class="col-lg-5">
+                        <div class="col-lg-5">
                 <div class="card card-zoom mb-4">
                     <div class="card-body">
-                        <h2 class="h5 fw-semibold mb-3">Add a new car</h2>
-                        <form method="post" action="{{ url_for('owner_add_car') }}" class="row gy-3"
-                            enctype="multipart/form-data">
-                            <div class="col-12">
+                        <h2 class="h5 fw-semibold mb-3">List a new vehicle</h2>
+                        <form method="post" action="{{ url_for('owner_add_car') }}" enctype="multipart/form-data" class="row g-3">
+                            <div class="col-md-6">
+                                <label class="form-label" for="vehicle_type">Vehicle type</label>
+                                <select class="form-select" id="vehicle_type" name="vehicle_type" required>
+                                    <option value="">Select type</option>
+                                    <option value="car">Car</option>
+                                    <option value="motorcycle">Motorcycle</option>
+                                    <option value="scooter">Scooter</option>
+                                </select>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label" for="size_category">Size category</label>
+                                <input type="text" class="form-control" id="size_category" name="size_category" placeholder="Compact / Cruiser">
+                            </div>
+                            <div class="col-md-6">
                                 <label class="form-label" for="name">Listing name</label>
-                                <input type="text" class="form-control" id="name" name="name"
-                                    placeholder="e.g. EcoSport Urban Cruiser" required>
+                                <input type="text" class="form-control" id="name" name="name" placeholder="e.g. Swift Automatic">
                             </div>
                             <div class="col-md-6">
                                 <label class="form-label" for="brand">Brand</label>
@@ -100,99 +160,188 @@
                                 <input type="text" class="form-control" id="model" name="model" required>
                             </div>
                             <div class="col-md-6">
-                                <label class="form-label" for="licence_plate">Licence plate</label>
-                                <input type="text" class="form-control" id="licence_plate" name="licence_plate"
-                                    required>
+                                <label class="form-label" for="licence_plate">Registration number</label>
+                                <input type="text" class="form-control" id="licence_plate" name="licence_plate" required>
                             </div>
                             <div class="col-md-6">
-                                <label class="form-label" for="city">City</label>
-                                <input type="text" class="form-control" id="city" name="city"
-                                    placeholder="e.g. Bengaluru" required>
+                                <label class="form-label" for="seats">Seats</label>
+                                <input type="number" class="form-control" id="seats" name="seats" min="1" max="12" value="4">
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label" for="rate_per_hour">Rate/hour (Rs)</label>
+                                <input type="number" class="form-control" id="rate_per_hour" name="rate_per_hour" min="0" value="350">
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label" for="daily_rate">Rate/day (Rs)</label>
+                                <input type="number" class="form-control" id="daily_rate" name="daily_rate" placeholder="Auto-calculated if blank">
                             </div>
                             <div class="col-md-6">
                                 <label class="form-label" for="fuel_type">Fuel type</label>
-                                <input type="text" class="form-control" id="fuel_type" name="fuel_type"
-                                    placeholder="Petrol / Diesel / EV">
+                                <input type="text" class="form-control" id="fuel_type" name="fuel_type" placeholder="Petrol / EV">
                             </div>
                             <div class="col-md-6">
                                 <label class="form-label" for="transmission">Transmission</label>
-                                <input type="text" class="form-control" id="transmission" name="transmission"
-                                    placeholder="Manual / Automatic">
+                                <input type="text" class="form-control" id="transmission" name="transmission" placeholder="Manual / Automatic">
                             </div>
-                            <div class="col-md-4">
-                                <label class="form-label" for="seats">Seats</label>
-                                <input type="number" class="form-control" id="seats" name="seats" min="1" max="12"
-                                    value="5">
-                            </div>
-                            <div class="col-md-4">
-                                <label class="form-label" for="rate_per_hour">Rate/hr (?)</label>
-                                <input type="number" step="0.5" class="form-control" id="rate_per_hour"
-                                    name="rate_per_hour" value="350">
-                            </div>
-                            <div class="col-md-4">
-                                <label class="form-label" for="daily_rate">Rate/day (?)</label>
-                                <input type="number" step="0.5" class="form-control" id="daily_rate" name="daily_rate"
-                                    placeholder="Auto-calculated if blank">
+                            <div class="col-md-6">
+                                <label class="form-label" for="city">City</label>
+                                <input type="text" class="form-control" id="city" name="city" placeholder="Bengaluru">
                             </div>
                             <div class="col-md-6">
                                 <label class="form-label" for="latitude">Latitude</label>
-                                <input type="text" class="form-control" id="latitude" name="latitude"
-                                    placeholder="12.9716" required>
+                                <input type="text" class="form-control" id="latitude" name="latitude" placeholder="12.9716" required>
                             </div>
                             <div class="col-md-6">
                                 <label class="form-label" for="longitude">Longitude</label>
-                                <input type="text" class="form-control" id="longitude" name="longitude"
-                                    placeholder="77.5946" required>
+                                <input type="text" class="form-control" id="longitude" name="longitude" placeholder="77.5946" required>
+                            </div>
+                            <div class="col-12">
+                                <div class="form-check">
+                                    <input class="form-check-input" type="checkbox" id="vehicle_has_gps" name="has_gps" {% if g.profile and g.profile.get('gps_tracking') %}checked{% endif %}>
+                                    <label class="form-check-label" for="vehicle_has_gps">This vehicle has a GPS device installed</label>
+                                </div>
                             </div>
                             <div class="col-12">
                                 <label class="form-label" for="image_url">Primary image URL</label>
-                                <input type="url" class="form-control" id="image_url" name="image_url"
-                                    placeholder="https://...">
+                                <input type="url" class="form-control" id="image_url" name="image_url" placeholder="https://...">
                             </div>
                             <div class="col-12">
                                 <label class="form-label" for="photos">Upload gallery images</label>
-                                <input type="file" class="form-control" id="photos" name="photos" accept="image/*"
-                                    multiple>
-                                <div class="form-text">Upload up to 10 images (PNG, JPG, GIF, WEBP). We'll resize
-                                    automatically.</div>
+                                <input type="file" class="form-control" id="photos" name="photos" accept="image/*" multiple>
+                                <div class="form-text">Upload up to 8 images (PNG, JPG, GIF, WEBP).</div>
                             </div>
                             <div class="col-12">
-                                <label class="form-label" for="description">Description / highlights</label>
-                                <textarea class="form-control" id="description" name="description" rows="3"
-                                    placeholder="Mention delivery options, add-ons, insurance, etc."></textarea>
+                                <label class="form-label" for="description">Highlights</label>
+                                <textarea class="form-control" id="description" name="description" rows="3" placeholder="Mention delivery options, add-ons, insurance, etc."></textarea>
                             </div>
                             <div class="col-12 d-grid">
-                                <button type="submit" class="btn btn-success">List car</button>
+                                <button type="submit" class="btn btn-success">List vehicle</button>
                             </div>
                         </form>
+                    </div>
+                </div>
+                <div class="card card-zoom mb-4">
+                    <div class="card-body">
+                        <h2 class="h5 fw-semibold mb-3">Pending booking requests</h2>
+                        {% set pending_requests = rentals|selectattr('owner_response', 'equalto', 'pending')|list %}
+                        {% set counter_requests = rentals|selectattr('owner_response', 'equalto', 'counter')|list %}
+                        {% if pending_requests or counter_requests %}
+                            {% for rental in pending_requests %}
+                                <div class="border rounded-4 p-3 mb-3">
+                                    <div class="fw-semibold">{{ rental['car_name'] }} - {{ rental['renter_username'] }}</div>
+                                    <div class="text-muted small mb-2">Start {{ rental['start_time'] }} ? {{ rental['end_time'] or 'TBD' }}</div>
+                                    <div class="text-muted small mb-3">Offer total: Rs {{ rental['total_amount']|round|int }}</div>
+                                    <div class="d-flex gap-2 flex-wrap">
+                                        <form method="post" action="{{ url_for('owner_respond_rental', rental_id=rental['id']) }}">
+                                            <input type="hidden" name="action" value="accept">
+                                            <button type="submit" class="btn btn-sm btn-success">Accept</button>
+                                        </form>
+                                        <form method="post" action="{{ url_for('owner_respond_rental', rental_id=rental['id']) }}" class="d-flex gap-2">
+                                            <input type="hidden" name="action" value="reject">
+                                            <input type="text" class="form-control form-control-sm" name="reason" placeholder="Reason" required>
+                                            <button type="submit" class="btn btn-sm btn-outline-danger">Reject</button>
+                                        </form>
+                                        <form method="post" action="{{ url_for('owner_respond_rental', rental_id=rental['id']) }}" class="d-flex gap-2">
+                                            <input type="hidden" name="action" value="counter">
+                                            <input type="number" class="form-control form-control-sm" name="counter_amount" placeholder="New total" min="0" step="50" required>
+                                            <input type="text" class="form-control form-control-sm" name="counter_comment" placeholder="Note (optional)">
+                                            <button type="submit" class="btn btn-sm btn-outline-secondary">Counter once</button>
+                                        </form>
+                                    </div>
+                                </div>
+                            {% endfor %}
+                            {% for rental in counter_requests %}
+                                <div class="border rounded-4 p-3 mb-3 bg-warning-subtle">
+                                    <div class="fw-semibold">{{ rental['car_name'] }} - {{ rental['renter_username'] }}</div>
+                                    <div class="text-muted small">Waiting for renter to respond to your counter offer of Rs {{ rental['counter_amount']|round|int }}.</div>
+                                </div>
+                            {% endfor %}
+                        {% else %}
+                            <p class="text-muted mb-0">No new booking requests right now.</p>
+                        {% endif %}
+                    </div>
+                </div>
+
+                <div class="card card-zoom mb-4">
+                    <div class="card-body">
+                        <h2 class="h5 fw-semibold mb-3">Awaiting payment</h2>
+                        {% set awaiting = rentals|selectattr('payment_status', 'equalto', 'awaiting_payment')|list %}
+                        {% if awaiting %}
+                            {% for rental in awaiting %}
+                                <div class="border rounded-4 p-3 mb-3">
+                                    <div class="fw-semibold">{{ rental['car_name'] }} - {{ rental['renter_username'] }}</div>
+                                    <div class="text-muted small mb-2">Total due Rs {{ rental['total_amount']|round|int }} by {{ rental['payment_due_at'] or 'n/a' }}</div>
+                                    <div class="text-muted small">We have alerted the renter. You will be notified once payment is confirmed.</div>
+                                </div>
+                            {% endfor %}
+                        {% else %}
+                            <p class="text-muted mb-0">No pending payments from renters.</p>
+                        {% endif %}
+                    </div>
+                </div>
+
+                <div class="card card-zoom mb-4">
+                    <div class="card-body">
+                        <h2 class="h5 fw-semibold mb-3">Trips in progress</h2>
+                        {% set active_trips = rentals|selectattr('status', 'equalto', 'active')|list %}
+                        {% set ready_to_start = rentals|selectattr('status', 'equalto', 'booked')|selectattr('owner_response', 'equalto', 'accepted')|selectattr('payment_status', 'equalto', 'paid')|list %}
+                        {% if active_trips or ready_to_start %}
+                            {% for rental in ready_to_start %}
+                                <div class="border rounded-4 p-3 mb-3">
+                                    <div class="fw-semibold">{{ rental['car_name'] }} - {{ rental['renter_username'] }}</div>
+                                    <div class="text-muted small mb-2">Payment confirmed. Mark the trip as started when you hand over the car.</div>
+                                    <form method="post" action="{{ url_for('owner_start_rental', rental_id=rental['id']) }}">
+                                        <button type="submit" class="btn btn-sm btn-success">Mark trip started</button>
+                                    </form>
+                                </div>
+                            {% endfor %}
+                            {% for rental in active_trips %}
+                                <div class="border rounded-4 p-3 mb-3">
+                                    <div class="fw-semibold">{{ rental['car_name'] }} - {{ rental['renter_username'] }}</div>
+                                    <div class="text-muted small">Started {{ rental['owner_started_at'] or rental['start_time'] }}</div>
+                                    <div class="d-flex flex-wrap gap-2 mt-2">
+                                        <form method="post" action="{{ url_for('owner_extend_rental', rental_id=rental['id']) }}" class="d-flex gap-2">
+                                            <input type="number" class="form-control form-control-sm" name="extra_hours" min="1" placeholder="Extra hours" required>
+                                            <button type="submit" class="btn btn-sm btn-outline-secondary">Extend trip</button>
+                                        </form>
+                                        <form method="post" action="{{ url_for('owner_complete_rental', rental_id=rental['id']) }}">
+                                            <button type="submit" class="btn btn-sm btn-outline-success">Mark completed</button>
+                                        </form>
+                                    </div>
+                                </div>
+                            {% endfor %}
+                        {% else %}
+                            <p class="text-muted mb-0">No live trips at the moment. Your cars are ready for new bookings.</p>
+                        {% endif %}
                     </div>
                 </div>
 
                 <div class="card card-zoom">
                     <div class="card-body">
-                        <h2 class="h5 fw-semibold mb-3">Trips in progress</h2>
-                        {% if rentals %}
-                        <div class="list-group list-group-flush">
-                            {% for rental in rentals %}
-                            <div class="list-group-item">
-                                <div class="d-flex justify-content-between align-items-center">
-                                    <div>
-                                        <div class="fw-semibold">{{ rental['brand'] }} {{ rental['model'] }}</div>
-                                        <div class="text-muted small">Renter: {{ rental['renter_username'] }} � Started
-                                            {{ rental['start_time'] }}</div>
-                                    </div>
-                                    <form method="post"
-                                        action="{{ url_for('owner_complete_rental', rental_id=rental['id']) }}">
-                                        <button type="submit" class="btn btn-sm btn-outline-success">Mark
-                                            completed</button>
+                        <h2 class="h5 fw-semibold mb-3">Completed trips awaiting review</h2>
+                        {% set completed_trips = rentals|selectattr('status', 'equalto', 'completed')|list %}
+                        {% if completed_trips %}
+                            {% for rental in completed_trips %}
+                                <div class="border rounded-4 p-3 mb-3">
+                                    <div class="fw-semibold">{{ rental['car_name'] }} - {{ rental['renter_username'] }}</div>
+                                    <div class="text-muted small mb-2">Ended {{ rental['completed_at'] or rental['end_time'] }}</div>
+                                    <form method="post" action="{{ url_for('owner_review_rental', rental_id=rental['id']) }}" class="row g-2">
+                                        <div class="col-4">
+                                            <label class="form-label small" for="passenger_rating_{{ rental['id'] }}">Passenger rating</label>
+                                            <input type="number" class="form-control form-control-sm" id="passenger_rating_{{ rental['id'] }}" name="passenger_rating" min="1" max="5" required>
+                                        </div>
+                                        <div class="col-8">
+                                            <label class="form-label small" for="comment_{{ rental['id'] }}">Comment</label>
+                                            <input type="text" class="form-control form-control-sm" id="comment_{{ rental['id'] }}" name="comment" placeholder="Optional feedback">
+                                        </div>
+                                        <div class="col-12 d-grid">
+                                            <button type="submit" class="btn btn-sm btn-outline-success">Submit review</button>
+                                        </div>
                                     </form>
                                 </div>
-                            </div>
                             {% endfor %}
-                        </div>
                         {% else %}
-                        <p class="text-muted mb-0">No live trips at the moment. Your cars are ready for new bookings.
-                        </p>
+                            <p class="text-muted mb-0">No trips waiting for reviews.</p>
                         {% endif %}
                     </div>
                 </div>
@@ -201,3 +350,5 @@
     </div>
 </section>
 {% endblock %}
+
+

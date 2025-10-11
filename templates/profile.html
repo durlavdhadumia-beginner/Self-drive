@@ -1,0 +1,183 @@
+{% extends "base.html" %}
+{% block title %}My Profile | DriveNow{% endblock %}
+{% block content %}
+<section class="py-5">
+    <div class="container">
+        <div class="row justify-content-center">
+            <div class="col-lg-9">
+                <div class="card card-zoom mb-4">
+                    <div class="card-body p-4 p-md-5">
+                        <div class="d-flex flex-column flex-md-row justify-content-between align-items-start align-items-md-center mb-4 gap-3">
+                            <div>
+                                <h1 class="h4 fw-bold mb-1">Account profile</h1>
+                                <p class="text-muted mb-0">Keep your personal and verification details up to date.</p>
+                            </div>
+                            {% if g.profile_complete %}
+                                <span class="badge bg-success-subtle text-success fw-semibold"><i class="bi bi-check-circle"></i> Profile ready</span>
+                            {% else %}
+                                <span class="badge bg-warning text-dark fw-semibold"><i class="bi bi-exclamation-circle"></i> Action required</span>
+                            {% endif %}
+                        </div>
+                        {% if error %}
+                            <div class="alert alert-danger" role="alert">{{ error }}</div>
+                        {% endif %}
+                        {% if message %}
+                            <div class="alert alert-success" role="alert">{{ message }}</div>
+                        {% endif %}
+                        <form method="post" enctype="multipart/form-data" novalidate class="row g-3">
+                            <div class="col-md-6">
+                                <label class="form-label" for="full_name">Full name</label>
+                                <input type="text" class="form-control" id="full_name" name="full_name" value="{{ profile['full_name'] or '' }}" required>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label" for="date_of_birth">Date of birth</label>
+                                <input type="date" class="form-control" id="date_of_birth" name="date_of_birth" value="{{ profile['date_of_birth'] or '' }}">
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label" for="phone">Mobile number</label>
+                                <input type="tel" class="form-control" id="phone" name="phone" value="{{ profile['phone'] or '' }}" required>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label" for="address">Address</label>
+                                <input type="text" class="form-control" id="address" name="address" value="{{ profile['address'] or '' }}">
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label" for="govt_id_type">Govt ID type</label>
+                                <input type="text" class="form-control" id="govt_id_type" name="govt_id_type" value="{{ profile['govt_id_type'] or '' }}" placeholder="Aadhaar / PAN / Passport">
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label" for="govt_id_number">Govt ID number</label>
+                                <input type="text" class="form-control" id="govt_id_number" name="govt_id_number" value="{{ profile['govt_id_number'] or '' }}" required>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label" for="driver_license">Driving licence number</label>
+                                <input type="text" class="form-control" id="driver_license" name="driver_license" value="{{ profile['driver_license'] or '' }}">
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label" for="additional_id">Additional ID (employee / student)</label>
+                                <input type="text" class="form-control" id="additional_id" name="additional_id" value="{{ profile['additional_id'] or '' }}">
+                            </div>
+
+                            <div class="col-12 mt-2">
+                                <hr class="my-4">
+                                <h2 class="h5 fw-semibold mb-2">Payout preferences</h2>
+                                <p class="text-muted small mb-3">We route refunds and owner earnings to these details. Provide a bank account + IFSC or a UPI ID.</p>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label" for="account_holder">Account holder name</label>
+                                <input type="text" class="form-control" id="account_holder" name="account_holder" value="{{ payout['account_holder'] or profile['full_name'] or '' }}">
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label" for="account_number">Bank account number</label>
+                                <input type="text" class="form-control" id="account_number" name="account_number" value="{{ payout['account_number'] or '' }}">
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label" for="ifsc_code">IFSC code</label>
+                                <input type="text" class="form-control text-uppercase" id="ifsc_code" name="ifsc_code" value="{{ payout['ifsc_code'] or '' }}" maxlength="11">
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label" for="upi_id">UPI ID (optional if bank provided)</label>
+                                <input type="text" class="form-control" id="upi_id" name="upi_id" value="{{ payout['upi_id'] or '' }}" placeholder="name@bank">
+                            </div>
+
+                            {% if is_owner %}
+                                <div class="col-12 mt-2">
+                                    <hr class="my-4">
+                                    <h2 class="h5 fw-semibold mb-2">Host requirements</h2>
+                                    <p class="text-muted small mb-3">These details help renters trust your listings and are required before you can add new vehicles.</p>
+                                </div>
+                                <div class="col-md-8">
+                                    <label class="form-label" for="vehicle_registration">Default vehicle registration reference</label>
+                                    <input type="text" class="form-control" id="vehicle_registration" name="vehicle_registration" value="{{ profile['vehicle_registration'] or '' }}" placeholder="KA01AB1234">
+                                </div>
+                                <div class="col-md-4 d-flex align-items-end">
+                                    <div class="form-check form-switch">
+                                        <input class="form-check-input" type="checkbox" role="switch" id="gps_tracking" name="gps_tracking" {% if profile['gps_tracking'] %}checked{% endif %}>
+                                        <label class="form-check-label" for="gps_tracking">Fleet has GPS</label>
+                                    </div>
+                                </div>
+                            {% endif %}
+
+                            <div class="col-12 mt-3">
+                                <hr class="my-4">
+                                <h2 class="h5 fw-semibold mb-2">Identity documents</h2>
+                                <p class="text-muted small">Upload clear scans of at least three government issued IDs. Supported formats: JPG, PNG, PDF.</p>
+                            </div>
+
+                            {% if documents %}
+                                <div class="col-12">
+                                    <div class="table-responsive">
+                                        <table class="table align-middle small">
+                                            <thead>
+                                                <tr>
+                                                    <th>Document</th>
+                                                    <th>Uploaded</th>
+                                                    <th class="text-end">Actions</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                {% for doc in documents %}
+                                                    <tr>
+                                                        <td>{{ doc['doc_type'] or 'Document' }}</td>
+                                                        <td class="text-muted">{{ doc['created_at'] }}</td>
+                                                        <td class="text-end d-flex justify-content-end gap-2">
+                                                            <a class="btn btn-sm btn-outline-primary" href="{{ url_for('serve_upload', filename=doc['filename']) }}" target="_blank">View</a>
+                                                            <form method="post" action="{{ url_for('profile_delete_document', doc_id=doc['id']) }}">
+                                                                <button type="submit" class="btn btn-sm btn-outline-danger">Delete</button>
+                                                            </form>
+                                                        </td>
+                                                    </tr>
+                                                {% endfor %}
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                </div>
+                            {% endif %}
+
+                            <div class="col-md-6">
+                                <label class="form-label">Document type</label>
+                                <input type="text" class="form-control" name="doc_type" placeholder="e.g. Aadhaar">
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label">Upload file</label>
+                                <input type="file" class="form-control" name="doc_files" accept=".png,.jpg,.jpeg,.pdf">
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label">Document type</label>
+                                <input type="text" class="form-control" name="doc_type" placeholder="e.g. PAN Card">
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label">Upload file</label>
+                                <input type="file" class="form-control" name="doc_files" accept=".png,.jpg,.jpeg,.pdf">
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label">Document type</label>
+                                <input type="text" class="form-control" name="doc_type" placeholder="e.g. Driving Licence">
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label">Upload file</label>
+                                <input type="file" class="form-control" name="doc_files" accept=".png,.jpg,.jpeg,.pdf">
+                            </div>
+
+                            <div class="col-12 d-grid mt-4">
+                                <button type="submit" class="btn btn-success btn-lg">Save profile</button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+                <div class="card card-zoom">
+                    <div class="card-body">
+                        <h2 class="h6 fw-semibold mb-2">Why we collect this</h2>
+                        <ul class="text-muted small mb-0">
+                            <li>Verified IDs help keep both hosts and renters safe.</li>
+                            <li>Phone details are used for booking alerts and support.</li>
+                            <li>Hosts need a default registration reference and GPS confirmation before listing vehicles.</li>
+                            <li>Admins verify uploaded documents before enabling payouts.</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+{% endblock %}

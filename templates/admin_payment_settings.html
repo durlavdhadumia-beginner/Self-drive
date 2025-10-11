@@ -1,0 +1,64 @@
+{% extends "base.html" %}
+{% block title %}Payment Settings | DriveNow{% endblock %}
+{% block content %}
+<section class="py-5">
+    <div class="container">
+        <div class="row justify-content-center">
+            <div class="col-lg-7">
+                <div class="card card-zoom mb-4">
+                    <div class="card-body p-4 p-md-5">
+                        <div class="d-flex flex-column flex-md-row justify-content-between align-items-start align-items-md-center gap-3 mb-4">
+                            <div>
+                                <h1 class="h4 fw-bold mb-1">Company payout account</h1>
+                                <p class="text-muted mb-0">Customer payments land here first. We retain {{ commission_rate }}% as commission before releasing the balance to owners.</p>
+                            </div>
+                            <a href="{{ url_for('admin_dashboard') }}" class="btn btn-outline-success"><i class="bi bi-speedometer2"></i> Dashboard</a>
+                        </div>
+                        {% if error %}
+                            <div class="alert alert-danger" role="alert">{{ error }}</div>
+                        {% endif %}
+                        {% if message %}
+                            <div class="alert alert-success" role="alert">{{ message }}</div>
+                        {% endif %}
+                        <form method="post" class="row g-3">
+                            <div class="col-md-6">
+                                <label class="form-label" for="account_holder">Account holder name</label>
+                                <input type="text" class="form-control" id="account_holder" name="account_holder" value="{{ config['account_holder'] or '' }}">
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label" for="account_number">Bank account number</label>
+                                <input type="text" class="form-control" id="account_number" name="account_number" value="{{ config['account_number'] or '' }}">
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label" for="ifsc_code">IFSC code</label>
+                                <input type="text" class="form-control text-uppercase" id="ifsc_code" name="ifsc_code" value="{{ config['ifsc_code'] or '' }}" maxlength="11">
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label" for="upi_id">UPI ID (optional if bank provided)</label>
+                                <input type="text" class="form-control" id="upi_id" name="upi_id" value="{{ config['upi_id'] or '' }}" placeholder="company@bank">
+                            </div>
+                            <div class="col-12">
+                                <small class="text-muted">Last updated on {{ config['updated_at'] or 'never' }}</small>
+                            </div>
+                            <div class="col-12 d-grid">
+                                <button type="submit" class="btn btn-success btn-lg">Save payment settings</button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+                <div class="card card-zoom">
+                    <div class="card-body">
+                        <h2 class="h6 fw-semibold mb-2">How payouts work</h2>
+                        <ul class="text-muted small mb-0">
+                            <li>Customers pay into this company account. We retain {{ commission_rate }}% commission + service fees.</li>
+                            <li>The remaining {{ 100 - commission_rate }}% is marked for host disbursal once the trip is complete.</li>
+                            <li>Admins can review pending owner payouts from the rentals register and mark them as released.</li>
+                            <li>Keep this information current to avoid delays in owner settlements.</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+{% endblock %}

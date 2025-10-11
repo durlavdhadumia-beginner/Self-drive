@@ -1,4 +1,4 @@
-﻿{% extends "base.html" %}
+{% extends "base.html" %}
 {% block title %}Sign In | DriveNow{% endblock %}
 {% block content %}
 <section class="py-5" style="background:linear-gradient(135deg, rgba(13,159,92,0.1), rgba(10,92,54,0.05));">
@@ -20,9 +20,12 @@
                                 <label for="username" class="form-label">Username</label>
                                 <input type="text" class="form-control form-control-lg" id="username" name="username" required autofocus>
                             </div>
-                            <div class="mb-4">
+                            <div class="mb-2">
                                 <label for="password" class="form-label">Password</label>
                                 <input type="password" class="form-control form-control-lg" id="password" name="password" required>
+                            </div>
+                            <div class="mb-4 text-end">
+                                <a href="{{ url_for('forgot_password') }}" class="link-secondary small">Forgot password?</a>
                             </div>
                             <div class="d-grid mb-3">
                                 <button type="submit" class="btn btn-success btn-lg">Sign in</button>

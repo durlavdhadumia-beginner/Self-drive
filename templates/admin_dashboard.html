@@ -1,0 +1,231 @@
+{% extends "base.html" %}
+{% block title %}Admin Dashboard | DriveNow{% endblock %}
+{% block content %}
+<section class="py-5">
+    <div class="container">
+        <h1 class="h4 fw-bold mb-4">Platform overview</h1>
+        <div class="d-flex flex-wrap gap-2 mb-3">
+            <a href="{{ url_for('admin_users') }}" class="btn btn-sm btn-outline-success">Users register</a>
+            <a href="{{ url_for('admin_rentals') }}" class="btn btn-sm btn-outline-success">Trips register</a>
+            <a href="{{ url_for('admin_map') }}" class="btn btn-sm btn-outline-success">Live map</a>
+            <a href="{{ url_for('admin_payment_settings') }}" class="btn btn-sm btn-outline-success">Payment settings</a>
+        </div>
+        <div class="row g-3 mb-4">
+            <div class="col-sm-6 col-lg-3" {% if metrics.users is not defined %}style="display:none"{% endif %}>
+                <div class="card card-zoom h-100">
+                    <div class="card-body">
+                        <div class="text-muted small text-uppercase">Users</div>
+                        <div class="display-6 fw-semibold">{{ metrics.users }}</div>
+                        <div class="text-muted small">{{ metrics.renters }} renters - {{ metrics.owners }} hosts</div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-sm-6 col-lg-3">
+                <div class="card card-zoom h-100">
+                    <div class="card-body">
+                        <div class="text-muted small text-uppercase">Cars listed</div>
+                        <div class="display-6 fw-semibold">{{ metrics.cars }}</div>
+                        <div class="text-muted small">Active self-drive vehicles</div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-sm-6 col-lg-3">
+                <div class="card card-zoom h-100">
+                    <div class="card-body">
+                        <div class="text-muted small text-uppercase">Live trips</div>
+                        <div class="display-6 fw-semibold">{{ metrics.active_rentals }}</div>
+                        <div class="text-muted small">Currently marked as active</div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-sm-6 col-lg-3">
+                <div class="card card-zoom h-100">
+                    <div class="card-body">
+                        <div class="text-muted small text-uppercase">Open complaints</div>
+                        <div class="display-6 fw-semibold">{{ metrics.open_complaints }}</div>
+                        <div class="text-muted small">Needs admin attention</div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-sm-6 col-lg-3">
+                <div class="card card-zoom h-100">
+                    <div class="card-body">
+                        <div class="text-muted small text-uppercase">Feedback inbox</div>
+                        <div class="display-6 fw-semibold">{{ metrics.feedback_total }}</div>
+                        <div class="text-muted small">General platform messages</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="row g-4">
+            <div class="col-lg-6">
+                <div class="card card-zoom h-100">
+                    <div class="card-body">
+                        <div class="d-flex justify-content-between align-items-center mb-3">
+                            <h2 class="h5 fw-semibold mb-0">Awaiting payments</h2>
+                            <span class="badge bg-success-subtle text-success">{{ pending_payments|length }}</span>
+                        </div>
+                        {% if pending_payments %}
+                            <div class="table-responsive">
+                                <table class="table align-middle small">
+                                    <thead>
+                                        <tr>
+                                            <th>Rental</th>
+                                            <th>Renter</th>
+                                            <th>Car</th>
+                                            <th class="text-end">Due</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {% for payment in pending_payments %}
+                                            <tr>
+                                                <td>#{{ payment['id'] }}</td>
+                                                <td>{{ payment['renter_username'] }}</td>
+                                                <td>{{ payment['car_name'] }}</td>
+                                                <td class="text-end">
+                                                    Rs {{ payment['total_amount']|round|int }}<br>
+                                                    <span class="text-muted">{{ payment['payment_due_at'] or 'n/a' }}</span>
+                                                </td>
+                                            </tr>
+                                        {% endfor %}
+                                    </tbody>
+                                </table>
+                            </div>
+                        {% else %}
+                            <p class="text-muted mb-0">No outstanding payments at the moment.</p>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+            <div class="col-lg-6">
+                <div class="card card-zoom h-100">
+                    <div class="card-body">
+                        <div class="d-flex justify-content-between align-items-center mb-3">
+                            <h2 class="h5 fw-semibold mb-0">Open complaints</h2>
+                            <span class="badge bg-danger-subtle text-danger">{{ open_complaints|length }}</span>
+                        </div>
+                        {% if open_complaints %}
+                            <div class="table-responsive">
+                                <table class="table align-middle small">
+                                    <thead>
+                                        <tr>
+                                            <th>ID</th>
+                                            <th>Submitted by</th>
+                                            <th>Summary</th>
+                                            <th></th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {% for complaint in open_complaints %}
+                                            <tr>
+                                                <td>#{{ complaint['id'] }}</td>
+                                                <td>{{ complaint['submitter'] }}<br><span class="text-muted">Against {{ complaint['target_username'] }}</span></td>
+                                                <td>
+                                                    <div class="fw-semibold">{{ complaint['category'] }}</div>
+                                                    <div class="text-muted">{{ complaint['description'] }}</div>
+                                                </td>
+                                                <td>
+                                                    <form method="post" action="{{ url_for('resolve_complaint', complaint_id=complaint['id']) }}" class="d-grid gap-2">
+                                                        <input type="text" class="form-control form-control-sm" name="resolution" placeholder="Resolution note" required>
+                                                        <button type="submit" class="btn btn-sm btn-success">Resolve</button>
+                                                    </form>
+                                                </td>
+                                            </tr>
+                                        {% endfor %}
+                                    </tbody>
+                                </table>
+                            </div>
+                        {% else %}
+                            <p class="text-muted mb-0">All caught up! No unresolved tickets.</p>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+            <div class="col-lg-6">
+                <div class="card card-zoom h-100">
+                    <div class="card-body">
+                        <h2 class="h5 fw-semibold mb-2">Company payout account</h2>
+                        <p class="text-muted small mb-3">Customer payments route here. Commission retained: {{ commission_rate }}%.</p>
+                        <ul class="list-unstyled text-muted small mb-3">
+                            <li><span class="fw-semibold text-dark">Account holder:</span> {{ company_payout.account_holder or 'Not set' }}</li>
+                            <li><span class="fw-semibold text-dark">Account number:</span> {{ company_payout.account_number or '—' }}</li>
+                            <li><span class="fw-semibold text-dark">IFSC:</span> {{ company_payout.ifsc_code or '—' }}</li>
+                            <li><span class="fw-semibold text-dark">UPI ID:</span> {{ company_payout.upi_id or '—' }}</li>
+                            <li><span class="fw-semibold text-dark">Updated:</span> {{ company_payout.updated_at or 'Never' }}</li>
+                        </ul>
+                        <a href="{{ url_for('admin_payment_settings') }}" class="btn btn-sm btn-outline-success">Manage account</a>
+                    </div>
+                </div>
+            </div>
+            <div class="col-lg-6">
+                <div class="card card-zoom h-100">
+                    <div class="card-body">
+                        <div class="d-flex justify-content-between align-items-center mb-3">
+                            <h2 class="h5 fw-semibold mb-0">Latest feedback</h2>
+                            <a href="{{ url_for('admin_feedback_list') }}" class="btn btn-sm btn-outline-success">View all</a>
+                        </div>
+                        {% if recent_feedback %}
+                            <ul class="list-group list-group-flush">
+                                {% for feedback in recent_feedback %}
+                                    <li class="list-group-item">
+                                        <div class="fw-semibold">{{ feedback['username'] }} <span class="text-muted small">({{ feedback['role']|capitalize }})</span></div>
+                                        <div class="text-muted small">{{ feedback['category'] }} &middot; {{ feedback['created_at'] }}</div>
+                                        <div class="mt-2">
+                                            <a href="{{ url_for('admin_feedback_detail', feedback_id=feedback['id']) }}" class="btn btn-sm btn-outline-secondary">Open</a>
+                                        </div>
+                                    </li>
+                                {% endfor %}
+                            </ul>
+                        {% else %}
+                            <p class="text-muted mb-0">No new feedback has been logged.</p>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+            <div class="col-lg-6">
+                <div class="card card-zoom h-100">
+                    <div class="card-body">
+                        <h2 class="h5 fw-semibold mb-3">Recent rentals</h2>
+                        {% if recent_rentals %}
+                            <ul class="list-group list-group-flush">
+                                {% for rental in recent_rentals %}
+                                    <li class="list-group-item">
+                                        <div class="fw-semibold">{{ rental['car_name'] }} - {{ rental['status']|capitalize }}</div>
+                                        <div class="text-muted small">{{ rental['renter_username'] }} with {{ rental['owner_username'] }}</div>
+                                        <div class="text-muted small">{{ rental['start_time'] }} ? {{ rental['end_time'] or 'TBD' }}</div>
+                                    </li>
+                                {% endfor %}
+                            </ul>
+                        {% else %}
+                            <p class="text-muted mb-0">No rentals found.</p>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+            <div class="col-lg-6">
+                <div class="card card-zoom h-100">
+                    <div class="card-body">
+                        <h2 class="h5 fw-semibold mb-3">Recent signups</h2>
+                        {% if recent_users %}
+                            <ul class="list-group list-group-flush">
+                                {% for user in recent_users %}
+                                    <li class="list-group-item d-flex justify-content-between align-items-center">
+                                        <div>
+                                            <div class="fw-semibold">{{ user['username'] }}</div>
+                                            <div class="text-muted small">Role: {{ user['role'] }}{% if user['is_admin'] %} - Admin{% endif %}</div>
+                                        </div>
+                                        <span class="badge bg-success-subtle text-success">ID {{ user['id'] }}</span>
+                                    </li>
+                                {% endfor %}
+                            </ul>
+                        {% else %}
+                            <p class="text-muted mb-0">No new users yet.</p>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+{% endblock %}
+
