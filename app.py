@@ -475,23 +475,38 @@ def seed_cities_if_needed(conn: sqlite3.Connection) -> None:
         existing = conn.execute("SELECT COUNT(*) FROM cities").fetchone()[0]
     except sqlite3.OperationalError:
         return
-    if existing:
+    try:
+        pincode_rows = conn.execute(
+            "SELECT COUNT(*) FROM cities WHERE pincode IS NOT NULL AND TRIM(pincode) <> ''"
+        ).fetchone()[0]
+    except sqlite3.OperationalError:
+        pincode_rows = 0
+    if existing and pincode_rows:
         return
     try:
-        from import_indian_cities import download_dataset, transform_rows
+        from import_indian_cities import (
+            download_primary_dataset,
+            download_pincode_dataset,
+            transform_rows,
+        )
     except Exception as exc:  # pragma: no cover
         print(f"City import skipped (module unavailable): {exc}")
         return
     try:
-        csv_text = download_dataset()
-        rows = list(transform_rows(csv_text))
+        primary_csv = download_primary_dataset()
+        pincode_csv = download_pincode_dataset()
+        rows = list(transform_rows(primary_csv, pincode_csv))
     except Exception as exc:  # pragma: no cover
         print(f"City import skipped (download failed): {exc}")
         return
     if not rows:
         return
+    conn.execute("DELETE FROM cities")
     conn.executemany(
-        "INSERT OR REPLACE INTO cities (id, name, state, latitude, longitude) VALUES (?, ?, ?, ?, ?)",
+        """
+        INSERT OR REPLACE INTO cities (id, name, state, latitude, longitude, pincode)
+        VALUES (?, ?, ?, ?, ?, ?)
+        """,
         rows,
     )
     conn.commit()
