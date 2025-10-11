@@ -331,6 +331,7 @@ def init_db() -> None:
         "CREATE INDEX IF NOT EXISTS idx_cities_name ON cities(name COLLATE NOCASE)"
     )
     db.commit()
+    seed_cities_if_needed(db)
     db.execute(
         "INSERT OR IGNORE INTO company_payout_config (id, updated_at) VALUES (1, ?)",
         (datetime.utcnow().isoformat(),),
@@ -467,6 +468,34 @@ def get_company_payout_details() -> dict:
         db.commit()
         row = db.execute("SELECT * FROM company_payout_config WHERE id = 1").fetchone()
     return dict(row)
+
+
+def seed_cities_if_needed(conn: sqlite3.Connection) -> None:
+    try:
+        existing = conn.execute("SELECT COUNT(*) FROM cities").fetchone()[0]
+    except sqlite3.OperationalError:
+        return
+    if existing:
+        return
+    try:
+        from import_indian_cities import download_dataset, transform_rows
+    except Exception as exc:  # pragma: no cover
+        print(f"City import skipped (module unavailable): {exc}")
+        return
+    try:
+        csv_text = download_dataset()
+        rows = list(transform_rows(csv_text))
+    except Exception as exc:  # pragma: no cover
+        print(f"City import skipped (download failed): {exc}")
+        return
+    if not rows:
+        return
+    conn.executemany(
+        "INSERT OR REPLACE INTO cities (id, name, state, latitude, longitude) VALUES (?, ?, ?, ?, ?)",
+        rows,
+    )
+    conn.commit()
+    print(f"Seeded {len(rows)} Indian cities.")
 
 
 def profile_is_complete(profile: dict | None) -> bool:

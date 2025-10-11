@@ -1,12 +1,19 @@
-"""Populate the cities table with Indian towns using the countries-states-cities dataset.
+"""Populate the cities table with Indian towns using multiple open datasets.
 
-Run this script whenever you want to refresh the list of cities:
+Datasets used:
+1. Countries-States-Cities project
+   https://github.com/dr5hn/countries-states-cities-database
+   (provides larger cities and coordinates)
+2. India Post PIN code directory
+   https://github.com/sanand0/pincode
+   (covers small branch offices mapped to PIN codes)
 
+Run:
     python import_indian_cities.py
 
-It downloads the latest CSV from
-https://github.com/dr5hn/countries-states-cities-database
-and imports rows where ``country_code == 'IN'``.
+It downloads both CSVs, merges the entries, and writes them into the `cities`
+table of `car_rental.db`. Town names are deduplicated by (name, state).
+PIN codes from India Post are stored to enable postcode-based search later.
 """
 
 from __future__ import annotations
@@ -19,33 +26,51 @@ import urllib.request
 from pathlib import Path
 from typing import Iterable, Tuple
 
-
-DATA_URL = "https://raw.githubusercontent.com/dr5hn/countries-states-cities-database/master/csv/cities.csv"
+PRIMARY_DATA_URL = (
+    "https://raw.githubusercontent.com/dr5hn/countries-states-cities-database/master/csv/cities.csv"
+)
+PINCODE_DATA_URL = "https://raw.githubusercontent.com/sanand0/pincode/master/data/IN.csv"
 DB_PATH = Path(__file__).with_name("car_rental.db")
 
 
-def download_dataset() -> str:
-    print("Downloading city dataset …", flush=True)
-    with urllib.request.urlopen(DATA_URL) as response:  # type: ignore[call-arg]
+def _download(url: str) -> str:
+    with urllib.request.urlopen(url) as response:  # type: ignore[call-arg]
         if response.status != 200:
-            raise RuntimeError(f"Failed to download dataset (status {response.status})")
-        data = response.read().decode("utf-8")
-    return data
+            raise RuntimeError(f"Failed to download {url} (status {response.status})")
+        return response.read().decode("utf-8")
 
 
-def transform_rows(csv_text: str) -> Iterable[Tuple[int, str, str, float | None, float | None]]:
-    reader = csv.DictReader(io.StringIO(csv_text))
-    for row in reader:
+def download_primary_dataset() -> str:
+    print("Downloading primary city dataset …", flush=True)
+    return _download(PRIMARY_DATA_URL)
+
+
+def download_pincode_dataset() -> str:
+    print("Downloading pin code dataset …", flush=True)
+    return _download(PINCODE_DATA_URL)
+
+
+def transform_rows(
+    primary_csv: str, pincode_csv: str
+) -> Iterable[Tuple[int, str, str, float | None, float | None, str | None]]:
+    seen: set[Tuple[str, str]] = set()
+
+    # Primary dataset with coordinates
+    primary_reader = csv.DictReader(io.StringIO(primary_csv))
+    for row in primary_reader:
         if row.get("country_code") != "IN":
             continue
         try:
             city_id = int(row["id"])
         except (TypeError, ValueError):
             continue
-        name = row.get("name", "").strip()
+        name = (row.get("name") or "").strip()
         if not name:
             continue
-        state_name = (row.get("state_name") or "").strip()
+        state = (row.get("state_name") or "").strip()
+        key = (name.lower(), state.lower())
+        if key in seen:
+            continue
         try:
             latitude = float(row["latitude"]) if row.get("latitude") else None
         except ValueError:
@@ -54,7 +79,28 @@ def transform_rows(csv_text: str) -> Iterable[Tuple[int, str, str, float | None,
             longitude = float(row["longitude"]) if row.get("longitude") else None
         except ValueError:
             longitude = None
-        yield city_id, name, state_name, latitude, longitude
+        yield city_id, name, state, latitude, longitude, None
+        seen.add(key)
+
+    # India Post dataset – includes smaller towns/offices
+    pincode_reader = csv.DictReader(io.StringIO(pincode_csv))
+    for raw_row in pincode_reader:
+        row = {k.strip().lower(): (v.strip() if isinstance(v, str) else v) for k, v in raw_row.items()}
+        name = row.get("office name") or row.get("office_name") or ""
+        state = row.get("state name") or row.get("state_name") or ""
+        pincode = row.get("pincode")
+        if not name or not state or not pincode:
+            continue
+        key = (name.lower(), state.lower())
+        if key in seen:
+            continue
+        try:
+            pin_int = int(pincode)
+        except (TypeError, ValueError):
+            continue
+        city_id = 100_000_000 + pin_int  # Offset to avoid clashing with primary IDs
+        yield city_id, name, state, None, None, pincode
+        seen.add(key)
 
 
 def ensure_table(conn: sqlite3.Connection) -> None:
@@ -65,20 +111,30 @@ def ensure_table(conn: sqlite3.Connection) -> None:
             name TEXT NOT NULL,
             state TEXT,
             latitude REAL,
-            longitude REAL
+            longitude REAL,
+            pincode TEXT
         )
         """
     )
-    conn.execute(
-        "CREATE INDEX IF NOT EXISTS idx_cities_name ON cities(name COLLATE NOCASE)"
-    )
+    try:
+        conn.execute("ALTER TABLE cities ADD COLUMN pincode TEXT")
+    except sqlite3.OperationalError:
+        pass
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_cities_name ON cities(name COLLATE NOCASE)")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_cities_pincode ON cities(pincode)")
 
 
 def main() -> None:
-    csv_text = download_dataset()
-    rows = list(transform_rows(csv_text))
+    try:
+        primary_csv = download_primary_dataset()
+        pincode_csv = download_pincode_dataset()
+    except Exception as exc:
+        print(f"Download failed: {exc}", file=sys.stderr)
+        sys.exit(1)
+
+    rows = list(transform_rows(primary_csv, pincode_csv))
     if not rows:
-        print("No Indian cities were found in the dataset!", file=sys.stderr)
+        print("No rows were generated from the datasets.", file=sys.stderr)
         sys.exit(1)
 
     conn = sqlite3.connect(DB_PATH)
@@ -87,13 +143,16 @@ def main() -> None:
         with conn:
             conn.execute("DELETE FROM cities")
             conn.executemany(
-                "INSERT OR REPLACE INTO cities (id, name, state, latitude, longitude) VALUES (?, ?, ?, ?, ?)",
+                """
+                INSERT OR REPLACE INTO cities (id, name, state, latitude, longitude, pincode)
+                VALUES (?, ?, ?, ?, ?, ?)
+                """,
                 rows,
             )
     finally:
         conn.close()
 
-    print(f"Imported {len(rows)} Indian cities into {DB_PATH.name}.")
+    print(f"Imported {len(rows)} Indian cities/towns into {DB_PATH.name}.")
 
 
 if __name__ == "__main__":
