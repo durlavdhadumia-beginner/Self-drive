@@ -2488,6 +2488,8 @@ if __name__ == "__main__":
     main()
 
 
+with app.app_context():
+    init_db()
 
 
 @app.route("/uploads/<path:filename>")
