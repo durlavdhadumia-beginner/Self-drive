@@ -7,7 +7,7 @@
             <div class="col-md-7 col-lg-6">
                 <div class="card card-zoom">
                     <div class="card-body p-5">
-                        <h1 class="h3 fw-bold mb-3">Create your DriveNow account</h1>
+                        <h1 class="h3 fw-bold mb-3">Create your CarRentalNTravel account</h1>
                         <p class="text-muted">Use your email address or mobile number and choose the role that suits you. Passwords must be alphanumeric and include at least one special character.</p>
                         {% if message %}
                             <div class="alert alert-info" role="status">{{ message }}</div>
@@ -15,62 +15,44 @@
                         {% if error %}
                             <div class="alert alert-danger" role="alert">{{ error }}</div>
                         {% endif %}
-                        {% if otp_pending %}
-                            <form method="post" class="row g-3 mt-2">
-                                <div class="col-12">
-                                    <label for="otp_code" class="form-label">Verification code</label>
-                                    <input type="text" class="form-control form-control-lg text-center" id="otp_code" name="otp_code" inputmode="numeric" pattern="\d*" maxlength="6" autocomplete="one-time-code" required autofocus>
-                                    <div class="form-text">Enter the 6-digit code that was sent to <strong>{{ masked_contact }}</strong>.</div>
+                        <form method="post" novalidate class="row g-3 mt-2">
+                            <div class="col-12">
+                                <label for="username" class="form-label">Email or mobile number</label>
+                                <input type="text" class="form-control form-control-lg" id="username" name="username" required autocomplete="username" value="{{ form_data.get('username', '') }}" autofocus>
+                            </div>
+                            <div class="col-12">
+                                <label for="password" class="form-label">Password</label>
+                                <input type="password" class="form-control form-control-lg" id="password" name="password" required aria-describedby="passwordHelp" autocomplete="new-password">
+                                <div class="form-text" id="passwordHelp">8+ characters, include letters, numbers, and a special symbol (e.g. @, #, !).</div>
+                            </div>
+                            <div class="col-12">
+                                <label for="confirm_password" class="form-label">Confirm password</label>
+                                <input type="password" class="form-control form-control-lg" id="confirm_password" name="confirm_password" required autocomplete="new-password">
+                            </div>
+                            <div class="col-12">
+                                <label for="role" class="form-label">I am signing up as</label>
+                                <select class="form-select form-select-lg" id="role" name="role">
+                                    <option value="renter" {% if form_data.get('role', 'renter') == 'renter' %}selected{% endif %}>Customer (book self-drive vehicles)</option>
+                                    <option value="owner" {% if form_data.get('role') == 'owner' %}selected{% endif %}>Vehicle owner / host</option>
+                                    <option value="both" {% if form_data.get('role') == 'both' %}selected{% endif %}>Both customer and host</option>
+                                    <option value="admin" {% if form_data.get('role') == 'admin' %}selected{% endif %}>Admin (manage platform)</option>
+                                </select>
+                            </div>
+                            <div class="col-12">
+                                <div class="form-check">
+                                    <input class="form-check-input" type="checkbox" value="1" id="admin_request" name="admin_request" {% if form_data.get('admin_request') %}checked{% endif %}>
+                                    <label class="form-check-label" for="admin_request">I need admin back-office access</label>
                                 </div>
-                                <div class="col-12 d-grid">
-                                    <button type="submit" class="btn btn-success btn-lg">Verify and create account</button>
-                                </div>
-                            </form>
-                            <p class="text-center text-muted mt-3 mb-0">
-                                Didn't receive the code?
-                                <a href="{{ url_for('register', resend=1) }}">Send it again</a>
-                                or <a href="{{ url_for('register', reset=1) }}">use a different email / phone</a>.
-                            </p>
-                        {% else %}
-                            <form method="post" novalidate class="row g-3 mt-2">
-                                <div class="col-12">
-                                    <label for="username" class="form-label">Email or mobile number</label>
-                                    <input type="text" class="form-control form-control-lg" id="username" name="username" required autocomplete="username" value="{{ form_data.get('username', '') }}" autofocus>
-                                </div>
-                                <div class="col-12">
-                                    <label for="password" class="form-label">Password</label>
-                                    <input type="password" class="form-control form-control-lg" id="password" name="password" required aria-describedby="passwordHelp" autocomplete="new-password">
-                                    <div class="form-text" id="passwordHelp">8+ characters, include letters, numbers, and a special symbol (e.g. @, #, !).</div>
-                                </div>
-                                <div class="col-12">
-                                    <label for="confirm_password" class="form-label">Confirm password</label>
-                                    <input type="password" class="form-control form-control-lg" id="confirm_password" name="confirm_password" required autocomplete="new-password">
-                                </div>
-                                <div class="col-12">
-                                    <label for="role" class="form-label">I am signing up as</label>
-                                    <select class="form-select form-select-lg" id="role" name="role">
-                                        <option value="renter" {% if form_data.get('role', 'renter') == 'renter' %}selected{% endif %}>Customer (book self-drive vehicles)</option>
-                                        <option value="owner" {% if form_data.get('role') == 'owner' %}selected{% endif %}>Vehicle owner / host</option>
-                                        <option value="both" {% if form_data.get('role') == 'both' %}selected{% endif %}>Both customer and host</option>
-                                        <option value="admin" {% if form_data.get('role') == 'admin' %}selected{% endif %}>Admin (manage platform)</option>
-                                    </select>
-                                </div>
-                                <div class="col-12">
-                                    <div class="form-check">
-                                        <input class="form-check-input" type="checkbox" value="1" id="admin_request" name="admin_request" {% if form_data.get('admin_request') %}checked{% endif %}>
-                                        <label class="form-check-label" for="admin_request">I need admin back-office access</label>
-                                    </div>
-                                </div>
-                                <div class="col-12 {% if not form_data.get('admin_request') and form_data.get('role') != 'admin' %}d-none{% endif %}" id="admin-code-row">
-                                    <label for="admin_code" class="form-label">Admin invite code</label>
-                                    <input type="text" class="form-control" id="admin_code" name="admin_code" placeholder="Enter access code provided by website owner" autocomplete="one-time-code">
-                                </div>
-                                <div class="col-12 d-grid">
-                                    <button type="submit" class="btn btn-success btn-lg">Create account</button>
-                                </div>
-                            </form>
-                            <p class="text-center text-muted mt-3 mb-0">Already with us? <a href="{{ url_for('login') }}">Sign in</a></p>
-                        {% endif %}
+                            </div>
+                            <div class="col-12 {% if not form_data.get('admin_request') and form_data.get('role') != 'admin' %}d-none{% endif %}" id="admin-code-row">
+                                <label for="admin_code" class="form-label">Admin invite code</label>
+                                <input type="text" class="form-control" id="admin_code" name="admin_code" placeholder="Enter access code provided by website owner" autocomplete="off">
+                            </div>
+                            <div class="col-12 d-grid">
+                                <button type="submit" class="btn btn-success btn-lg">Create account</button>
+                            </div>
+                        </form>
+                        <p class="text-center text-muted mt-3 mb-0">Already with us? <a href="{{ url_for('login') }}">Sign in</a></p>
                     </div>
                 </div>
             </div>
@@ -80,7 +62,6 @@
 {% endblock %}
 {% block scripts %}
 {{ super() }}
-{% if not otp_pending %}
 <script>
     const adminToggle = document.getElementById('admin_request');
     const adminRow = document.getElementById('admin-code-row');
@@ -103,5 +84,4 @@
     }
     syncAdmin();
 </script>
-{% endif %}
 {% endblock %}

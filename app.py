@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import os
 import re
-import secrets
 import sqlite3
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
@@ -38,7 +37,6 @@ PROMO_CODES: Dict[str, float] = {
     "FIRSTDRIVE": 0.20,
 }
 COMPANY_COMMISSION_RATE = 0.05
-OTP_EXPIRY_MINUTES = 10
 
 UPLOAD_ROOT.mkdir(parents=True, exist_ok=True)
 USER_DOC_ROOT.mkdir(parents=True, exist_ok=True)
@@ -49,6 +47,7 @@ app.config.update(
     UPLOAD_FOLDER=str(UPLOAD_ROOT),
     MAX_CONTENT_LENGTH=16 * 1024 * 1024,  # 16 MB per request
 )
+app.logger.setLevel("INFO")
 
 
 @dataclass
@@ -106,29 +105,6 @@ def normalize_contact(username: str) -> Tuple[str, str]:
     if not re.fullmatch(r"91[6-9]\d{9}", normalized):
         return ("", "")
     return ("phone", normalized)
-
-
-def mask_contact(contact_type: str, contact_value: str) -> str:
-    if contact_type == "email":
-        local, _, domain = contact_value.partition("@")
-        if len(local) <= 2:
-            masked_local = local[:1] + "*"
-        else:
-            masked_local = local[:2] + "*" * max(1, len(local) - 2)
-        return f"{masked_local}@{domain}"
-    if contact_type == "phone":
-        return f"+{contact_value[:2]} *****{contact_value[-4:]}"
-    return contact_value
-
-
-def send_verification_code(contact_type: str, destination: str, code: str) -> None:
-    """Stub implementation: log the OTP so an email/SMS service can be plugged in."""
-    if contact_type == "email":
-        app.logger.info("Registration OTP for %s: %s", destination, code)
-    elif contact_type == "phone":
-        app.logger.info("Registration OTP for +%s: %s", destination, code)
-    else:
-        app.logger.info("Registration OTP %s for %s", code, destination)
 
 
 def init_db() -> None:
@@ -2525,143 +2501,66 @@ def register() -> str:
     if g.user is not None:
         return redirect(url_for("home"))
     error = None
-    message = None
-    pending = session.get("pending_registration")
-    masked_contact = ""
+    message = request.args.get("message")
     form_data = {
         "username": "",
         "role": "renter",
         "admin_request": False,
     }
-    pending_expired = False
-    if pending:
-        expires_at_raw = pending.get("expires_at")
-        try:
-            expires_at = datetime.fromisoformat(expires_at_raw) if expires_at_raw else None
-        except (TypeError, ValueError):
-            expires_at = None
-        if expires_at and datetime.utcnow() > expires_at:
-            pending_expired = True
-            session.pop("pending_registration", None)
-            pending = None
-        else:
-            masked_contact = mask_contact(pending.get("contact_type", ""), pending.get("destination", ""))
-    if request.args.get("reset"):
-        session.pop("pending_registration", None)
-        return redirect(url_for("register"))
-    if request.args.get("resend") and pending:
-        otp = f"{secrets.randbelow(1_000_000):06d}"
-        pending["otp"] = otp
-        pending["expires_at"] = (datetime.utcnow() + timedelta(minutes=OTP_EXPIRY_MINUTES)).isoformat()
-        session["pending_registration"] = pending
-        send_verification_code(pending.get("contact_type", ""), pending.get("destination", ""), otp)
-        masked_contact = mask_contact(pending.get("contact_type", ""), pending.get("destination", ""))
-        message = "A new verification code has been sent."
-    if pending_expired:
-        error = "Your verification code expired. Please start again."
     if request.method == "POST":
-        if "otp_code" in request.form:
-            pending = session.get("pending_registration")
-            if not pending:
-                error = "Your verification session expired. Please start over."
-            else:
-                otp_code = request.form.get("otp_code", "").strip()
-                if not re.fullmatch(r"\d{6}", otp_code):
-                    error = "Enter the 6-digit verification code."
-                else:
-                    expires_at_raw = pending.get("expires_at")
-                    try:
-                        expires_at = datetime.fromisoformat(expires_at_raw) if expires_at_raw else None
-                    except (TypeError, ValueError):
-                        expires_at = None
-                    if expires_at and datetime.utcnow() > expires_at:
-                        error = "The verification code has expired. Please request a new one."
-                    elif otp_code != pending.get("otp"):
-                        error = "Incorrect verification code."
-            if error is None and pending:
-                db = get_db()
-                try:
-                    db.execute(
-                        "INSERT INTO users (username, password_hash, role, is_admin) VALUES (?, ?, ?, ?)",
-                        (
-                            pending["username"],
-                            pending["password_hash"],
-                            pending.get("role", "renter"),
-                            int(pending.get("is_admin", 0)),
-                        ),
-                    )
-                    db.commit()
-                except sqlite3.IntegrityError:
-                    error = "Username is already taken. Please register again with a different contact."
-                    session.pop("pending_registration", None)
-                else:
-                    session.pop("pending_registration", None)
-                    return redirect(url_for("login", message="Account created. Please sign in."))
-        else:
-            username = request.form.get("username", "").strip()
-            password = request.form.get("password", "")
-            confirm_password = request.form.get("confirm_password", "")
-            selected_role = request.form.get("role", "renter").lower()
-            admin_request = request.form.get("admin_request")
-            admin_code = request.form.get("admin_code", "").strip()
-            form_data["username"] = username
-            form_data["role"] = selected_role
-            form_data["admin_request"] = bool(admin_request) or selected_role == "admin"
+        username_input = request.form.get("username", "").strip()
+        password = request.form.get("password", "")
+        confirm_password = request.form.get("confirm_password", "")
+        selected_role = request.form.get("role", "renter").lower()
+        admin_request = request.form.get("admin_request")
+        admin_code = request.form.get("admin_code", "").strip()
+        form_data["username"] = username_input
+        form_data["role"] = selected_role
+        form_data["admin_request"] = bool(admin_request) or selected_role == "admin"
 
-            contact_type, destination = normalize_contact(username)
-            if not username:
-                error = "Email or mobile number is required."
-            elif not contact_type:
-                error = "Enter a valid email address or Indian mobile number."
-            if error is None:
-                if password != confirm_password:
-                    error = "Passwords do not match."
-                elif len(password) < 8 or not re.search(r"[A-Za-z]", password) or not re.search(r"[0-9]", password) or not re.search(r"[^A-Za-z0-9]", password):
-                    error = "Password must include letters, numbers, and a special character."
-            is_admin = 0
-            admin_required = form_data["admin_request"]
-            if error is None and admin_required:
-                secret = app.config.get("ADMIN_SETUP_SECRET", "DRIVENOW-ADMIN")
-                if not admin_code or admin_code != secret:
-                    error = "Invalid admin invite code."
-                else:
-                    is_admin = 1
-            role_for_db = selected_role if selected_role in {"owner", "renter", "both"} else "renter"
-            if selected_role == "admin":
-                role_for_db = "renter"
-            if error is None:
-                db = get_db()
-                existing = db.execute("SELECT 1 FROM users WHERE username = ?", (username,)).fetchone()
-                if existing:
-                    error = "Username is already taken."
-            if error is None:
-                otp = f"{secrets.randbelow(1_000_000):06d}"
-                expires_at = (datetime.utcnow() + timedelta(minutes=OTP_EXPIRY_MINUTES)).isoformat()
-                payload = {
-                    "username": username,
-                    "password_hash": generate_password_hash(password),
-                    "role": role_for_db,
-                    "is_admin": is_admin,
-                    "contact_type": contact_type,
-                    "destination": destination,
-                    "otp": otp,
-                    "expires_at": expires_at,
-                }
-                session["pending_registration"] = payload
-                send_verification_code(contact_type, destination, otp)
-                pending = payload
-                masked_contact = mask_contact(contact_type, destination)
-                message = "Enter the verification code sent to your contact to finish creating the account."
-    otp_pending = session.get("pending_registration") is not None
-    if otp_pending and not masked_contact:
-        current = session.get("pending_registration", {})
-        masked_contact = mask_contact(current.get("contact_type", ""), current.get("destination", ""))
+        contact_type, normalized_value = normalize_contact(username_input)
+        if not username_input:
+            error = "Email or mobile number is required."
+        elif not contact_type:
+            error = "Enter a valid email address or Indian mobile number."
+        if error is None:
+            if password != confirm_password:
+                error = "Passwords do not match."
+            elif len(password) < 8 or not re.search(r"[A-Za-z]", password) or not re.search(r"[0-9]", password) or not re.search(r"[^A-Za-z0-9]", password):
+                error = "Password must include letters, numbers, and a special character."
+        is_admin = 0
+        admin_required = form_data["admin_request"]
+        if error is None and admin_required:
+            secret = app.config.get("ADMIN_SETUP_SECRET", "DRIVENOW-ADMIN")
+            if not admin_code or admin_code != secret:
+                error = "Invalid admin invite code."
+            else:
+                is_admin = 1
+        role_for_db = selected_role if selected_role in {"owner", "renter", "both"} else "renter"
+        if selected_role == "admin":
+            role_for_db = "renter"
+        username_to_store = normalized_value if contact_type else username_input
+        if error is None:
+            db = get_db()
+            existing = db.execute("SELECT 1 FROM users WHERE username = ?", (username_to_store,)).fetchone()
+            if existing:
+                error = "Username is already taken."
+        if error is None:
+            db = get_db()
+            try:
+                db.execute(
+                    "INSERT INTO users (username, password_hash, role, is_admin) VALUES (?, ?, ?, ?)",
+                    (username_to_store, generate_password_hash(password), role_for_db, is_admin),
+                )
+                db.commit()
+            except sqlite3.IntegrityError:
+                error = "Username is already taken."
+            else:
+                return redirect(url_for("login", message="Account created. Please sign in."))
     return render_template(
         "register.html",
         error=error,
         message=message,
-        otp_pending=otp_pending,
-        masked_contact=masked_contact,
         form_data=form_data,
     )
 
