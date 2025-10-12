@@ -1383,12 +1383,11 @@ def home() -> str:
 
 
 @app.route("/search", methods=["GET", "POST"])
-@login_required
-@role_required("renter", "owner")
 
 def search() -> str:
     profile_warning = None
-    if not g.profile_complete:
+    user = getattr(g, 'user', None)
+    if user is not None and not getattr(g, 'profile_complete', False):
         profile_warning = "You can browse vehicles, but please complete your profile before confirming a booking."
     db = get_db()
     cars: List[Car] = []
