@@ -1,5 +1,28 @@
 {% extends "base.html" %}
 {% block title %}My Profile | DriveNow{% endblock %}
+{% block head %}
+    {{ super() }}
+    <style>
+        .date-input-wrapper {
+            position: relative;
+        }
+        .date-input-wrapper .placeholder-label {
+            position: absolute;
+            top: 50%;
+            left: 0.9rem;
+            transform: translateY(-50%);
+            color: rgba(17, 24, 39, 0.45);
+            pointer-events: none;
+            transition: opacity 0.2s ease, transform 0.2s ease;
+            font-size: 0.95rem;
+        }
+        .date-input-wrapper input.has-date-value + .placeholder-label,
+        .date-input-wrapper input:focus + .placeholder-label {
+            opacity: 0;
+            transform: translate(-0.15rem, -50%);
+        }
+    </style>
+{% endblock %}
 {% block content %}
 <section class="py-5">
     <div class="container">
@@ -31,7 +54,11 @@
                             </div>
                             <div class="col-md-6">
                                 <label class="form-label" for="date_of_birth">Date of birth</label>
-                                <input type="date" class="form-control" id="date_of_birth" name="date_of_birth" value="{{ profile['date_of_birth'] or '' }}">
+                                <div class="date-input-wrapper">
+                                    <input type="date" class="form-control dob-input" id="date_of_birth" name="date_of_birth" value="{{ profile['date_of_birth'] or '' }}" autocomplete="bday">
+                                    <span class="placeholder-label">Select year</span>
+                                </div>
+                                <div class="form-text">Tap the year at the top of the calendar or use the arrows to move quickly.</div>
                             </div>
                             <div class="col-md-6">
                                 <label class="form-label" for="phone">Mobile number</label>
@@ -180,4 +207,26 @@
         </div>
     </div>
 </section>
+{% endblock %}
+{% block scripts %}
+{{ super() }}
+<script>
+    (function () {
+        const dobInput = document.getElementById('date_of_birth');
+        if (!dobInput) {
+            return;
+        }
+        const syncPlaceholder = () => {
+            if (dobInput.value) {
+                dobInput.classList.add('has-date-value');
+            } else {
+                dobInput.classList.remove('has-date-value');
+            }
+        };
+        syncPlaceholder();
+        ['change', 'input', 'blur'].forEach((eventName) => {
+            dobInput.addEventListener(eventName, syncPlaceholder);
+        });
+    })();
+</script>
 {% endblock %}

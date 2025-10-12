@@ -14,10 +14,18 @@
             --zoom-dark: #0a5c36;
             --zoom-bg: #f6fff8;
         }
+        html, body {
+            height: 100%;
+        }
         body {
             background: var(--zoom-bg);
             font-family: "Inter", "Segoe UI", sans-serif;
             color: #111827;
+            display: flex;
+            flex-direction: column;
+        }
+        main {
+            flex: 1 0 auto;
         }
         .navbar {
             background: linear-gradient(90deg, var(--zoom-green), #0abc6b);
@@ -110,7 +118,8 @@
             background: #0f172a;
             color: rgba(255,255,255,0.7);
             padding: 2rem 0;
-            margin-top: 4rem;
+            margin-top: auto;
+            flex-shrink: 0;
         }
     </style>
     {% block head %}{% endblock %}

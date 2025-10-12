@@ -1,0 +1,158 @@
+{% extends "base.html" %}
+{% block title %}Admin | {{ user['username'] }} profile{% endblock %}
+{% block content %}
+<section class="py-5">
+    <div class="container">
+        <div class="d-flex flex-column flex-md-row justify-content-between gap-3 align-items-md-center mb-4">
+            <div>
+                <h1 class="h4 fw-bold mb-1">User profile overview</h1>
+                <p class="text-muted mb-0">Review identity details, uploaded compliance documents, and payout preferences.</p>
+            </div>
+            <div class="d-flex gap-2">
+                <a href="{{ url_for('admin_users') }}" class="btn btn-outline-secondary">Back to users</a>
+                <a href="{{ url_for('admin_dashboard') }}" class="btn btn-outline-success">Admin dashboard</a>
+            </div>
+        </div>
+        <div class="row g-4">
+            <div class="col-lg-7">
+                <div class="card card-zoom h-100 mb-4 mb-lg-0">
+                    <div class="card-body">
+                        <div class="d-flex flex-column flex-lg-row justify-content-between gap-3">
+                            <div>
+                                <h2 class="h5 fw-bold mb-1">{{ user['username'] }}</h2>
+                                <p class="text-muted small mb-0">Account ID #{{ user['id'] }}</p>
+                            </div>
+                            <div class="d-flex flex-wrap gap-2">
+                                <span class="badge bg-success-subtle text-success text-uppercase">{{ user['role']|replace('_', ' ') }}</span>
+                                {% if user['is_admin'] %}
+                                    <span class="badge bg-dark-subtle text-dark">Admin</span>
+                                {% endif %}
+                                {% if profile.get('profile_completed') %}
+                                    <span class="badge bg-success-subtle text-success">Profile complete</span>
+                                {% else %}
+                                    <span class="badge bg-warning-subtle text-warning-emphasis">Profile incomplete</span>
+                                {% endif %}
+                                {% if profile.get('profile_verified_at') %}
+                                    <span class="badge bg-primary-subtle text-primary">Verified {{ profile['profile_verified_at'] }}</span>
+                                {% else %}
+                                    <span class="badge bg-secondary-subtle text-secondary">Not verified</span>
+                                {% endif %}
+                            </div>
+                        </div>
+                        <hr class="my-4">
+                        <div class="row g-3">
+                            <div class="col-md-6">
+                                <span class="text-muted text-uppercase small fw-semibold">Full name</span>
+                                <div class="fw-semibold">{{ profile['full_name'] or 'Not provided' }}</div>
+                            </div>
+                            <div class="col-md-6">
+                                <span class="text-muted text-uppercase small fw-semibold">Date of birth</span>
+                                <div class="fw-semibold">{{ profile['date_of_birth'] or 'Not provided' }}</div>
+                            </div>
+                            <div class="col-md-6">
+                                <span class="text-muted text-uppercase small fw-semibold">Mobile</span>
+                                <div class="fw-semibold">{{ profile['phone'] or 'Not provided' }}</div>
+                            </div>
+                            <div class="col-md-6">
+                                <span class="text-muted text-uppercase small fw-semibold">Address</span>
+                                <div class="fw-semibold">{{ profile['address'] or 'Not provided' }}</div>
+                            </div>
+                            <div class="col-md-6">
+                                <span class="text-muted text-uppercase small fw-semibold">Govt ID type</span>
+                                <div class="fw-semibold">{{ profile['govt_id_type'] or 'Not provided' }}</div>
+                            </div>
+                            <div class="col-md-6">
+                                <span class="text-muted text-uppercase small fw-semibold">Govt ID number</span>
+                                <div class="fw-semibold">{{ profile['govt_id_number'] or 'Not provided' }}</div>
+                            </div>
+                            <div class="col-md-6">
+                                <span class="text-muted text-uppercase small fw-semibold">Driving licence</span>
+                                <div class="fw-semibold">{{ profile['driver_license'] or 'Not provided' }}</div>
+                            </div>
+                            <div class="col-md-6">
+                                <span class="text-muted text-uppercase small fw-semibold">Additional ID</span>
+                                <div class="fw-semibold">{{ profile['additional_id'] or 'Not provided' }}</div>
+                            </div>
+                            <div class="col-md-6">
+                                <span class="text-muted text-uppercase small fw-semibold">Vehicle registration</span>
+                                <div class="fw-semibold">{{ profile['vehicle_registration'] or 'Not provided' }}</div>
+                            </div>
+                            <div class="col-md-6">
+                                <span class="text-muted text-uppercase small fw-semibold">GPS tracking consent</span>
+                                <div class="fw-semibold">{{ 'Enabled' if profile.get('gps_tracking') else 'Disabled' }}</div>
+                            </div>
+                        </div>
+                        <div class="mt-4 p-3 rounded bg-light d-flex flex-wrap gap-4">
+                            <div>
+                                <div class="text-muted text-uppercase small">Vehicles hosted</div>
+                                <div class="fs-5 fw-bold">{{ stats['vehicle_count'] }}</div>
+                            </div>
+                            <div>
+                                <div class="text-muted text-uppercase small">Trips booked</div>
+                                <div class="fs-5 fw-bold">{{ stats['trip_count'] }}</div>
+                            </div>
+                            <div>
+                                <div class="text-muted text-uppercase small">Documents</div>
+                                <div class="fs-5 fw-bold">{{ documents|length }}</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="card card-zoom mt-4">
+                    <div class="card-body">
+                        <h2 class="h5 fw-bold mb-3">Payout preferences</h2>
+                        <div class="row g-3">
+                            <div class="col-md-6">
+                                <span class="text-muted text-uppercase small fw-semibold">Account holder</span>
+                                <div class="fw-semibold">{{ payout.get('account_holder') or profile['full_name'] or 'Not provided' }}</div>
+                            </div>
+                            <div class="col-md-6">
+                                <span class="text-muted text-uppercase small fw-semibold">Account number</span>
+                                <div class="fw-semibold">{{ payout.get('account_number') or 'Not provided' }}</div>
+                            </div>
+                            <div class="col-md-6">
+                                <span class="text-muted text-uppercase small fw-semibold">IFSC code</span>
+                                <div class="fw-semibold">{{ payout.get('ifsc_code') or 'Not provided' }}</div>
+                            </div>
+                            <div class="col-md-6">
+                                <span class="text-muted text-uppercase small fw-semibold">UPI ID</span>
+                                <div class="fw-semibold">{{ payout.get('upi_id') or 'Not provided' }}</div>
+                            </div>
+                        </div>
+                        {% if payout.get('updated_at') %}
+                            <p class="text-muted small mb-0 mt-3">Last updated {{ payout['updated_at'] }}</p>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+            <div class="col-lg-5">
+                <div class="card card-zoom h-100">
+                    <div class="card-body">
+                        <h2 class="h5 fw-bold mb-3">Documents</h2>
+                        {% if documents %}
+                            <ul class="list-group list-group-flush">
+                                {% for doc in documents %}
+                                    <li class="list-group-item px-0 py-3 d-flex flex-column gap-2">
+                                        <div class="d-flex justify-content-between align-items-center gap-3">
+                                            <div>
+                                                <div class="fw-semibold">{{ doc['doc_type'] or 'Supporting document' }}</div>
+                                                <div class="text-muted small">{{ doc['created_at'] }}</div>
+                                            </div>
+                                            <div class="btn-group">
+                                                <a href="{{ url_for('admin_download_user_document', user_id=user['id'], doc_id=doc['id']) }}" class="btn btn-outline-primary btn-sm">Download</a>
+                                                <a href="{{ url_for('static', filename='uploads/' ~ doc['filename']) }}" target="_blank" rel="noopener" class="btn btn-outline-secondary btn-sm">Preview</a>
+                                            </div>
+                                        </div>
+                                    </li>
+                                {% endfor %}
+                            </ul>
+                        {% else %}
+                            <div class="text-muted small">No documents uploaded yet.</div>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+{% endblock %}
