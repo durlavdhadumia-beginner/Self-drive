@@ -35,7 +35,7 @@
                                         {% if user['is_admin'] %}<span class="badge bg-success-subtle text-success">Admin</span>{% endif %}
                                     </td>
                                     <td class="text-muted">{{ user['role']|capitalize }}</td>
-                                    <td class="text-muted small">{{ user['full_name'] or '—' }}<br>{{ user['phone'] or '—' }}</td>
+                                    <td class="text-muted small">{{ user['full_name'] or '-' }}<br>{{ user['phone'] or '-' }}</td>
                                     <td>{{ user['doc_count'] }}</td>
                                     <td>{{ user['vehicle_count'] }}</td>
                                     <td>{{ user['trip_count'] }}</td>

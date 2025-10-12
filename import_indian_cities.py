@@ -1,19 +1,8 @@
-"""Populate the cities table with Indian towns using multiple open datasets.
+"""Populate the cities table with the countries-states-cities dataset.
 
-Datasets used:
-1. Countries-States-Cities project
-   https://github.com/dr5hn/countries-states-cities-database
-   (provides larger cities and coordinates)
-2. India Post PIN code directory
-   https://github.com/sanand0/pincode
-   (covers small branch offices mapped to PIN codes)
+Run this script whenever you want to refresh the list of Indian cities:
 
-Run:
     python import_indian_cities.py
-
-It downloads both CSVs, merges the entries, and writes them into the `cities`
-table of `car_rental.db`. Town names are deduplicated by (name, state).
-PIN codes from India Post are stored to enable postcode-based search later.
 """
 
 from __future__ import annotations
@@ -29,35 +18,20 @@ from typing import Iterable, Tuple
 PRIMARY_DATA_URL = (
     "https://raw.githubusercontent.com/dr5hn/countries-states-cities-database/master/csv/cities.csv"
 )
-PINCODE_DATA_URL = "https://raw.githubusercontent.com/sanand0/pincode/master/data/IN.csv"
 DB_PATH = Path(__file__).with_name("car_rental.db")
-
-
-def _download(url: str) -> str:
-    with urllib.request.urlopen(url) as response:  # type: ignore[call-arg]
-        if response.status != 200:
-            raise RuntimeError(f"Failed to download {url} (status {response.status})")
-        return response.read().decode("utf-8")
 
 
 def download_primary_dataset() -> str:
     print("Downloading primary city dataset …", flush=True)
-    return _download(PRIMARY_DATA_URL)
+    with urllib.request.urlopen(PRIMARY_DATA_URL) as response:  # type: ignore[call-arg]
+        if response.status != 200:
+            raise RuntimeError(f"Failed to download dataset (status {response.status})")
+        return response.read().decode("utf-8")
 
 
-def download_pincode_dataset() -> str:
-    print("Downloading pin code dataset …", flush=True)
-    return _download(PINCODE_DATA_URL)
-
-
-def transform_rows(
-    primary_csv: str, pincode_csv: str
-) -> Iterable[Tuple[int, str, str, float | None, float | None, str | None]]:
-    seen: set[Tuple[str, str]] = set()
-
-    # Primary dataset with coordinates
-    primary_reader = csv.DictReader(io.StringIO(primary_csv))
-    for row in primary_reader:
+def transform_rows(primary_csv: str) -> Iterable[Tuple[int, str, str, float | None, float | None, str | None]]:
+    reader = csv.DictReader(io.StringIO(primary_csv))
+    for row in reader:
         if row.get("country_code") != "IN":
             continue
         try:
@@ -67,10 +41,7 @@ def transform_rows(
         name = (row.get("name") or "").strip()
         if not name:
             continue
-        state = (row.get("state_name") or "").strip()
-        key = (name.lower(), state.lower())
-        if key in seen:
-            continue
+        state_name = (row.get("state_name") or "").strip()
         try:
             latitude = float(row["latitude"]) if row.get("latitude") else None
         except ValueError:
@@ -79,28 +50,7 @@ def transform_rows(
             longitude = float(row["longitude"]) if row.get("longitude") else None
         except ValueError:
             longitude = None
-        yield city_id, name, state, latitude, longitude, None
-        seen.add(key)
-
-    # India Post dataset – includes smaller towns/offices
-    pincode_reader = csv.DictReader(io.StringIO(pincode_csv))
-    for raw_row in pincode_reader:
-        row = {k.strip().lower(): (v.strip() if isinstance(v, str) else v) for k, v in raw_row.items()}
-        name = row.get("office name") or row.get("office_name") or ""
-        state = row.get("state name") or row.get("state_name") or ""
-        pincode = row.get("pincode")
-        if not name or not state or not pincode:
-            continue
-        key = (name.lower(), state.lower())
-        if key in seen:
-            continue
-        try:
-            pin_int = int(pincode)
-        except (TypeError, ValueError):
-            continue
-        city_id = 100_000_000 + pin_int  # Offset to avoid clashing with primary IDs
-        yield city_id, name, state, None, None, pincode
-        seen.add(key)
+        yield city_id, name, state_name, latitude, longitude, None
 
 
 def ensure_table(conn: sqlite3.Connection) -> None:
@@ -127,14 +77,13 @@ def ensure_table(conn: sqlite3.Connection) -> None:
 def main() -> None:
     try:
         primary_csv = download_primary_dataset()
-        pincode_csv = download_pincode_dataset()
     except Exception as exc:
         print(f"Download failed: {exc}", file=sys.stderr)
         sys.exit(1)
 
-    rows = list(transform_rows(primary_csv, pincode_csv))
+    rows = list(transform_rows(primary_csv))
     if not rows:
-        print("No rows were generated from the datasets.", file=sys.stderr)
+        print("No Indian cities were found in the dataset!", file=sys.stderr)
         sys.exit(1)
 
     conn = sqlite3.connect(DB_PATH)
@@ -152,7 +101,7 @@ def main() -> None:
     finally:
         conn.close()
 
-    print(f"Imported {len(rows)} Indian cities/towns into {DB_PATH.name}.")
+    print(f"Imported {len(rows)} Indian cities into {DB_PATH.name}.")
 
 
 if __name__ == "__main__":
