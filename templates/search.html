@@ -347,7 +347,15 @@
             ensureMapSize();
         }
 
-        function redrawRadius() {
+        function fitToRadius(padding = 0.2) {
+            if (radiusCircle) {
+                map.fitBounds(radiusCircle.getBounds().pad(padding));
+            } else if (locationMarker) {
+                map.setView(locationMarker.getLatLng(), map.getZoom());
+            }
+        }
+
+        function redrawRadius({ adjustView = false } = {}) {
             const lat = parseFloat(latitudeField.value);
             const lng = parseFloat(longitudeField.value);
             const km = parseFloat(radiusInput.value || initialRadius);
@@ -371,19 +379,27 @@
                 radiusCircle.setLatLng([lat, lng]);
                 radiusCircle.setRadius(radiusMeters);
             }
+            if (adjustView) {
+                fitToRadius();
+            }
         }
 
         map.on('click', (event) => {
             updateSelectedLocation(event.latlng.lat, event.latlng.lng);
+            redrawRadius({ adjustView: true });
             focusOn(event.latlng.lat, event.latlng.lng);
         });
 
-        radiusInput.addEventListener('change', redrawRadius);
-        radiusInput.addEventListener('input', redrawRadius);
+        const handleRadiusInput = () => redrawRadius({ adjustView: true });
+        radiusInput.addEventListener('change', handleRadiusInput);
+        radiusInput.addEventListener('input', handleRadiusInput);
 
         if (Number.isFinite(initialLat) && Number.isFinite(initialLng)) {
-            focusOn(initialLat, initialLng);
             updateSelectedLocation(initialLat, initialLng);
+            redrawRadius({ adjustView: true });
+            if (!carsData || !carsData.length) {
+                fitToRadius();
+            }
         } else {
             focusOn(DEFAULT_VIEW.lat, DEFAULT_VIEW.lng, DEFAULT_VIEW.zoom);
         }
@@ -401,6 +417,9 @@
             const bounds = L.latLngBounds(carsData.map(car => [car.latitude, car.longitude]));
             if (locationMarker) {
                 bounds.extend(locationMarker.getLatLng());
+            }
+            if (radiusCircle) {
+                bounds.extend(radiusCircle.getBounds());
             }
             map.fitBounds(bounds.pad(0.2));
             ensureMapSize();
