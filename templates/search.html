@@ -358,7 +358,11 @@
         function redrawRadius({ adjustView = false } = {}) {
             const lat = parseFloat(latitudeField.value);
             const lng = parseFloat(longitudeField.value);
-            const km = parseFloat(radiusInput.value || initialRadius);
+            const rawKm = parseFloat(radiusInput.value);
+            const km = Number.isFinite(rawKm) && rawKm > 0 ? rawKm : initialRadius;
+            if (!Number.isFinite(rawKm) || rawKm <= 0) {
+                radiusInput.value = km.toString();
+            }
             if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
                 if (radiusCircle) {
                     radiusCircle.remove();
