@@ -347,6 +347,22 @@
             ensureMapSize();
         }
 
+        function radiusToZoom(km) {
+            if (!Number.isFinite(km) || km <= 0) {
+                return 13;
+            }
+            if (km <= 3) return 14;
+            if (km <= 8) return 13;
+            if (km <= 15) return 12;
+            if (km <= 30) return 11;
+            if (km <= 60) return 10;
+            if (km <= 120) return 9;
+            if (km <= 240) return 8;
+            if (km <= 480) return 7;
+            if (km <= 960) return 6;
+            return 5;
+        }
+
         function fitToRadius(padding = 0.2) {
             if (radiusCircle) {
                 const bounds = radiusCircle.getBounds();
@@ -356,9 +372,7 @@
                 }
             }
             if (locationMarker) {
-                const currentZoom = map.getZoom();
-                const fallbackZoom = Number.isFinite(currentZoom) ? currentZoom : DEFAULT_VIEW.zoom;
-                map.setView(locationMarker.getLatLng(), fallbackZoom);
+                map.setView(locationMarker.getLatLng(), radiusToZoom(parseFloat(radiusInput.value) || initialRadius));
             }
         }
 
@@ -391,14 +405,14 @@
                 radiusCircle.setRadius(radiusMeters);
             }
             if (adjustView) {
-                fitToRadius();
+                map.setView([lat, lng], radiusToZoom(km));
             }
         }
 
         map.on('click', (event) => {
             updateSelectedLocation(event.latlng.lat, event.latlng.lng);
             redrawRadius({ adjustView: true });
-            focusOn(event.latlng.lat, event.latlng.lng);
+            fitToRadius();
         });
 
         const handleRadiusInput = () => redrawRadius({ adjustView: true });
