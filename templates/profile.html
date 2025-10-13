@@ -21,6 +21,32 @@
             opacity: 0;
             transform: translate(-0.15rem, -50%);
         }
+        .dob-input:not(.has-date-value)::-webkit-datetime-edit,
+        .dob-input:not(.has-date-value)::-webkit-datetime-edit-text,
+        .dob-input:not(.has-date-value)::-webkit-datetime-edit-month-field,
+        .dob-input:not(.has-date-value)::-webkit-datetime-edit-day-field,
+        .dob-input:not(.has-date-value)::-webkit-datetime-edit-year-field {
+            color: transparent;
+        }
+        .dob-input.has-date-value::-webkit-datetime-edit,
+        .dob-input.has-date-value::-webkit-datetime-edit-text,
+        .dob-input.has-date-value::-webkit-datetime-edit-month-field,
+        .dob-input.has-date-value::-webkit-datetime-edit-day-field,
+        .dob-input.has-date-value::-webkit-datetime-edit-year-field {
+            color: inherit;
+        }
+        .dob-input::-webkit-calendar-picker-indicator {
+            cursor: pointer;
+        }
+        .dob-input:not(.has-date-value),
+        .dob-input:not(.has-date-value):-moz-ui-invalid {
+            color: transparent;
+            text-shadow: 0 0 0 rgba(17,24,39,0.6);
+        }
+        .dob-input.has-date-value {
+            color: inherit;
+            text-shadow: none;
+        }
     </style>
 {% endblock %}
 {% block content %}
