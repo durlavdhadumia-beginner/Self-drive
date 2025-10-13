@@ -633,6 +633,29 @@ def reverse_geocode_city(latitude: float, longitude: float) -> Optional[str]:
     return None
 
 
+def lookup_city_coordinates(city_name: str) -> Optional[Tuple[float, float]]:
+    """Return latitude and longitude for a given city name from the local cities table."""
+    cleaned = (city_name or "").strip()
+    if not cleaned:
+        return None
+    db = get_db()
+    row = db.execute(
+        """
+        SELECT latitude, longitude
+        FROM cities
+        WHERE LOWER(name) = LOWER(?)
+          AND latitude IS NOT NULL
+          AND longitude IS NOT NULL
+        ORDER BY (pincode IS NULL), pincode
+        LIMIT 1
+        """,
+        (cleaned,),
+    ).fetchone()
+    if row and row["latitude"] is not None and row["longitude"] is not None:
+        return float(row["latitude"]), float(row["longitude"])
+    return None
+
+
 def fetch_available_cars(
     *,
     latitude: float,
@@ -1585,6 +1608,29 @@ def search() -> str:
         except (TypeError, ValueError):
             latitude = longitude = None
             radius = None
+
+    if (latitude is None or longitude is None) and city:
+        coords = lookup_city_coordinates(city.split(",")[0].strip())
+        if coords:
+            latitude, longitude = coords
+            if radius is None:
+                radius = 10.0
+
+    if not cars and latitude is not None and longitude is not None:
+        lookup_radius = radius if radius is not None else 10.0
+        cars = fetch_available_cars(
+            latitude=latitude,
+            longitude=longitude,
+            radius_km=lookup_radius,
+            city=city,
+            price_min=price_min_hours,
+            price_max=price_max_hours,
+            vehicle_types=filters["vehicle_types"],
+            seat_min=filters["seat_min"],
+            seat_max=filters["seat_max"],
+            require_gps=filters["require_gps"],
+        )
+        radius = lookup_radius
 
     start_dt = parse_iso(parse_datetime(start_time_raw))
     end_dt = parse_iso(parse_datetime(end_time_raw))
