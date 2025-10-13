@@ -121,12 +121,20 @@
                         <form action="{{ url_for('search') }}" method="get" id="hero-search" class="row g-3">
                             <div class="col-12">
                                 <label for="city" class="form-label">City</label>
-                                <input list="cities" class="form-control form-control-lg" id="city" name="city" placeholder="e.g. Bengaluru" required>
-                                <datalist id="cities">
-                                    {% for city in cities %}
-                                        <option value="{{ city.name }}">{{ city.name }}{% if city.state %}, {{ city.state }}{% endif %}</option>
-                                    {% endfor %}
-                                </datalist>
+                                <div class="city-autocomplete position-relative">
+                                    <input type="text"
+                                           class="form-control form-control-lg"
+                                           id="city"
+                                           name="city"
+                                           placeholder="e.g. Bengaluru"
+                                           required
+                                           autocomplete="off"
+                                           role="combobox"
+                                           aria-expanded="false"
+                                           aria-autocomplete="list"
+                                           aria-controls="city-suggestions">
+                                    <div class="city-suggestions list-group shadow-sm d-none" id="city-suggestions" role="listbox"></div>
+                                </div>
                             </div>
                             <div class="col-md-6">
                                 <label for="start_time" class="form-label">Trip start</label>
@@ -279,6 +287,170 @@
 {% endblock %}
 {% block scripts %}
 {{ super() }}
+<style>
+    .city-autocomplete .city-suggestions {
+        position: absolute;
+        top: calc(100% + 0.25rem);
+        left: 0;
+        right: 0;
+        z-index: 30;
+        max-height: 260px;
+        overflow-y: auto;
+        border-radius: 0.75rem;
+        background: #fff;
+    }
+    .city-autocomplete .city-suggestions .list-group-item {
+        cursor: pointer;
+        border: none;
+        border-bottom: 1px solid rgba(15, 118, 110, 0.08);
+    }
+    .city-autocomplete .city-suggestions .list-group-item:last-child {
+        border-bottom: none;
+        border-bottom-left-radius: 0.75rem;
+        border-bottom-right-radius: 0.75rem;
+    }
+    .city-autocomplete .city-suggestions .list-group-item:first-child {
+        border-top-left-radius: 0.75rem;
+        border-top-right-radius: 0.75rem;
+    }
+    .city-autocomplete .city-suggestions .list-group-item.active,
+    .city-autocomplete .city-suggestions .list-group-item:focus,
+    .city-autocomplete .city-suggestions .list-group-item:hover {
+        background: rgba(13, 159, 92, 0.12);
+        color: #0a5c36;
+    }
+</style>
+<script>
+    (function () {
+        const cityInput = document.getElementById('city');
+        const suggestionPanel = document.getElementById('city-suggestions');
+        if (!cityInput || !suggestionPanel) {
+            return;
+        }
+        const rawOptions = {{ cities|tojson }};
+        const normalised = [];
+        const seen = new Set();
+        const buildLabel = (item) => item.state ? `${item.name}, ${item.state}` : item.name;
+        rawOptions.forEach((city) => {
+            if (!city || !city.name) {
+                return;
+            }
+            const key = city.name.trim().toLowerCase();
+            if (seen.has(key)) {
+                return;
+            }
+            seen.add(key);
+            normalised.push({
+                value: city.name.trim(),
+                label: buildLabel(city)
+            });
+        });
+        normalised.sort((a, b) => a.label.localeCompare(b.label));
+        const MAX_RESULTS = 12;
+        let activeIndex = -1;
+        let currentResults = [];
+
+        function hideSuggestions() {
+            suggestionPanel.classList.add('d-none');
+            suggestionPanel.innerHTML = '';
+            cityInput.setAttribute('aria-expanded', 'false');
+            activeIndex = -1;
+            currentResults = [];
+        }
+
+        function highlight(index) {
+            const items = suggestionPanel.querySelectorAll('[data-value]');
+            items.forEach((item, idx) => {
+                item.classList.toggle('active', idx === index);
+            });
+            activeIndex = index;
+        }
+
+        function renderSuggestions(term) {
+            const query = term.trim().toLowerCase();
+            let results;
+            if (!query) {
+                results = normalised.slice(0, MAX_RESULTS);
+            } else {
+                results = normalised
+                    .filter((option) => option.label.toLowerCase().includes(query))
+                    .slice(0, MAX_RESULTS);
+            }
+            suggestionPanel.innerHTML = '';
+            if (!results.length) {
+                suggestionPanel.innerHTML = '<div class="list-group-item text-muted small">No matching cities found</div>';
+                suggestionPanel.classList.remove('d-none');
+                cityInput.setAttribute('aria-expanded', 'true');
+                activeIndex = -1;
+                currentResults = [];
+                return;
+            }
+            const fragment = document.createDocumentFragment();
+            results.forEach((option, index) => {
+                const button = document.createElement('button');
+                button.type = 'button';
+                button.className = 'list-group-item list-group-item-action text-start';
+                button.setAttribute('data-value', option.value);
+                button.setAttribute('role', 'option');
+                button.dataset.index = String(index);
+                button.textContent = option.label;
+                fragment.appendChild(button);
+            });
+            suggestionPanel.appendChild(fragment);
+            suggestionPanel.classList.remove('d-none');
+            cityInput.setAttribute('aria-expanded', 'true');
+            activeIndex = -1;
+            currentResults = results;
+        }
+
+        cityInput.addEventListener('focus', () => {
+            renderSuggestions(cityInput.value);
+        });
+        cityInput.addEventListener('input', () => {
+            renderSuggestions(cityInput.value);
+        });
+        cityInput.addEventListener('keydown', (event) => {
+            if (suggestionPanel.classList.contains('d-none')) {
+                return;
+            }
+            if (event.key === 'ArrowDown') {
+                event.preventDefault();
+                if (!currentResults.length) {
+                    return;
+                }
+                const nextIndex = activeIndex + 1 >= currentResults.length ? 0 : activeIndex + 1;
+                highlight(nextIndex);
+            } else if (event.key === 'ArrowUp') {
+                event.preventDefault();
+                if (!currentResults.length) {
+                    return;
+                }
+                const prevIndex = activeIndex - 1 < 0 ? currentResults.length - 1 : activeIndex - 1;
+                highlight(prevIndex);
+            } else if (event.key === 'Enter') {
+                if (activeIndex >= 0 && currentResults[activeIndex]) {
+                    event.preventDefault();
+                    cityInput.value = currentResults[activeIndex].value;
+                    hideSuggestions();
+                }
+            } else if (event.key === 'Escape') {
+                hideSuggestions();
+            }
+        });
+        cityInput.addEventListener('blur', () => {
+            window.setTimeout(hideSuggestions, 120);
+        });
+        suggestionPanel.addEventListener('pointerdown', (event) => {
+            const target = event.target.closest('[data-value]');
+            if (!target) {
+                return;
+            }
+            event.preventDefault();
+            cityInput.value = target.getAttribute('data-value');
+            hideSuggestions();
+        });
+    })();
+</script>
 <script>
     const detectBtn = document.getElementById('detect-location');
     const latField = document.getElementById('search-lat');
