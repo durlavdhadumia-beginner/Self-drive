@@ -349,9 +349,16 @@
 
         function fitToRadius(padding = 0.2) {
             if (radiusCircle) {
-                map.fitBounds(radiusCircle.getBounds().pad(padding));
-            } else if (locationMarker) {
-                map.setView(locationMarker.getLatLng(), map.getZoom());
+                const bounds = radiusCircle.getBounds();
+                if (bounds.isValid()) {
+                    map.fitBounds(bounds.pad(padding));
+                    return;
+                }
+            }
+            if (locationMarker) {
+                const currentZoom = map.getZoom();
+                const fallbackZoom = Number.isFinite(currentZoom) ? currentZoom : DEFAULT_VIEW.zoom;
+                map.setView(locationMarker.getLatLng(), fallbackZoom);
             }
         }
 
