@@ -95,8 +95,14 @@
             <div class="card-body">
                 <form method="post" id="search-form" class="row g-3 align-items-end">
                     <input type="hidden" name="city" value="{{ city or detected_city or '' }}">
-                    <input type="hidden" name="start_time" id="start-field" value="{{ start_time or '' }}">
-                    <input type="hidden" name="end_time" id="end-field" value="{{ end_time or '' }}">
+                    <div class="col-md-3">
+                        <label class="form-label" for="start-field">Trip start</label>
+                        <input type="datetime-local" class="form-control" name="start_time" id="start-field" value="{{ start_time or '' }}" required>
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label" for="end-field">Trip end</label>
+                        <input type="datetime-local" class="form-control" name="end_time" id="end-field" value="{{ end_time or '' }}" required>
+                    </div>
                     <input type="hidden" name="latitude" id="latitude-field" value="{{ latitude if latitude is not none else '' }}">
                     <input type="hidden" name="longitude" id="longitude-field" value="{{ longitude if longitude is not none else '' }}">
                     {% set selected_vehicle_type = filters.vehicle_types|first if filters.vehicle_types else '' %}
@@ -286,6 +292,8 @@
         const initialLng = {{ longitude if longitude is not none else 'null' }};
         const initialRadius = {{ radius or 10 }};
         const carsData = {{ cars_payload|tojson|safe }};
+        const pad = (value) => value.toString().padStart(2, '0');
+        const formatDateTime = (date) => `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
 
         const DEFAULT_VIEW = { lat: 20.5937, lng: 78.9629, zoom: 5 };
         const map = L.map(mapElement, { zoomControl: true });
@@ -473,23 +481,51 @@
         }
 
         searchForm.addEventListener('submit', (event) => {
+            if (startField && endField && startField.value && endField.value && endField.value <= startField.value) {
+                event.preventDefault();
+                alert('Trip end time must be after the start time.');
+                endField.focus();
+                return;
+            }
             if (!latitudeField.value || !longitudeField.value) {
                 event.preventDefault();
                 alert('Please select a pickup location on the map before searching.');
             }
         });
 
+        const syncEndConstraints = () => {
+            if (!startField || !endField || !startField.value) {
+                return;
+            }
+            endField.min = startField.value;
+            if (!endField.value || endField.value <= startField.value) {
+                const startDate = new Date(startField.value);
+                const adjusted = new Date(startDate.getTime() + 60 * 60 * 1000);
+                endField.value = formatDateTime(adjusted);
+            }
+        };
+
+        if (startField) {
+            startField.addEventListener('change', () => {
+                syncEndConstraints();
+            });
+        }
+        if (endField) {
+            endField.addEventListener('change', () => {
+                syncEndConstraints();
+            });
+        }
+
         if (startField && !startField.value) {
             const now = new Date();
             now.setMinutes(0, 0, 0);
-            const pad = (value) => value.toString().padStart(2, '0');
-            const format = (date) => `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
             const start = new Date(now.getTime() + 60 * 60 * 1000);
             const end = new Date(start.getTime() + 4 * 60 * 60 * 1000);
-            startField.value = format(start);
+            startField.value = formatDateTime(start);
             if (endField && !endField.value) {
-                endField.value = format(end);
+                endField.value = formatDateTime(end);
             }
         }
+        syncEndConstraints();
     </script>
 {% endblock %}
