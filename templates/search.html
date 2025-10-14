@@ -503,19 +503,6 @@
             useLocationBtn.style.display = 'none';
         }
 
-        searchForm.addEventListener('submit', (event) => {
-            if (startField && endField && startField.value && endField.value && endField.value <= startField.value) {
-                event.preventDefault();
-                alert('Trip end time must be after the start time.');
-                endField.focus();
-                return;
-            }
-            if (!latitudeField.value || !longitudeField.value) {
-                event.preventDefault();
-                alert('Please select a pickup location on the map before searching.');
-            }
-        });
-
         const syncEndConstraints = () => {
             if (!startField || !endField || !startField.value) {
                 return;
@@ -538,6 +525,21 @@
                 syncEndConstraints();
             });
         }
+
+        searchForm.addEventListener('submit', (event) => {
+            if (startField && endField && startField.value && endField.value && endField.value <= startField.value) {
+                event.preventDefault();
+                alert('Trip end time must be after the start time.');
+                endField.focus();
+                return;
+            }
+            const hasCoordinates = latitudeField.value && longitudeField.value;
+            const cityValue = cityInput ? cityInput.value.trim() : '';
+            if (!hasCoordinates && !cityValue) {
+                event.preventDefault();
+                alert('Please select a pickup location on the map before searching.');
+            }
+        });
 
         if (startField && !startField.value) {
             const now = new Date();
