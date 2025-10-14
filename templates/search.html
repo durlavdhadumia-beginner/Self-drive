@@ -537,7 +537,7 @@
             const cityValue = cityInput ? cityInput.value.trim() : '';
             if (!hasCoordinates && !cityValue) {
                 event.preventDefault();
-                alert('Please select a pickup location on the map before searching.');
+                alert('Please select a pickup location on the map or enter a city before searching.');
             }
         });
 

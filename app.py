@@ -671,6 +671,38 @@ def lookup_city_coordinates(city_name: str) -> Optional[Tuple[float, float]]:
     ).fetchone()
     if row and row["latitude"] is not None and row["longitude"] is not None:
         return float(row["latitude"]), float(row["longitude"])
+    tokens = cleaned.lower().split()
+    if len(tokens) > 1:
+        for size in range(len(tokens), 0, -1):
+            attempt = " ".join(tokens[:size])
+            row = db.execute(
+                """
+                SELECT latitude, longitude
+                FROM cities
+                WHERE LOWER(name) = LOWER(?)
+                  AND latitude IS NOT NULL
+                  AND longitude IS NOT NULL
+                ORDER BY (pincode IS NULL), pincode
+                LIMIT 1
+                """,
+                (attempt,),
+            ).fetchone()
+            if row and row["latitude"] is not None and row["longitude"] is not None:
+                return float(row["latitude"]), float(row["longitude"])
+    row = db.execute(
+        """
+        SELECT latitude, longitude
+        FROM cities
+        WHERE LOWER(name) LIKE '%' || LOWER(?) || '%'
+          AND latitude IS NOT NULL
+          AND longitude IS NOT NULL
+        ORDER BY LENGTH(name), (pincode IS NULL), pincode
+        LIMIT 1
+        """,
+        (cleaned,),
+    ).fetchone()
+    if row and row["latitude"] is not None and row["longitude"] is not None:
+        return float(row["latitude"]), float(row["longitude"])
     return None
 
 
