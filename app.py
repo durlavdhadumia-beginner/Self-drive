@@ -643,21 +643,7 @@ def lookup_city_coordinates(city_name: str) -> Optional[Tuple[float, float]]:
     if not cleaned:
         return None
     db = get_db()
-    row = db.execute(
-        """
-        SELECT latitude, longitude
-        FROM cities
-        WHERE LOWER(name) = LOWER(?)
-          AND latitude IS NOT NULL
-          AND longitude IS NOT NULL
-        ORDER BY (pincode IS NULL), pincode
-        LIMIT 1
-        """,
-        (cleaned,),
-    ).fetchone()
-    if row and row["latitude"] is not None and row["longitude"] is not None:
-        return float(row["latitude"]), float(row["longitude"])
-    row = db.execute(
+    matches = db.execute(
         """
         SELECT latitude, longitude
         FROM cities
@@ -669,26 +655,25 @@ def lookup_city_coordinates(city_name: str) -> Optional[Tuple[float, float]]:
         """,
         (cleaned,),
     ).fetchone()
-    if row and row["latitude"] is not None and row["longitude"] is not None:
-        return float(row["latitude"]), float(row["longitude"])
+    if matches and matches["latitude"] is not None and matches["longitude"] is not None:
+        return float(matches["latitude"]), float(matches["longitude"])
     tokens = cleaned.lower().split()
-    if len(tokens) > 1:
-        for size in range(len(tokens), 0, -1):
-            attempt = " ".join(tokens[:size])
-            row = db.execute(
-                """
-                SELECT latitude, longitude
-                FROM cities
-                WHERE LOWER(name) = LOWER(?)
-                  AND latitude IS NOT NULL
-                  AND longitude IS NOT NULL
-                ORDER BY (pincode IS NULL), pincode
-                LIMIT 1
-                """,
-                (attempt,),
-            ).fetchone()
-            if row and row["latitude"] is not None and row["longitude"] is not None:
-                return float(row["latitude"]), float(row["longitude"])
+    for size in range(len(tokens), 0, -1):
+        attempt = " ".join(tokens[:size])
+        row = db.execute(
+            """
+            SELECT latitude, longitude
+            FROM cities
+            WHERE LOWER(name) = LOWER(?)
+              AND latitude IS NOT NULL
+              AND longitude IS NOT NULL
+            ORDER BY (pincode IS NULL), pincode
+            LIMIT 1
+            """,
+            (attempt,),
+        ).fetchone()
+        if row and row["latitude"] is not None and row["longitude"] is not None:
+            return float(row["latitude"]), float(row["longitude"])
     row = db.execute(
         """
         SELECT latitude, longitude
