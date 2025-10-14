@@ -91,24 +91,13 @@
                                 <input type="tel" class="form-control" id="phone" name="phone" value="{{ profile['phone'] or '' }}" required>
                             </div>
                             <div class="col-md-6">
+                                <label class="form-label" for="email_contact">Email ID / login contact</label>
+                                <input type="text" class="form-control" id="email_contact" name="email_contact" value="{{ profile['email_contact'] or '' }}" required>
+                                <div class="form-text">Used for account alerts and booking updates. You can change it anytime.</div>
+                            </div>
+                            <div class="col-md-6">
                                 <label class="form-label" for="address">Address</label>
                                 <input type="text" class="form-control" id="address" name="address" value="{{ profile['address'] or '' }}">
-                            </div>
-                            <div class="col-md-6">
-                                <label class="form-label" for="govt_id_type">Govt ID type</label>
-                                <input type="text" class="form-control" id="govt_id_type" name="govt_id_type" value="{{ profile['govt_id_type'] or '' }}" placeholder="Aadhaar / PAN / Passport">
-                            </div>
-                            <div class="col-md-6">
-                                <label class="form-label" for="govt_id_number">Govt ID number</label>
-                                <input type="text" class="form-control" id="govt_id_number" name="govt_id_number" value="{{ profile['govt_id_number'] or '' }}" required>
-                            </div>
-                            <div class="col-md-6">
-                                <label class="form-label" for="driver_license">Driving licence number</label>
-                                <input type="text" class="form-control" id="driver_license" name="driver_license" value="{{ profile['driver_license'] or '' }}">
-                            </div>
-                            <div class="col-md-6">
-                                <label class="form-label" for="additional_id">Additional ID (employee / student)</label>
-                                <input type="text" class="form-control" id="additional_id" name="additional_id" value="{{ profile['additional_id'] or '' }}">
                             </div>
 
                             <div class="col-12 mt-2">
@@ -189,7 +178,7 @@
 
                             <div class="col-md-6">
                                 <label class="form-label">Document type</label>
-                                <input type="text" class="form-control" name="doc_type" placeholder="e.g. Aadhaar">
+                                <input type="text" class="form-control" name="doc_type" placeholder="e.g. Aadhaar (front)">
                             </div>
                             <div class="col-md-6">
                                 <label class="form-label">Upload file</label>
@@ -205,7 +194,15 @@
                             </div>
                             <div class="col-md-6">
                                 <label class="form-label">Document type</label>
-                                <input type="text" class="form-control" name="doc_type" placeholder="e.g. Driving Licence">
+                                <input type="text" class="form-control" name="doc_type" placeholder="e.g. Driving licence">
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label">Upload file</label>
+                                <input type="file" class="form-control" name="doc_files" accept=".png,.jpg,.jpeg,.pdf">
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label">Document type</label>
+                                <input type="text" class="form-control" name="doc_type" placeholder="Additional ID (employee / student)">
                             </div>
                             <div class="col-md-6">
                                 <label class="form-label">Upload file</label>

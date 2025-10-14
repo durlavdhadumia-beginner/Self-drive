@@ -534,7 +534,11 @@ def profile_is_complete(profile: dict | None) -> bool:
             return source.get(key)
         return getattr(source, key, None)
 
-    required_fields = [_value(profile, "full_name"), _value(profile, "phone"), _value(profile, "govt_id_number")]
+    required_fields = [
+        _value(profile, "full_name"),
+        _value(profile, "phone"),
+        _value(profile, "email_contact"),
+    ]
     docs_required = 0
     if getattr(g, "user", None) and has_role("owner"):
         required_fields.append(_value(profile, "vehicle_registration"))
@@ -901,8 +905,16 @@ def load_logged_in_user() -> None:
 @login_required
 def profile() -> str:
     db = get_db()
+    try:
+        db.execute("ALTER TABLE user_profiles ADD COLUMN email_contact TEXT DEFAULT ''")
+        db.commit()
+    except sqlite3.OperationalError:
+        pass
     profile_row = ensure_user_profile(g.user["id"])
     payout_row = ensure_user_payout(g.user["id"])
+    fallback_contact = g.user.get("username") if g.user else ""
+    if not profile_row.get("email_contact"):
+        profile_row["email_contact"] = fallback_contact or profile_row.get("phone", "")
     g.profile = profile_row
     message = request.args.get("message")
     error = None
@@ -911,11 +923,8 @@ def profile() -> str:
         form = request.form
         full_name = form.get("full_name", "").strip()
         date_of_birth = form.get("date_of_birth", "").strip()
+        email_contact = form.get("email_contact", "").strip()
         phone = form.get("phone", "").strip()
-        govt_id_type = form.get("govt_id_type", "").strip()
-        govt_id_number = form.get("govt_id_number", "").strip()
-        driver_license = form.get("driver_license", "").strip()
-        additional_id = form.get("additional_id", "").strip()
         address = form.get("address", "").strip()
         vehicle_registration = form.get("vehicle_registration", "").strip()
         gps_tracking = 1 if form.get("gps_tracking") else 0
@@ -930,8 +939,8 @@ def profile() -> str:
             missing_fields.append("full name")
         if not phone:
             missing_fields.append("mobile number")
-        if not govt_id_number:
-            missing_fields.append("government ID number")
+        if not email_contact:
+            missing_fields.append("email ID or account contact")
         if has_role("owner") and not vehicle_registration:
             missing_fields.append("vehicle registration details")
         if not ((account_number and ifsc_code) or upi_id):
@@ -939,25 +948,21 @@ def profile() -> str:
         db.execute(
             """
             UPDATE user_profiles
-            SET full_name = ?, date_of_birth = ?, phone = ?, govt_id_type = ?,
-                govt_id_number = ?, driver_license = ?, additional_id = ?, address = ?,
+            SET full_name = ?, date_of_birth = ?, phone = ?, address = ?,
                 vehicle_registration = ?, gps_tracking = ?, profile_completed = ?,
-                updated_at = ?
+                updated_at = ?, email_contact = ?
             WHERE user_id = ?
             """,
             (
                 full_name,
                 date_of_birth,
                 phone,
-                govt_id_type,
-                govt_id_number,
-                driver_license,
-                additional_id,
                 address,
                 vehicle_registration,
                 gps_tracking,
                 0 if missing_fields else 1,
                 datetime.utcnow().isoformat(),
+                email_contact,
                 g.user["id"],
             ),
         )
@@ -981,6 +986,8 @@ def profile() -> str:
         if any(getattr(f, "filename", "") for f in doc_files):
             save_user_documents(g.user["id"], doc_files, doc_types)
         profile_row = ensure_user_profile(g.user["id"])
+        if not profile_row.get("email_contact"):
+            profile_row["email_contact"] = email_contact or (g.user.get("username") if g.user else "")
         payout_row = ensure_user_payout(g.user["id"])
         g.profile = profile_row
         g.profile_complete = profile_is_complete(profile_row)
