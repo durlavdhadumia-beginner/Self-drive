@@ -104,11 +104,11 @@
                     <div class="col-12">
                         <div class="filter-bar">
                             <div class="row g-3 align-items-end">
-                                <div class="col-lg-6 col-md-6">
+                                <div class="col-lg-3 col-md-4">
                                     <label class="form-label" for="start-field">Trip start</label>
                                     <input type="datetime-local" class="form-control" name="start_time" id="start-field" value="{{ start_time or '' }}" required>
                                 </div>
-                                <div class="col-lg-6 col-md-6">
+                                <div class="col-lg-3 col-md-4">
                                     <label class="form-label" for="end-field">Trip end</label>
                                     <input type="datetime-local" class="form-control" name="end_time" id="end-field" value="{{ end_time or '' }}" required>
                                 </div>
@@ -129,16 +129,16 @@
                                     </select>
                                 </div>
                                 <div class="col-lg-3 col-md-6">
-                                    <label class="form-label" for="radius">Radius (km)</label>
-                                    <input type="number" class="form-control" name="radius" id="radius" min="1" max="200" step="1" value="{{ radius or 10 }}">
-                                </div>
-                                <div class="col-lg-3 col-md-6">
                                     <label class="form-label" for="seat_min">Seats min</label>
                                     <input type="number" class="form-control" id="seat_min" name="seat_min" value="{{ filters.seat_min if filters.seat_min is not none else '' }}" min="2" max="12">
                                 </div>
                                 <div class="col-lg-3 col-md-6">
                                     <label class="form-label" for="seat_max">Seats max</label>
                                     <input type="number" class="form-control" id="seat_max" name="seat_max" value="{{ filters.seat_max if filters.seat_max is not none else '' }}" min="2" max="12">
+                                </div>
+                                <div class="col-lg-3 col-md-6">
+                                    <label class="form-label" for="radius">Radius (km)</label>
+                                    <input type="number" class="form-control" name="radius" id="radius" min="1" max="200" step="1" value="{{ radius or 10 }}">
                                 </div>
                             </div>
                             <div class="row g-3 align-items-end mt-0">
