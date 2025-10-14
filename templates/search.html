@@ -106,7 +106,14 @@
                             <div class="row g-3 align-items-end">
                                 <div class="col-lg-3 col-md-4">
                                     <label class="form-label" for="city-field">City</label>
-                                    <input type="text" class="form-control" name="city" id="city-field" value="{{ city or detected_city or '' }}" placeholder="e.g. Bengaluru">
+                                    <input type="text" class="form-control" name="city" id="city-field" value="{{ city or detected_city or '' }}" placeholder="e.g. Bengaluru" list="city-options">
+                                    {% if city_options %}
+                                        <datalist id="city-options">
+                                            {% for option in city_options %}
+                                                <option value="{{ option }}">
+                                            {% endfor %}
+                                        </datalist>
+                                    {% endif %}
                                 </div>
                                 <div class="col-lg-3 col-md-4">
                                     <label class="form-label" for="start-field">Trip start</label>
@@ -286,6 +293,7 @@
     <script src="{{ url_for('static', filename='vendor/leaflet/leaflet.js') }}"></script>
     <script>
         const mapElement = document.getElementById('map');
+        const cityInput = document.getElementById('city-field');
         const latitudeField = document.getElementById('latitude-field');
         const longitudeField = document.getElementById('longitude-field');
         const radiusInput = document.getElementById('radius');
@@ -300,6 +308,15 @@
         const carsData = {{ cars_payload|tojson|safe }};
         const pad = (value) => value.toString().padStart(2, '0');
         const formatDateTime = (date) => `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
+
+        if (cityInput) {
+            const clearLocation = () => {
+                latitudeField.value = '';
+                longitudeField.value = '';
+            };
+            cityInput.addEventListener('input', clearLocation);
+            cityInput.addEventListener('change', clearLocation);
+        }
 
         const DEFAULT_VIEW = { lat: 20.5937, lng: 78.9629, zoom: 5 };
         const map = L.map(mapElement, { zoomControl: true });

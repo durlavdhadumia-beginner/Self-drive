@@ -1555,10 +1555,14 @@ def search() -> str:
         filters["require_gps"] = request.form.get("require_gps") == "on"
         price_min_hours = convert_price(filters["price_min"], filters["price_unit"])
         price_max_hours = convert_price(filters["price_max"], filters["price_unit"])
-        try:
-            latitude = float(request.form.get("latitude", ""))
-            longitude = float(request.form.get("longitude", ""))
-            radius = float(request.form.get("radius", "10"))
+        lat_raw = request.form.get("latitude", "").strip()
+        lon_raw = request.form.get("longitude", "").strip()
+        radius_raw = request.form.get("radius", "").strip()
+        latitude = parse_float(lat_raw)
+        longitude = parse_float(lon_raw)
+        radius = parse_float(radius_raw)
+        radius = radius if radius is not None else 10.0
+        if latitude is not None and longitude is not None:
             if not city:
                 detected_city = reverse_geocode_city(latitude, longitude)
                 city = detected_city or city
@@ -1576,8 +1580,8 @@ def search() -> str:
             )
             if not cars:
                 error = "No cars found within the selected filters."
-        except ValueError:
-            error = "Latitude, longitude, and radius must be numeric values."
+        else:
+            latitude = longitude = None
     else:
         start_time_raw = request.args.get("start_time")
         end_time_raw = request.args.get("end_time")
@@ -1677,6 +1681,11 @@ def search() -> str:
                     end_dt,
                 )
 
+    city_rows = db.execute(
+        "SELECT name FROM cities ORDER BY name COLLATE NOCASE LIMIT 25"
+    ).fetchall()
+    city_options = [row["name"] for row in city_rows]
+
     return render_template(
         "search.html",
         cars=cars,
@@ -1693,6 +1702,7 @@ def search() -> str:
         filters=filters,
         available_vehicle_types=available_vehicle_types,
         profile_warning=profile_warning,
+        city_options=city_options,
     )
 
 
