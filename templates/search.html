@@ -130,21 +130,8 @@
                                     <label class="form-label" for="radius">Radius (km)</label>
                                     <input type="number" class="form-control" name="radius" id="radius" min="1" max="200" step="1" value="{{ radius or 10 }}">
                                 </div>
-                                <div class="col-lg-3 col-md-6">
-                                    <label class="form-label" for="price_unit">Rate type (&#8377;/hr or &#8377;/day)</label>
-                                    <select class="form-select" id="price_unit" name="price_unit">
-                                        <option value="hour" {% if filters.price_unit == 'hour' %}selected{% endif %}>Per hour</option>
-                                        <option value="day" {% if filters.price_unit == 'day' %}selected{% endif %}>Per day</option>
-                                    </select>
-                                </div>
-                                <div class="col-lg-3 col-md-6">
-                                    <label class="form-label" for="price_min">Min rate</label>
-                                    <input type="number" class="form-control" name="price_min" id="price_min" value="{{ filters.price_min if filters.price_min is not none else '' }}" min="0" step="50">
-                                </div>
-                                <div class="col-lg-3 col-md-6">
-                                    <label class="form-label" for="price_max">Max rate</label>
-                                    <input type="number" class="form-control" name="price_max" id="price_max" value="{{ filters.price_max if filters.price_max is not none else '' }}" min="0" step="50">
-                                </div>
+                            </div>
+                            <div class="row g-3 align-items-end mt-0">
                                 <div class="col-lg-3 col-md-6">
                                     <label class="form-label" for="seat_min">Seats min</label>
                                     <input type="number" class="form-control" id="seat_min" name="seat_min" value="{{ filters.seat_min if filters.seat_min is not none else '' }}" min="2" max="12">
@@ -153,15 +140,30 @@
                                     <label class="form-label" for="seat_max">Seats max</label>
                                     <input type="number" class="form-control" id="seat_max" name="seat_max" value="{{ filters.seat_max if filters.seat_max is not none else '' }}" min="2" max="12">
                                 </div>
-                                <div class="col-lg-3 col-md-6 d-flex align-items-center">
+                                <div class="col-lg-3 col-md-6">
+                                    <label class="form-label" for="price_unit">Rate type (&#8377;/hr or &#8377;/day)</label>
+                                    <select class="form-select" id="price_unit" name="price_unit">
+                                        <option value="hour" {% if filters.price_unit == 'hour' %}selected{% endif %}>Per hour</option>
+                                        <option value="day" {% if filters.price_unit == 'day' %}selected{% endif %}>Per day</option>
+                                    </select>
+                                </div>
+                                <div class="col-lg-2 col-md-4">
+                                    <label class="form-label" for="price_min">Min rate</label>
+                                    <input type="number" class="form-control" name="price_min" id="price_min" value="{{ filters.price_min if filters.price_min is not none else '' }}" min="0" step="50">
+                                </div>
+                                <div class="col-lg-2 col-md-4">
+                                    <label class="form-label" for="price_max">Max rate</label>
+                                    <input type="number" class="form-control" name="price_max" id="price_max" value="{{ filters.price_max if filters.price_max is not none else '' }}" min="0" step="50">
+                                </div>
+                                <div class="col-lg-2 col-md-4 d-flex align-items-center">
                                     <div class="form-check">
                                         <input class="form-check-input" type="checkbox" id="require_gps" name="require_gps" value="on" {% if filters.require_gps %}checked{% endif %}>
                                         <label class="form-check-label" for="require_gps">Only vehicles with GPS</label>
                                     </div>
                                 </div>
-                                <div class="col-lg-3 col-md-6 d-grid gap-2">
-                                    <button type="button" class="btn btn-outline-success" id="use-location"><i class="bi bi-geo-alt"></i> Use my current location</button>
-                                    <button type="submit" class="btn btn-success btn-lg">Update results</button>
+                                <div class="col-lg-4 col-md-6 d-grid d-lg-flex gap-2 justify-content-lg-end">
+                                    <button type="button" class="btn btn-outline-success flex-lg-shrink-0" id="use-location"><i class="bi bi-geo-alt"></i> Use my current location</button>
+                                    <button type="submit" class="btn btn-success btn-lg flex-lg-shrink-0">Update results</button>
                                 </div>
                             </div>
                         </div>
