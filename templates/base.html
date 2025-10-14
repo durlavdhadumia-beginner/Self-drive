@@ -145,7 +145,7 @@
                 {% if g.user %}
                     <li class="nav-item"><a class="nav-link" href="{{ url_for('home') }}">Home</a></li>
                     {% if has_role('renter') and not (g.user and g.user.get('is_admin')) %}
-                        <li class="nav-item"><a class="nav-link" href="{{ url_for('search') }}">Book a car</a></li>
+                        <li class="nav-item"><a class="nav-link" href="{{ url_for('search') }}">Book a vehicle</a></li>
                         <li class="nav-item"><a class="nav-link" href="{{ url_for('rentals') }}">My trips</a></li>
                     {% endif %}
                     {% if has_role('owner') %}
