@@ -105,6 +105,10 @@
                         <div class="filter-bar">
                             <div class="row g-3 align-items-end">
                                 <div class="col-lg-3 col-md-4">
+                                    <label class="form-label" for="city-field">City</label>
+                                    <input type="text" class="form-control" name="city" id="city-field" value="{{ city or detected_city or '' }}" placeholder="e.g. Bengaluru">
+                                </div>
+                                <div class="col-lg-3 col-md-4">
                                     <label class="form-label" for="start-field">Trip start</label>
                                     <input type="datetime-local" class="form-control" name="start_time" id="start-field" value="{{ start_time or '' }}" required>
                                 </div>
