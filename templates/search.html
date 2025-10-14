@@ -95,14 +95,6 @@
             <div class="card-body">
                 <form method="post" id="search-form" class="row g-3 align-items-end">
                     <input type="hidden" name="city" value="{{ city or detected_city or '' }}">
-                    <div class="col-md-3">
-                        <label class="form-label" for="start-field">Trip start</label>
-                        <input type="datetime-local" class="form-control" name="start_time" id="start-field" value="{{ start_time or '' }}" required>
-                    </div>
-                    <div class="col-md-3">
-                        <label class="form-label" for="end-field">Trip end</label>
-                        <input type="datetime-local" class="form-control" name="end_time" id="end-field" value="{{ end_time or '' }}" required>
-                    </div>
                     <input type="hidden" name="latitude" id="latitude-field" value="{{ latitude if latitude is not none else '' }}">
                     <input type="hidden" name="longitude" id="longitude-field" value="{{ longitude if longitude is not none else '' }}">
                     {% set selected_vehicle_type = filters.vehicle_types|first if filters.vehicle_types else '' %}
@@ -114,23 +106,21 @@
                             <div class="row g-3 align-items-end">
                                 <div class="col-md-3">
                                     <label class="form-label" for="radius">Radius (km)</label>
-                                    <input type="number" class="form-control form-control-lg" name="radius" id="radius" min="1" max="200" step="1" value="{{ radius or 10 }}">
+                                    <input type="number" class="form-control" name="radius" id="radius" min="1" max="200" step="1" value="{{ radius or 10 }}">
                                 </div>
                                 <div class="col-md-3">
-                                    <div class="vehicle-type-field">
-                                        <label class="form-label" for="vehicle_types">Vehicle type</label>
-                                        <select class="form-select vehicle-type-select" id="vehicle_types" name="vehicle_types">
-                                            <option value="" {% if not selected_vehicle_type %}selected{% endif %}>Any vehicle</option>
-                                            {% for label in ['SUV', 'Compact', 'Sedan', 'Hatchback', 'Motorcycle', 'Scooter', 'Pickup', 'Electric'] %}
-                                                <option value="{{ label }}" {% if label == selected_vehicle_type %}selected{% endif %}>{{ label }}</option>
-                                            {% endfor %}
-                                            {% for v in available_vehicle_types %}
-                                                {% if v and v not in ['SUV', 'Compact', 'Sedan', 'Hatchback', 'Motorcycle', 'Scooter', 'Pickup', 'Electric'] %}
-                                                    <option value="{{ v }}" {% if v == selected_vehicle_type %}selected{% endif %}>{{ v }}</option>
-                                                {% endif %}
-                                            {% endfor %}
-                                        </select>
-                                    </div>
+                                    <label class="form-label" for="vehicle_types">Vehicle type</label>
+                                    <select class="form-select" id="vehicle_types" name="vehicle_types">
+                                        <option value="" {% if not selected_vehicle_type %}selected{% endif %}>Any vehicle</option>
+                                        {% for label in ['SUV', 'Compact', 'Sedan', 'Hatchback', 'Motorcycle', 'Scooter', 'Pickup', 'Electric'] %}
+                                            <option value="{{ label }}" {% if label == selected_vehicle_type %}selected{% endif %}>{{ label }}</option>
+                                        {% endfor %}
+                                        {% for v in available_vehicle_types %}
+                                            {% if v and v not in ['SUV', 'Compact', 'Sedan', 'Hatchback', 'Motorcycle', 'Scooter', 'Pickup', 'Electric'] %}
+                                                <option value="{{ v }}" {% if v == selected_vehicle_type %}selected{% endif %}>{{ v }}</option>
+                                            {% endif %}
+                                        {% endfor %}
+                                    </select>
                                 </div>
                                 <div class="col-md-3">
                                     <label class="form-label" for="price_unit">Rate type (&#8377;/hr or &#8377;/day)</label>
@@ -162,6 +152,14 @@
                                         <input class="form-check-input" type="checkbox" id="require_gps" name="require_gps" value="on" {% if filters.require_gps %}checked{% endif %}>
                                         <label class="form-check-label" for="require_gps">Only vehicles with GPS</label>
                                     </div>
+                                </div>
+                                <div class="col-md-3">
+                                    <label class="form-label" for="start-field">Trip start</label>
+                                    <input type="datetime-local" class="form-control" name="start_time" id="start-field" value="{{ start_time or '' }}" required>
+                                </div>
+                                <div class="col-md-3">
+                                    <label class="form-label" for="end-field">Trip end</label>
+                                    <input type="datetime-local" class="form-control" name="end_time" id="end-field" value="{{ end_time or '' }}" required>
                                 </div>
                                 <div class="col-md-3 d-grid">
                                     <button type="button" class="btn btn-outline-success" id="use-location"><i class="bi bi-geo-alt"></i> Use my current location</button>
