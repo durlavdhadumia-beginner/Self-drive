@@ -533,7 +533,7 @@
                 endField.focus();
                 return;
             }
-            const hasCoordinates = latitudeField.value && longitudeField.value;
+            const hasCoordinates = Boolean(latitudeField.value && longitudeField.value);
             const cityValue = cityInput ? cityInput.value.trim() : '';
             if (!hasCoordinates && !cityValue) {
                 event.preventDefault();
