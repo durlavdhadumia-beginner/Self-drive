@@ -290,10 +290,135 @@
 {% endblock %}
 {% block scripts %}
     {{ super() }}
+    <script>
+        const cityInput = document.getElementById('city-field');
+        const suggestionPanel = document.getElementById('city-suggestions');
+        const cityOptions = {{ city_options|tojson }};
+        let clearLocation = () => {};
+        if (cityInput && suggestionPanel) {
+            const normalised = [];
+            const seen = new Set();
+            const buildLabel = (item) => item.state ? `${item.name}, ${item.state}` : item.name;
+            cityOptions.forEach((entry) => {
+                if (!entry || !entry.name) {
+                    return;
+                }
+                const label = buildLabel(entry);
+                if (seen.has(label.toLowerCase())) {
+                    return;
+                }
+                seen.add(label.toLowerCase());
+                normalised.push({ value: label, label });
+            });
+            normalised.sort((a, b) => a.label.localeCompare(b.label));
+            let activeIndex = -1;
+            let currentResults = [];
+
+            const hideSuggestions = () => {
+                suggestionPanel.classList.add('d-none');
+                suggestionPanel.innerHTML = '';
+                cityInput.setAttribute('aria-expanded', 'false');
+                activeIndex = -1;
+                currentResults = [];
+            };
+
+            const highlight = (index) => {
+                const items = suggestionPanel.querySelectorAll('[data-value]');
+                items.forEach((item, idx) => {
+                    item.classList.toggle('active', idx === index);
+                });
+                activeIndex = index;
+            };
+
+            const applySelection = (value) => {
+                cityInput.value = value;
+                hideSuggestions();
+                clearLocation();
+                cityInput.dispatchEvent(new Event('change'));
+            };
+
+            const renderSuggestions = (term) => {
+                const query = term.trim().toLowerCase();
+                const results = query
+                    ? normalised.filter((option) => option.label.toLowerCase().includes(query)).slice(0, 12)
+                    : normalised.slice(0, 12);
+                suggestionPanel.innerHTML = '';
+                if (!results.length) {
+                    suggestionPanel.innerHTML = '<div class="list-group-item text-muted small">No matching cities found</div>';
+                    suggestionPanel.classList.remove('d-none');
+                    cityInput.setAttribute('aria-expanded', 'true');
+                    currentResults = [];
+                    activeIndex = -1;
+                    return;
+                }
+                const fragment = document.createDocumentFragment();
+                results.forEach((option, index) => {
+                    const button = document.createElement('button');
+                    button.type = 'button';
+                    button.className = 'list-group-item list-group-item-action text-start';
+                    button.setAttribute('data-value', option.value);
+                    button.setAttribute('role', 'option');
+                    button.dataset.index = String(index);
+                    button.textContent = option.label;
+                    fragment.appendChild(button);
+                });
+                suggestionPanel.appendChild(fragment);
+                suggestionPanel.classList.remove('d-none');
+                cityInput.setAttribute('aria-expanded', 'true');
+                currentResults = results;
+                activeIndex = -1;
+            };
+
+            cityInput.addEventListener('focus', () => {
+                renderSuggestions(cityInput.value);
+            });
+            cityInput.addEventListener('input', () => {
+                clearLocation();
+                renderSuggestions(cityInput.value);
+            });
+            cityInput.addEventListener('keydown', (event) => {
+                if (suggestionPanel.classList.contains('d-none')) {
+                    return;
+                }
+                if (event.key === 'ArrowDown') {
+                    event.preventDefault();
+                    if (!currentResults.length) {
+                        return;
+                    }
+                    const nextIndex = activeIndex + 1 >= currentResults.length ? 0 : activeIndex + 1;
+                    highlight(nextIndex);
+                } else if (event.key === 'ArrowUp') {
+                    event.preventDefault();
+                    if (!currentResults.length) {
+                        return;
+                    }
+                    const prevIndex = activeIndex - 1 < 0 ? currentResults.length - 1 : activeIndex - 1;
+                    highlight(prevIndex);
+                } else if (event.key === 'Enter') {
+                    if (activeIndex >= 0 && currentResults[activeIndex]) {
+                        event.preventDefault();
+                        applySelection(currentResults[activeIndex].value);
+                    }
+                } else if (event.key === 'Escape') {
+                    hideSuggestions();
+                }
+            });
+            cityInput.addEventListener('blur', () => {
+                window.setTimeout(hideSuggestions, 120);
+            });
+            suggestionPanel.addEventListener('pointerdown', (event) => {
+                const target = event.target.closest('[data-value]');
+                if (!target) {
+                    return;
+                }
+                event.preventDefault();
+                applySelection(target.getAttribute('data-value') || '');
+            });
+        }
+    </script>
     <script src="{{ url_for('static', filename='vendor/leaflet/leaflet.js') }}"></script>
     <script>
         const mapElement = document.getElementById('map');
-        const cityInput = document.getElementById('city-field');
         const latitudeField = document.getElementById('latitude-field');
         const longitudeField = document.getElementById('longitude-field');
         const radiusInput = document.getElementById('radius');
@@ -310,11 +435,10 @@
         const formatDateTime = (date) => `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
 
         if (cityInput) {
-            const clearLocation = () => {
+            clearLocation = () => {
                 latitudeField.value = '';
                 longitudeField.value = '';
             };
-            cityInput.addEventListener('input', clearLocation);
             cityInput.addEventListener('change', clearLocation);
         }
 
@@ -554,3 +678,5 @@
         syncEndConstraints();
     </script>
 {% endblock %}
+
+

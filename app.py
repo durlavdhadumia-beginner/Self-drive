@@ -638,56 +638,50 @@ def reverse_geocode_city(latitude: float, longitude: float) -> Optional[str]:
 
 
 def lookup_city_coordinates(city_name: str) -> Optional[Tuple[float, float]]:
-    """Return latitude and longitude for a given city name from the local cities table."""
+    """Return latitude/longitude for a city, tolerating state or region suffixes."""
     cleaned = (city_name or "").strip()
     if not cleaned:
         return None
     db = get_db()
-    matches = db.execute(
-        """
-        SELECT latitude, longitude
-        FROM cities
-        WHERE LOWER(name) LIKE LOWER(?) || '%'
-          AND latitude IS NOT NULL
-          AND longitude IS NOT NULL
-        ORDER BY LENGTH(name), (pincode IS NULL), pincode
-        LIMIT 1
-        """,
-        (cleaned,),
-    ).fetchone()
-    if matches and matches["latitude"] is not None and matches["longitude"] is not None:
-        return float(matches["latitude"]), float(matches["longitude"])
-    tokens = cleaned.lower().split()
-    for size in range(len(tokens), 0, -1):
-        attempt = " ".join(tokens[:size])
+
+    def _query(value: str, comparator: str = "=") -> Optional[Tuple[float, float]]:
         row = db.execute(
-            """
+            f"""
             SELECT latitude, longitude
             FROM cities
-            WHERE LOWER(name) = LOWER(?)
+            WHERE LOWER(name) {comparator} LOWER(?)
               AND latitude IS NOT NULL
               AND longitude IS NOT NULL
             ORDER BY (pincode IS NULL), pincode
             LIMIT 1
             """,
-            (attempt,),
+            (value,),
         ).fetchone()
         if row and row["latitude"] is not None and row["longitude"] is not None:
             return float(row["latitude"]), float(row["longitude"])
-    row = db.execute(
-        """
-        SELECT latitude, longitude
-        FROM cities
-        WHERE LOWER(name) LIKE '%' || LOWER(?) || '%'
-          AND latitude IS NOT NULL
-          AND longitude IS NOT NULL
-        ORDER BY LENGTH(name), (pincode IS NULL), pincode
-        LIMIT 1
-        """,
-        (cleaned,),
-    ).fetchone()
-    if row and row["latitude"] is not None and row["longitude"] is not None:
-        return float(row["latitude"]), float(row["longitude"])
+        return None
+
+    lowered = cleaned.lower()
+
+    exact = _query(lowered)
+    if exact:
+        return exact
+
+    tokens = [part.strip() for part in re.split(r",|\s+", lowered) if part.strip()]
+    for size in range(len(tokens), 0, -1):
+        attempt = " ".join(tokens[:size])
+        result = _query(attempt)
+        if result:
+            return result
+
+    prefix = _query(lowered + "%", comparator="LIKE")
+    if prefix:
+        return prefix
+
+    substring = _query("%" + lowered + "%", comparator="LIKE")
+    if substring:
+        return substring
+
     return None
 
 
@@ -2727,3 +2721,4 @@ with app.app_context():
 @app.route("/uploads/<path:filename>")
 def serve_upload(filename: str):
     return send_from_directory(UPLOAD_ROOT, filename)
+
