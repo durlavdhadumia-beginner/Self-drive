@@ -37,6 +37,24 @@ PROMO_CODES: Dict[str, float] = {
     "FIRSTDRIVE": 0.20,
 }
 COMPANY_COMMISSION_RATE = 0.05
+POPULAR_VEHICLE_TYPES: List[str] = [
+    "SUV",
+    "Sedan",
+    "Compact",
+    "Hatchback",
+    "Motorcycle",
+    "Scooter",
+    "Pickup",
+    "Electric",
+]
+DEFAULT_FUEL_TYPES: List[str] = [
+    "Petrol",
+    "Diesel",
+    "Electric",
+    "Hybrid",
+    "CNG",
+    "LPG",
+]
 
 UPLOAD_ROOT.mkdir(parents=True, exist_ok=True)
 USER_DOC_ROOT.mkdir(parents=True, exist_ok=True)
@@ -105,6 +123,81 @@ def normalize_contact(username: str) -> Tuple[str, str]:
     if not re.fullmatch(r"91[6-9]\d{9}", normalized):
         return ("", "")
     return ("phone", normalized)
+
+
+def _format_city_label(name: str, state: str) -> str:
+    name_clean = (name or "").strip()
+    state_clean = (state or "").strip()
+    return f"{name_clean}, {state_clean}" if state_clean else name_clean
+
+
+def load_city_entries(include_coordinates: bool = False) -> List[Dict[str, object]]:
+    """Return city dictionaries with optional coordinates for dropdowns and maps."""
+    db = get_db()
+    rows = db.execute(
+        "SELECT name, state, latitude, longitude FROM cities ORDER BY name"
+    ).fetchall()
+    entries: List[Dict[str, object]] = []
+    seen: set[str] = set()
+    def _append(name: str, state: str, latitude: Optional[float], longitude: Optional[float]) -> None:
+        label = _format_city_label(name, state)
+        key = label.lower()
+        if not label or key in seen:
+            return
+        seen.add(key)
+        entry: Dict[str, object] = {"name": name.strip(), "state": state.strip()}
+        if include_coordinates:
+            entry["latitude"] = float(latitude) if latitude is not None else None
+            entry["longitude"] = float(longitude) if longitude is not None else None
+        entries.append(entry)
+
+    if rows:
+        for row in rows:
+            _append(row["name"] or "", row["state"] or "", row["latitude"], row["longitude"])
+    else:
+        fallback_rows = db.execute(
+            """
+            SELECT city, latitude, longitude
+            FROM cars
+            WHERE city <> ''
+            ORDER BY city
+            """
+        ).fetchall()
+        for row in fallback_rows:
+            _append(row["city"] or "", "", row["latitude"], row["longitude"])
+    return entries
+
+
+def load_vehicle_type_options() -> List[str]:
+    db = get_db()
+    rows = db.execute(
+        "SELECT DISTINCT vehicle_type FROM cars WHERE vehicle_type <> '' ORDER BY vehicle_type"
+    ).fetchall()
+    return [row[0] for row in rows if row[0]]
+
+
+def load_fuel_type_options() -> List[str]:
+    db = get_db()
+    rows = db.execute(
+        "SELECT DISTINCT fuel_type FROM cars WHERE fuel_type <> '' ORDER BY fuel_type"
+    ).fetchall()
+    return [row[0] for row in rows if row[0]]
+
+
+def build_fuel_type_list() -> List[str]:
+    values = load_fuel_type_options()
+    fuel_types: List[str] = []
+    seen: set[str] = set()
+    for value in [*DEFAULT_FUEL_TYPES, *values]:
+        normalized = (value or "").strip()
+        if not normalized:
+            continue
+        key = normalized.lower()
+        if key in seen:
+            continue
+        seen.add(key)
+        fuel_types.append(normalized)
+    return fuel_types
 
 
 def init_db() -> None:
@@ -697,6 +790,7 @@ def fetch_available_cars(
     seat_min: Optional[int] = None,
     seat_max: Optional[int] = None,
     require_gps: bool = False,
+    fuel_types: Optional[List[str]] = None,
 ) -> List[Car]:
     db = get_db()
     params: List[object] = []
@@ -723,6 +817,10 @@ def fetch_available_cars(
     if price_max is not None:
         predicates.append("cars.rate_per_hour <= ?")
         params.append(price_max)
+    if fuel_types:
+        placeholders = ",".join("?" for _ in fuel_types)
+        predicates.append(f"LOWER(cars.fuel_type) IN ({placeholders})")
+        params.extend([ft.lower() for ft in fuel_types])
 
     where_clause = " AND ".join(predicates)
 
@@ -1478,21 +1576,12 @@ def home() -> str:
         context = build_admin_dashboard_context()
         return render_template("admin_dashboard.html", **context)
     db = get_db()
-    city_rows = db.execute(
-        "SELECT name, state FROM cities ORDER BY name"
-    ).fetchall()
-    if city_rows:
-        cities = [
-            {"name": row["name"], "state": row["state"] or ""}
-            for row in city_rows
-        ]
-    else:
-        fallback_rows = db.execute(
-            "SELECT DISTINCT city FROM cars WHERE city <> '' ORDER BY city"
-        ).fetchall()
-        cities = [{"name": row[0], "state": ""} for row in fallback_rows]
-    vehicle_types = [row[0] for row in db.execute(
-        "SELECT DISTINCT vehicle_type FROM cars WHERE vehicle_type <> '' ORDER BY vehicle_type").fetchall()]
+    cities = load_city_entries()
+    vehicle_type_values = load_vehicle_type_options()
+    additional_vehicle_types = [
+        vt for vt in vehicle_type_values if vt not in POPULAR_VEHICLE_TYPES
+    ]
+    fuel_types = build_fuel_type_list()
     owner_stats = None
     commission_rate_pct = int(COMPANY_COMMISSION_RATE * 100)
     if g.user and has_role("owner"):
@@ -1518,7 +1607,9 @@ def home() -> str:
     return render_template(
         "home.html",
         cities=cities,
-        vehicle_types=vehicle_types,
+        vehicle_types=additional_vehicle_types,
+        popular_vehicle_types=POPULAR_VEHICLE_TYPES,
+        fuel_types=fuel_types,
         owner_stats=owner_stats,
         commission_rate=commission_rate_pct,
     )
@@ -1532,23 +1623,11 @@ def search() -> str:
     if user is not None and not getattr(g, 'profile_complete', False):
         profile_warning = "You can browse vehicles, but please complete your profile before confirming a booking."
     db = get_db()
-    city_rows = db.execute(
-        "SELECT name, state FROM cities ORDER BY name"
-    ).fetchall()
-    if city_rows:
-        city_options = []
-        for row in city_rows:
-            name = (row["name"] or "").strip()
-            state = (row["state"] or "").strip()
-            if not name:
-                continue
-            label = f"{name}, {state}" if state else name
-            city_options.append(label)
-    else:
-        fallback_rows = db.execute(
-            "SELECT DISTINCT city FROM cars WHERE city <> '' ORDER BY city"
-        ).fetchall()
-        city_options = [row[0] for row in fallback_rows if row[0]]
+    city_entries = load_city_entries(include_coordinates=True)
+    city_options = [
+        _format_city_label(entry["name"], entry["state"])
+        for entry in city_entries
+    ]
 
     cars: List[Car] = []
     cars_payload: List[dict] = []
@@ -1562,10 +1641,8 @@ def search() -> str:
     start_time_raw = end_time_raw = None
     error = request.args.get("error")
 
-    vehicle_type_rows = db.execute(
-        "SELECT DISTINCT vehicle_type FROM cars WHERE vehicle_type <> '' ORDER BY vehicle_type"
-    ).fetchall()
-    available_vehicle_types = [row[0] for row in vehicle_type_rows]
+    available_vehicle_types = load_vehicle_type_options()
+    fuel_types = build_fuel_type_list()
 
     filters = {
         "vehicle_types": [],
@@ -1575,6 +1652,7 @@ def search() -> str:
         "seat_max": None,
         "require_gps": False,
         "price_unit": "hour",
+        "fuel_type": None,
     }
 
     def normalize_unit(raw: str | None) -> str:
@@ -1598,6 +1676,8 @@ def search() -> str:
         filters["seat_min"] = parse_int(request.form.get("seat_min"))
         filters["seat_max"] = parse_int(request.form.get("seat_max"))
         filters["require_gps"] = request.form.get("require_gps") == "on"
+        fuel_type_raw = request.form.get("fuel_type", "").strip()
+        filters["fuel_type"] = fuel_type_raw or None
         price_min_hours = convert_price(filters["price_min"], filters["price_unit"])
         price_max_hours = convert_price(filters["price_max"], filters["price_unit"])
         lat_raw = request.form.get("latitude", "").strip()
@@ -1624,6 +1704,7 @@ def search() -> str:
                 seat_min=filters["seat_min"],
                 seat_max=filters["seat_max"],
                 require_gps=filters["require_gps"],
+                fuel_types=[filters["fuel_type"]] if filters["fuel_type"] else None,
             )
             if not cars:
                 error = "No cars found within the selected filters."
@@ -1639,6 +1720,8 @@ def search() -> str:
         filters["seat_min"] = parse_int(request.args.get("seat_min"))
         filters["seat_max"] = parse_int(request.args.get("seat_max"))
         filters["require_gps"] = request.args.get("require_gps") in {"1", "true", "on"}
+        fuel_type_raw = request.args.get("fuel_type", "")
+        filters["fuel_type"] = fuel_type_raw.strip() or None
         price_min_hours = convert_price(filters["price_min"], filters["price_unit"])
         price_max_hours = convert_price(filters["price_max"], filters["price_unit"])
         try:
@@ -1661,6 +1744,7 @@ def search() -> str:
                     seat_min=filters["seat_min"],
                     seat_max=filters["seat_max"],
                     require_gps=filters["require_gps"],
+                    fuel_types=[filters["fuel_type"]] if filters["fuel_type"] else None,
                 )
                 radius = lookup_radius
         except (TypeError, ValueError):
@@ -1689,6 +1773,7 @@ def search() -> str:
             seat_min=filters["seat_min"],
             seat_max=filters["seat_max"],
             require_gps=filters["require_gps"],
+            fuel_types=[filters["fuel_type"]] if filters["fuel_type"] else None,
         )
         radius = lookup_radius
 
@@ -1747,8 +1832,11 @@ def search() -> str:
         error=error,
         filters=filters,
         available_vehicle_types=available_vehicle_types,
+        fuel_types=fuel_types,
         profile_warning=profile_warning,
         city_options=city_options,
+        city_entries=city_entries,
+        popular_vehicle_types=POPULAR_VEHICLE_TYPES,
     )
 
 
@@ -2168,6 +2256,10 @@ def owner_cars() -> str:
         """,
         (g.user["id"],),
     ).fetchall()
+    city_entries = load_city_entries(include_coordinates=True)
+    vehicle_type_values = load_vehicle_type_options()
+    other_vehicle_types = [vt for vt in vehicle_type_values if vt not in POPULAR_VEHICLE_TYPES]
+    fuel_types = build_fuel_type_list()
     pending_payments = [row for row in rental_rows if row["payment_status"] == 'awaiting_payment']
     return render_template(
         "owner_cars.html",
@@ -2175,6 +2267,10 @@ def owner_cars() -> str:
         rentals=rental_rows,
         pending_payments=pending_payments,
         commission_rate=int(COMPANY_COMMISSION_RATE * 100),
+        city_entries=city_entries,
+        popular_vehicle_types=POPULAR_VEHICLE_TYPES,
+        other_vehicle_types=other_vehicle_types,
+        fuel_types=fuel_types,
     )
 
 
@@ -2187,9 +2283,25 @@ def owner_add_car() -> str:
         return redirect(url_for("profile", message="Complete your host profile before listing cars."))
     try:
         seats = int(form.get("seats", 4))
-        rate = float(form.get("rate_per_hour", 0))
-        daily_rate_input = form.get("daily_rate")
-        daily_rate = float(daily_rate_input) if daily_rate_input else rate * 24
+    except (TypeError, ValueError):
+        return redirect(url_for("owner_cars"))
+    rate_unit = (form.get("rate_unit", "hour") or "hour").strip().lower()
+    rate_amount_raw = form.get("rate_amount", "")
+    try:
+        rate_amount = float(rate_amount_raw) if rate_amount_raw not in (None, "") else 0.0
+    except (TypeError, ValueError):
+        rate_amount = 0.0
+    if rate_amount < 0:
+        rate_amount = 0.0
+    if rate_unit not in {"hour", "day"}:
+        rate_unit = "hour"
+    if rate_unit == "day":
+        daily_rate = rate_amount
+        rate_per_hour = round(rate_amount / 24, 2) if rate_amount else 0.0
+    else:
+        rate_per_hour = rate_amount
+        daily_rate = round(rate_amount * 24, 2)
+    try:
         latitude = float(form.get("latitude"))
         longitude = float(form.get("longitude"))
     except (TypeError, ValueError):
@@ -2197,6 +2309,8 @@ def owner_add_car() -> str:
     vehicle_type = form.get("vehicle_type", "").strip() or "car"
     size_category = form.get("size_category", "").strip()
     has_gps = 1 if form.get("has_gps") else 0
+    city_raw = (form.get("city") or "").strip()
+    city_value = city_raw.split(",")[0].strip() if city_raw else ""
     db = get_db()
     cursor = db.execute(
         """
@@ -2212,14 +2326,14 @@ def owner_add_car() -> str:
             form.get("model", "Unknown"),
             form.get("licence_plate", ""),
             seats,
-            rate,
+            rate_per_hour,
             daily_rate,
             vehicle_type,
             size_category,
             has_gps,
             latitude,
             longitude,
-            form.get("city", ""),
+            city_value,
             form.get("image_url", ""),
             form.get("fuel_type", ""),
             form.get("transmission", ""),

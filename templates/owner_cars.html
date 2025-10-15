@@ -1,5 +1,17 @@
-﻿{% extends "base.html" %}
+{% extends "base.html" %}
 {% block title %}Host Dashboard | DriveNow{% endblock %}
+{% block head %}
+    {{ super() }}
+    <link rel="stylesheet" href="{{ url_for('static', filename='vendor/leaflet/leaflet.css') }}">
+    <style>
+        .host-location-map {
+            height: 280px;
+            min-height: 280px;
+            width: 100%;
+            background: linear-gradient(135deg, rgba(236, 253, 245, 0.4), rgba(209, 250, 229, 0.2));
+        }
+    </style>
+{% endblock %}
 {% block content %}
 <section class="py-5">
     <div class="container">
@@ -138,9 +150,12 @@
                                 <label class="form-label" for="vehicle_type">Vehicle type</label>
                                 <select class="form-select" id="vehicle_type" name="vehicle_type" required>
                                     <option value="">Select type</option>
-                                    <option value="car">Car</option>
-                                    <option value="motorcycle">Motorcycle</option>
-                                    <option value="scooter">Scooter</option>
+                                    {% for label in popular_vehicle_types %}
+                                        <option value="{{ label }}">{{ label }}</option>
+                                    {% endfor %}
+                                    {% for label in other_vehicle_types %}
+                                        <option value="{{ label }}">{{ label }}</option>
+                                    {% endfor %}
                                 </select>
                             </div>
                             <div class="col-md-6">
@@ -168,16 +183,25 @@
                                 <input type="number" class="form-control" id="seats" name="seats" min="1" max="12" value="4">
                             </div>
                             <div class="col-md-6">
-                                <label class="form-label" for="rate_per_hour">Rate/hour (Rs)</label>
-                                <input type="number" class="form-control" id="rate_per_hour" name="rate_per_hour" min="0" value="350">
+                                <label class="form-label" for="rate_unit">Rate type</label>
+                                <select class="form-select" id="rate_unit" name="rate_unit">
+                                    <option value="hour" selected>Per hour</option>
+                                    <option value="day">Per day</option>
+                                </select>
                             </div>
                             <div class="col-md-6">
-                                <label class="form-label" for="daily_rate">Rate/day (Rs)</label>
-                                <input type="number" class="form-control" id="daily_rate" name="daily_rate" placeholder="Auto-calculated if blank">
+                                <label class="form-label" for="rate_amount">Rate amount (&#8377;)</label>
+                                <input type="number" class="form-control" id="rate_amount" name="rate_amount" min="0" step="1" value="350">
+                                <div class="form-text">We auto-calculate the complementary daily or hourly price.</div>
                             </div>
                             <div class="col-md-6">
                                 <label class="form-label" for="fuel_type">Fuel type</label>
-                                <input type="text" class="form-control" id="fuel_type" name="fuel_type" placeholder="Petrol / EV">
+                                <input type="text" class="form-control" id="fuel_type" name="fuel_type" placeholder="Select or type" list="fuel-type-options" autocomplete="off">
+                                <datalist id="fuel-type-options">
+                                    {% for fuel in fuel_types %}
+                                        <option value="{{ fuel }}"></option>
+                                    {% endfor %}
+                                </datalist>
                             </div>
                             <div class="col-md-6">
                                 <label class="form-label" for="transmission">Transmission</label>
@@ -185,15 +209,26 @@
                             </div>
                             <div class="col-md-6">
                                 <label class="form-label" for="city">City</label>
-                                <input type="text" class="form-control" id="city" name="city" placeholder="Bengaluru">
+                                <input type="text" class="form-control" id="city" name="city" placeholder="Start typing a city" autocomplete="off" list="owner-city-options">
+                                <datalist id="owner-city-options">
+                                    {% for entry in city_entries %}
+                                        {% set label = entry.name ~ (', ' ~ entry.state if entry.state) %}
+                                        <option value="{{ label }}"></option>
+                                    {% endfor %}
+                                </datalist>
+                                <div class="form-text">Pick a city from the list. If it isn&#39;t there, drop a pin on the map below.</div>
+                            </div>
+                            <div class="col-12">
+                                <div id="owner-map" class="host-location-map rounded-4 border"></div>
+                                <div class="form-text">Click anywhere on the map to position this vehicle accurately.</div>
                             </div>
                             <div class="col-md-6">
                                 <label class="form-label" for="latitude">Latitude</label>
-                                <input type="text" class="form-control" id="latitude" name="latitude" placeholder="12.9716" required>
+                                <input type="text" class="form-control" id="latitude" name="latitude" placeholder="12.9716" required inputmode="decimal" autocomplete="off">
                             </div>
                             <div class="col-md-6">
                                 <label class="form-label" for="longitude">Longitude</label>
-                                <input type="text" class="form-control" id="longitude" name="longitude" placeholder="77.5946" required>
+                                <input type="text" class="form-control" id="longitude" name="longitude" placeholder="77.5946" required inputmode="decimal" autocomplete="off">
                             </div>
                             <div class="col-12">
                                 <div class="form-check">
@@ -350,5 +385,90 @@
     </div>
 </section>
 {% endblock %}
-
+{% block scripts %}
+    {{ super() }}
+    <script src="{{ url_for('static', filename='vendor/leaflet/leaflet.js') }}"></script>
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            const mapElement = document.getElementById('owner-map');
+            if (!mapElement || typeof L === 'undefined') {
+                return;
+            }
+            const cityInput = document.getElementById('city');
+            const latitudeField = document.getElementById('latitude');
+            const longitudeField = document.getElementById('longitude');
+            const cityEntries = {{ city_entries|tojson|safe }};
+            const buildLabel = (entry) => {
+                const name = (entry.name || '').trim();
+                const state = (entry.state || '').trim();
+                return state ? `${name}, ${state}` : name;
+            };
+            const findCity = (label) => {
+                if (!label) {
+                    return null;
+                }
+                const normalised = label.trim().toLowerCase();
+                return cityEntries.find((entry) => buildLabel(entry).toLowerCase() === normalised) || null;
+            };
+            const DEFAULT_VIEW = { lat: 20.5937, lng: 78.9629, zoom: 5 };
+            const map = L.map(mapElement, { zoomControl: true });
+            map.setView([DEFAULT_VIEW.lat, DEFAULT_VIEW.lng], DEFAULT_VIEW.zoom);
+            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                maxZoom: 18,
+                attribution: '&copy; <a href="https://www.openstreetmap.org">OpenStreetMap</a> contributors'
+            }).addTo(map);
+            let marker = null;
+            const ensureMapSize = () => map.invalidateSize();
+            map.whenReady(() => {
+                ensureMapSize();
+                setTimeout(ensureMapSize, 150);
+            });
+            window.addEventListener('resize', ensureMapSize);
+            const setMarker = (lat, lng) => {
+                if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
+                    return;
+                }
+                if (marker) {
+                    marker.setLatLng([lat, lng]);
+                } else {
+                    marker = L.marker([lat, lng], { draggable: true }).addTo(map);
+                    marker.on('dragend', (event) => {
+                        const pos = event.target.getLatLng();
+                        latitudeField.value = pos.lat.toFixed(6);
+                        longitudeField.value = pos.lng.toFixed(6);
+                    });
+                }
+                latitudeField.value = lat.toFixed(6);
+                longitudeField.value = lng.toFixed(6);
+            };
+            const focusOn = (lat, lng, zoom = 13) => {
+                if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
+                    return;
+                }
+                map.setView([lat, lng], zoom);
+                setMarker(lat, lng);
+            };
+            const handleCitySelection = () => {
+                const entry = findCity(cityInput.value);
+                if (entry && Number.isFinite(entry.latitude) && Number.isFinite(entry.longitude)) {
+                    focusOn(entry.latitude, entry.longitude, 11);
+                }
+            };
+            if (cityInput) {
+                cityInput.addEventListener('change', handleCitySelection);
+                cityInput.addEventListener('blur', handleCitySelection);
+            }
+            map.on('click', (event) => {
+                focusOn(event.latlng.lat, event.latlng.lng);
+            });
+            const latExisting = parseFloat(latitudeField.value);
+            const lngExisting = parseFloat(longitudeField.value);
+            if (Number.isFinite(latExisting) && Number.isFinite(lngExisting)) {
+                focusOn(latExisting, lngExisting);
+            } else {
+                handleCitySelection();
+            }
+        });
+    </script>
+{% endblock %}
 

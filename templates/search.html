@@ -106,10 +106,11 @@
                                 <div class="col-lg-3 col-md-4">
                                     <label class="form-label" for="city-field">City</label>
                                     <input type="text" class="form-control" name="city" id="city-field" value="{{ city or detected_city or '' }}" placeholder="e.g. Bengaluru" list="city-options">
-                                    {% if city_options %}
+                                    {% if city_entries %}
                                         <datalist id="city-options">
-                                            {% for option in city_options %}
-                                                <option value="{{ option }}">
+                                            {% for entry in city_entries %}
+                                                {% set label = entry.name ~ (', ' ~ entry.state if entry.state) %}
+                                                <option value="{{ label }}">
                                             {% endfor %}
                                         </datalist>
                                     {% endif %}
@@ -124,17 +125,27 @@
                                 </div>
                             </div>
                             <div class="row g-3 align-items-end mt-0">
+                                {% set popular_types = popular_vehicle_types or [] %}
                                 <div class="col-lg-3 col-md-6">
                                     <label class="form-label" for="vehicle_types">Vehicle type</label>
                                     <select class="form-select" id="vehicle_types" name="vehicle_types">
                                         <option value="" {% if not selected_vehicle_type %}selected{% endif %}>Any vehicle</option>
-                                        {% for label in ['SUV', 'Compact', 'Sedan', 'Hatchback', 'Motorcycle', 'Scooter', 'Pickup', 'Electric'] %}
+                                        {% for label in popular_types %}
                                             <option value="{{ label }}" {% if label == selected_vehicle_type %}selected{% endif %}>{{ label }}</option>
                                         {% endfor %}
                                         {% for v in available_vehicle_types %}
-                                            {% if v and v not in ['SUV', 'Compact', 'Sedan', 'Hatchback', 'Motorcycle', 'Scooter', 'Pickup', 'Electric'] %}
+                                            {% if v and v not in popular_types %}
                                                 <option value="{{ v }}" {% if v == selected_vehicle_type %}selected{% endif %}>{{ v }}</option>
                                             {% endif %}
+                                        {% endfor %}
+                                    </select>
+                                </div>
+                                <div class="col-lg-3 col-md-6">
+                                    <label class="form-label" for="fuel_type">Fuel type</label>
+                                    <select class="form-select" id="fuel_type" name="fuel_type">
+                                        <option value="" {% if not filters.fuel_type %}selected{% endif %}>Any fuel</option>
+                                        {% for fuel in fuel_types %}
+                                            <option value="{{ fuel }}" {% if fuel == filters.fuel_type %}selected{% endif %}>{{ fuel }}</option>
                                         {% endfor %}
                                     </select>
                                 </div>
@@ -146,13 +157,13 @@
                                     <label class="form-label" for="seat_max">Seats max</label>
                                     <input type="number" class="form-control" id="seat_max" name="seat_max" value="{{ filters.seat_max if filters.seat_max is not none else '' }}" min="2" max="12">
                                 </div>
-                                <div class="col-lg-3 col-md-6">
+                            </div>
+                            <div class="row g-3 align-items-end mt-0">
+                                <div class="col-lg-2 col-md-4">
                                     <label class="form-label" for="radius">Radius (km)</label>
                                     <input type="number" class="form-control" name="radius" id="radius" min="1" max="200" step="1" value="{{ radius or 10 }}">
                                 </div>
-                            </div>
-                            <div class="row g-3 align-items-end mt-0">
-                                <div class="col-lg-3 col-md-6">
+                                <div class="col-lg-2 col-md-4">
                                     <label class="form-label" for="price_unit">Rate type (&#8377;/hr or &#8377;/day)</label>
                                     <select class="form-select" id="price_unit" name="price_unit">
                                         <option value="hour" {% if filters.price_unit == 'hour' %}selected{% endif %}>Per hour</option>
@@ -167,7 +178,7 @@
                                     <label class="form-label" for="price_max">Max rate</label>
                                     <input type="number" class="form-control" name="price_max" id="price_max" value="{{ filters.price_max if filters.price_max is not none else '' }}" min="0" step="50">
                                 </div>
-                                <div class="col-lg-5 col-md-8">
+                                <div class="col-lg-4 col-md-8">
                                     <div class="d-flex flex-column flex-lg-row align-items-lg-end justify-content-lg-end gap-3">
                                         <div class="form-check">
                                             <input class="form-check-input" type="checkbox" id="require_gps" name="require_gps" value="on" {% if filters.require_gps %}checked{% endif %}>
@@ -292,7 +303,7 @@
     <script>
         const cityInput = document.getElementById('city-field');
         const suggestionPanel = document.getElementById('city-suggestions');
-        const cityOptions = {{ city_options|tojson }};
+        const cityOptions = {{ city_entries|tojson|safe }};
         let clearLocation = () => {};
         if (cityInput && suggestionPanel) {
             const normalised = [];

@@ -148,7 +148,7 @@
                                 <label for="radius" class="form-label">Search radius (km)</label>
                                 <input type="number" class="form-control" id="radius" name="radius" value="10" min="1" max="200">
                             </div>
-                            {% set popular_types = ['SUV', 'Compact', 'Sedan', 'Hatchback', 'Motorcycle', 'Scooter', 'Pickup', 'Electric'] %}
+                            {% set popular_types = popular_vehicle_types or [] %}
                             <div class="col-md-6">
                                 <label class="form-label" for="vehicle_type">Vehicle type</label>
                                 <select class="form-select" id="vehicle_type" name="vehicle_types">
@@ -160,6 +160,15 @@
                                         {% if v and v not in popular_types %}
                                             <option value="{{ v }}">{{ v }}</option>
                                         {% endif %}
+                                    {% endfor %}
+                                </select>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label" for="fuel_type">Fuel type</label>
+                                <select class="form-select" id="fuel_type" name="fuel_type">
+                                    <option value="">Any fuel</option>
+                                    {% for fuel in fuel_types %}
+                                        <option value="{{ fuel }}">{{ fuel }}</option>
                                     {% endfor %}
                                 </select>
                             </div>
