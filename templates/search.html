@@ -94,7 +94,6 @@
         <div class="card card-zoom mb-5">
             <div class="card-body">
                 <form method="post" id="search-form" class="row g-3 align-items-end">
-                    <input type="hidden" name="city" value="{{ city or detected_city or '' }}">
                     <input type="hidden" name="latitude" id="latitude-field" value="{{ latitude if latitude is not none else '' }}">
                     <input type="hidden" name="longitude" id="longitude-field" value="{{ longitude if longitude is not none else '' }}">
                     {% set selected_vehicle_type = filters.vehicle_types|first if filters.vehicle_types else '' %}
