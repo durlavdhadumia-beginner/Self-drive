@@ -1538,12 +1538,32 @@ def search() -> str:
     if user is not None and not getattr(g, 'profile_complete', False):
         profile_warning = "You can browse vehicles, but please complete your profile before confirming a booking."
     db = get_db()
+    city_rows = db.execute(
+        "SELECT name, state FROM cities ORDER BY name"
+    ).fetchall()
+    if city_rows:
+        city_options = []
+        for row in city_rows:
+            name = (row["name"] or "").strip()
+            state = (row["state"] or "").strip()
+            if not name:
+                continue
+            label = f"{name}, {state}" if state else name
+            city_options.append(label)
+    else:
+        fallback_rows = db.execute(
+            "SELECT DISTINCT city FROM cars WHERE city <> '' ORDER BY city"
+        ).fetchall()
+        city_options = [row[0] for row in fallback_rows if row[0]]
+
     cars: List[Car] = []
     cars_payload: List[dict] = []
     pricing_map: Dict[int, Dict[str, object]] = {}
     latitude = longitude = None
     radius = None
-    city = request.form.get("city") if request.method == "POST" else request.args.get("city")
+    city_raw = request.form.get("city") if request.method == "POST" else request.args.get("city")
+    city_display = (city_raw or "").strip()
+    city = city_display.split(",")[0].strip() if city_display else None
     detected_city = None
     start_time_raw = end_time_raw = None
     error = request.args.get("error")
@@ -1597,6 +1617,8 @@ def search() -> str:
             if not city:
                 detected_city = reverse_geocode_city(latitude, longitude)
                 city = detected_city or city
+                if detected_city and not city_display:
+                    city_display = detected_city
             cars = fetch_available_cars(
                 latitude=latitude,
                 longitude=longitude,
@@ -1652,11 +1674,13 @@ def search() -> str:
             radius = None
 
     if (latitude is None or longitude is None) and city:
-        coords = lookup_city_coordinates(city.split(",")[0].strip())
+        coords = lookup_city_coordinates(city)
         if coords:
             latitude, longitude = coords
             if radius is None:
                 radius = 10.0
+            if not city_display:
+                city_display = city
 
     if not cars and latitude is not None and longitude is not None:
         lookup_radius = radius if radius is not None else 10.0
@@ -1712,10 +1736,6 @@ def search() -> str:
                     end_dt,
                 )
 
-    city_rows = db.execute(
-        "SELECT name FROM cities ORDER BY name COLLATE NOCASE LIMIT 25"
-    ).fetchall()
-    city_options = [row["name"] for row in city_rows]
 
     return render_template(
         "search.html",
@@ -1726,6 +1746,7 @@ def search() -> str:
         longitude=longitude,
         radius=radius,
         city=city,
+        city_display=city_display,
         detected_city=detected_city,
         start_time=start_time_raw,
         end_time=end_time_raw,
