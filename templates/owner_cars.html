@@ -242,8 +242,20 @@
                             </div>
                             <div class="col-12">
                                 <label class="form-label" for="photos">Upload gallery images</label>
-                                <input type="file" class="form-control" id="photos" name="photos" accept="image/*" multiple>
-                                <div class="form-text">Upload up to 8 images (PNG, JPG, GIF, WEBP).</div>
+                                <div id="photo-input-list" class="d-flex flex-column gap-2">
+                                    <div class="input-group photo-input-row" data-role="photo-input-row">
+                                        <input type="file" class="form-control" id="photos" name="photos" accept="image/*" aria-label="Gallery image 1">
+                                        <button type="button" class="btn btn-outline-danger" data-role="remove-photo" title="Remove image">
+                                            <i class="bi bi-x-lg"></i>
+                                        </button>
+                                    </div>
+                                </div>
+                                <div class="d-flex justify-content-between align-items-center mt-2">
+                                    <div class="form-text mb-0">Upload up to 8 images (PNG, JPG, GIF, WEBP).</div>
+                                    <button type="button" class="btn btn-outline-success btn-sm" id="add-photo-input">
+                                        <i class="bi bi-plus-circle"></i> Add another
+                                    </button>
+                                </div>
                             </div>
                             <div class="col-12">
                                 <label class="form-label" for="description">Highlights</label>
@@ -390,6 +402,100 @@
     <script src="{{ url_for('static', filename='vendor/leaflet/leaflet.js') }}"></script>
     <script>
         document.addEventListener('DOMContentLoaded', () => {
+            const photoContainer = document.getElementById('photo-input-list');
+            const addPhotoBtn = document.getElementById('add-photo-input');
+            const MAX_PHOTOS = 8;
+            const attachRowHandlers = (row) => {
+                const input = row.querySelector('input[type="file"]');
+                const removeBtn = row.querySelector('[data-role="remove-photo"]');
+                if (input) {
+                    input.addEventListener('change', () => ensureSpareSlot());
+                }
+                if (removeBtn) {
+                    removeBtn.addEventListener('click', () => {
+                        const rows = photoContainer.querySelectorAll('[data-role="photo-input-row"]');
+                        if (rows.length === 1) {
+                            if (input) {
+                                input.value = '';
+                            }
+                            updatePhotoControls();
+                            return;
+                        }
+                        row.remove();
+                        ensureSpareSlot();
+                    });
+                }
+            };
+            const updatePhotoControls = () => {
+                if (!photoContainer || !addPhotoBtn) {
+                    return;
+                }
+                const rows = photoContainer.querySelectorAll('[data-role="photo-input-row"]');
+                const canAdd = rows.length < MAX_PHOTOS;
+                addPhotoBtn.disabled = !canAdd;
+                rows.forEach((row) => {
+                    const removeBtn = row.querySelector('[data-role="remove-photo"]');
+                    if (removeBtn) {
+                        removeBtn.disabled = rows.length === 1;
+                    }
+                });
+            };
+            const addPhotoRow = (focusInput = true) => {
+                if (!photoContainer) {
+                    return;
+                }
+                const currentCount = photoContainer.querySelectorAll('[data-role="photo-input-row"]').length;
+                if (currentCount >= MAX_PHOTOS) {
+                    updatePhotoControls();
+                    return;
+                }
+                const row = document.createElement('div');
+                row.className = 'input-group photo-input-row';
+                row.dataset.role = 'photo-input-row';
+                const input = document.createElement('input');
+                input.type = 'file';
+                input.name = 'photos';
+                input.accept = 'image/*';
+                input.className = 'form-control';
+                input.setAttribute('aria-label', `Gallery image ${currentCount + 1}`);
+                const removeBtn = document.createElement('button');
+                removeBtn.type = 'button';
+                removeBtn.className = 'btn btn-outline-danger';
+                removeBtn.dataset.role = 'remove-photo';
+                removeBtn.title = 'Remove image';
+                removeBtn.innerHTML = '<i class="bi bi-x-lg"></i>';
+                row.appendChild(input);
+                row.appendChild(removeBtn);
+                photoContainer.appendChild(row);
+                attachRowHandlers(row);
+                updatePhotoControls();
+                if (focusInput) {
+                    input.focus();
+                }
+            };
+            const ensureSpareSlot = () => {
+                if (!photoContainer) {
+                    return;
+                }
+                const rows = photoContainer.querySelectorAll('[data-role="photo-input-row"]');
+                const hasEmpty = Array.from(rows).some((row) => {
+                    const input = row.querySelector('input[type="file"]');
+                    return input && input.files && input.files.length === 0;
+                });
+                if (!hasEmpty && rows.length < MAX_PHOTOS) {
+                    addPhotoRow(false);
+                } else {
+                    updatePhotoControls();
+                }
+            };
+            if (photoContainer && addPhotoBtn) {
+                Array.from(photoContainer.querySelectorAll('[data-role="photo-input-row"]')).forEach(attachRowHandlers);
+                addPhotoBtn.addEventListener('click', () => {
+                    addPhotoRow();
+                    ensureSpareSlot();
+                });
+                ensureSpareSlot();
+            }
             const mapElement = document.getElementById('owner-map');
             if (!mapElement || typeof L === 'undefined') {
                 return;
