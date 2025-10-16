@@ -21,6 +21,11 @@
                                 <input type="text" class="form-control form-control-lg" id="username" name="username" required autocomplete="username" value="{{ form_data.get('username', '') }}" autofocus>
                             </div>
                             <div class="col-12">
+                                <label for="account_name" class="form-label">Account name</label>
+                                <input type="text" class="form-control form-control-lg" id="account_name" name="account_name" required autocomplete="nickname" value="{{ form_data.get('account_name', '') }}">
+                                <div class="form-text">This name appears on dashboards, trips, and notifications.</div>
+                            </div>
+                            <div class="col-12">
                                 <label for="password" class="form-label">Password</label>
                                 <input type="password" class="form-control form-control-lg" id="password" name="password" required aria-describedby="passwordHelp" autocomplete="new-password">
                                 <div class="form-text" id="passwordHelp">8+ characters, include letters, numbers, and a special symbol (e.g. @, #, !).</div>

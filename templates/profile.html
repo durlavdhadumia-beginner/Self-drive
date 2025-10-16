@@ -76,10 +76,10 @@
                         <form method="post" enctype="multipart/form-data" novalidate class="row g-3">
                             <div class="col-md-6">
                                 <label class="form-label" for="full_name">Full name</label>
-                                <input type="text" class="form-control" id="full_name" name="full_name" value="{{ profile['full_name'] or '' }}" required>
+                                <input type="text" class="form-control {% if 'full_name' in missing_keys %}is-invalid{% endif %}" id="full_name" name="full_name" value="{{ profile['full_name'] or '' }}" required>
                             </div>
                             <div class="col-md-6">
-                                <label class="form-label" for="date_of_birth">Date of birth</label>
+                                <label class="form-label" for="date_of_birth">Date of birth <span class="text-muted small">(optional)</span></label>
                                 <div class="date-input-wrapper">
                                     <input type="date" class="form-control dob-input" id="date_of_birth" name="date_of_birth" value="{{ profile['date_of_birth'] or '' }}" autocomplete="bday">
                                     <span class="placeholder-label">dd/mm/yyyy</span>
@@ -88,11 +88,11 @@
                             </div>
                             <div class="col-md-6">
                                 <label class="form-label" for="phone">Mobile number</label>
-                                <input type="tel" class="form-control" id="phone" name="phone" value="{{ profile['phone'] or '' }}" required>
+                                <input type="tel" class="form-control {% if 'phone' in missing_keys %}is-invalid{% endif %}" id="phone" name="phone" value="{{ profile['phone'] or '' }}" required>
                             </div>
                             <div class="col-md-6">
                                 <label class="form-label" for="email_contact">Email ID / login contact</label>
-                                <input type="text" class="form-control" id="email_contact" name="email_contact" value="{{ profile['email_contact'] or '' }}" required>
+                                <input type="text" class="form-control {% if 'email_contact' in missing_keys %}is-invalid{% endif %}" id="email_contact" name="email_contact" value="{{ profile['email_contact'] or '' }}" required>
                                 <div class="form-text">Used for account alerts and booking updates. You can change it anytime.</div>
                             </div>
                             <div class="col-md-6">
@@ -106,20 +106,20 @@
                                 <p class="text-muted small mb-3">We route refunds and owner earnings to these details. Provide a bank account + IFSC or a UPI ID.</p>
                             </div>
                             <div class="col-md-6">
-                                <label class="form-label" for="account_holder">Account holder name</label>
+                                <label class="form-label" for="account_holder">Account holder name <span class="text-muted small">(optional)</span></label>
                                 <input type="text" class="form-control" id="account_holder" name="account_holder" value="{{ payout['account_holder'] or profile['full_name'] or '' }}">
                             </div>
                             <div class="col-md-6">
                                 <label class="form-label" for="account_number">Bank account number</label>
-                                <input type="text" class="form-control" id="account_number" name="account_number" value="{{ payout['account_number'] or '' }}">
+                                <input type="text" class="form-control {% if 'account_number' in missing_keys %}is-invalid{% endif %}" id="account_number" name="account_number" value="{{ payout['account_number'] or '' }}">
                             </div>
                             <div class="col-md-6">
                                 <label class="form-label" for="ifsc_code">IFSC code</label>
-                                <input type="text" class="form-control text-uppercase" id="ifsc_code" name="ifsc_code" value="{{ payout['ifsc_code'] or '' }}" maxlength="11">
+                                <input type="text" class="form-control text-uppercase {% if 'ifsc_code' in missing_keys %}is-invalid{% endif %}" id="ifsc_code" name="ifsc_code" value="{{ payout['ifsc_code'] or '' }}" maxlength="11">
                             </div>
                             <div class="col-md-6">
                                 <label class="form-label" for="upi_id">UPI ID (optional if bank provided)</label>
-                                <input type="text" class="form-control" id="upi_id" name="upi_id" value="{{ payout['upi_id'] or '' }}" placeholder="name@bank">
+                                <input type="text" class="form-control {% if 'upi_id' in missing_keys %}is-invalid{% endif %}" id="upi_id" name="upi_id" value="{{ payout['upi_id'] or '' }}" placeholder="name@bank">
                             </div>
 
                             {% if is_owner %}
@@ -130,7 +130,7 @@
                                 </div>
                                 <div class="col-md-8">
                                     <label class="form-label" for="vehicle_registration">Default vehicle registration reference</label>
-                                    <input type="text" class="form-control" id="vehicle_registration" name="vehicle_registration" value="{{ profile['vehicle_registration'] or '' }}" placeholder="KA01AB1234">
+                                    <input type="text" class="form-control {% if 'vehicle_registration' in missing_keys %}is-invalid{% endif %}" id="vehicle_registration" name="vehicle_registration" value="{{ profile['vehicle_registration'] or '' }}" placeholder="KA01AB1234">
                                 </div>
                                 <div class="col-md-4 d-flex align-items-end">
                                     <div class="form-check form-switch">

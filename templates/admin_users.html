@@ -32,11 +32,10 @@
                                     <td>{{ user['id'] }}</td>
                                     <td>
                                         <div class="fw-semibold">
-                                            <a href="{{ url_for('admin_user_detail', user_id=user['id']) }}" class="text-decoration-none">{{ user['username'] }}</a>
+                                            <a href="{{ url_for('admin_user_detail', user_id=user['id']) }}" class="text-decoration-none">{{ user['display_name'] }}</a>
                                         </div>
-                                        <div class="small">
-                                            <a href="{{ url_for('admin_user_detail', user_id=user['id']) }}">View profile</a>
-                                        </div>
+                                        <div class="text-muted small">Login: {{ user['username'] }}</div>
+                                        <div class="small"><a href="{{ url_for('admin_user_detail', user_id=user['id']) }}">View profile</a></div>
                                         {% if user['is_admin'] %}<span class="badge bg-success-subtle text-success">Admin</span>{% endif %}
                                     </td>
                                     <td class="text-muted">{{ user['role']|capitalize }}</td>

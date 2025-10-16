@@ -201,6 +201,19 @@ def build_fuel_type_list() -> List[str]:
     return fuel_types
 
 
+def display_name(user: dict | sqlite3.Row | None) -> str:
+    """Return a friendly display name for a user record."""
+    if user is None:
+        return ""
+    if isinstance(user, dict):
+        account = user.get("account_name") or ""
+        username = user.get("username") or ""
+    else:
+        account = getattr(user, "account_name", "") or ""
+        username = getattr(user, "username", "") or ""
+    return account or username
+
+
 def init_db() -> None:
     db = get_db()
     db.executescript(
@@ -212,7 +225,8 @@ def init_db() -> None:
             username TEXT NOT NULL UNIQUE,
             password_hash TEXT NOT NULL,
             role TEXT NOT NULL CHECK(role IN ('owner', 'renter', 'both')),
-            is_admin INTEGER NOT NULL DEFAULT 0
+            is_admin INTEGER NOT NULL DEFAULT 0,
+            account_name TEXT NOT NULL DEFAULT ''
         );
 
         CREATE TABLE IF NOT EXISTS user_profiles (
@@ -404,6 +418,7 @@ def init_db() -> None:
 
     alter_statements = [
         "ALTER TABLE users ADD COLUMN is_admin INTEGER NOT NULL DEFAULT 0",
+        "ALTER TABLE users ADD COLUMN account_name TEXT NOT NULL DEFAULT ''",
         "ALTER TABLE cars ADD COLUMN city TEXT DEFAULT ''",
         "ALTER TABLE cars ADD COLUMN image_url TEXT DEFAULT ''",
         "ALTER TABLE cars ADD COLUMN fuel_type TEXT DEFAULT ''",
@@ -447,6 +462,19 @@ def init_db() -> None:
         except sqlite3.OperationalError:
             pass
     db.commit()
+    try:
+        db.execute(
+            "UPDATE users SET account_name = username WHERE account_name IS NULL OR account_name = ''"
+        )
+    except sqlite3.OperationalError:
+        pass
+    try:
+        db.execute(
+            "UPDATE car_images SET filename = substr(filename, 9) WHERE filename LIKE 'uploads/%'"
+        )
+    except sqlite3.OperationalError:
+        pass
+    db.commit()
     db.execute(
         "CREATE INDEX IF NOT EXISTS idx_cities_name ON cities(name COLLATE NOCASE)"
     )
@@ -480,7 +508,7 @@ def save_car_images(car_id: int, files: List) -> List[str]:
         filename = f"{timestamp}_{safe_name}"
         filepath = target_dir.joinpath(filename)
         upload.save(filepath)
-        relative_path = f"uploads/{car_id}/{filename}"
+        relative_path = f"{car_id}/{filename}"
         db.execute(
             "INSERT INTO car_images (car_id, filename) VALUES (?, ?)",
             (car_id, relative_path),
@@ -1006,7 +1034,7 @@ def load_logged_in_user() -> None:
         return
     db = get_db()
     user_row = db.execute(
-        "SELECT id, username, role, is_admin FROM users WHERE id = ?",
+        "SELECT id, username, role, is_admin, account_name FROM users WHERE id = ?",
         (user_id,),
     ).fetchone()
     if user_row is None:
@@ -1016,6 +1044,9 @@ def load_logged_in_user() -> None:
         g.profile_complete = False
         return
     g.user = dict(user_row)
+    if not g.user.get("account_name"):
+        g.user["account_name"] = g.user.get("username", "")
+    g.user["display_name"] = g.user.get("account_name") or g.user.get("username", "")
     profile_row = db.execute(
         "SELECT * FROM user_profiles WHERE user_id = ?",
         (user_id,),
@@ -1049,6 +1080,8 @@ def profile() -> str:
     message = request.args.get("message")
     error = None
     documents = fetch_user_documents(g.user["id"])
+    missing_fields: List[str] = []
+    missing_keys: List[str] = []
     if request.method == "POST":
         form = request.form
         full_name = form.get("full_name", "").strip()
@@ -1064,17 +1097,21 @@ def profile() -> str:
         upi_id = form.get("upi_id", "").strip()
         doc_types = form.getlist("doc_type")
         doc_files = request.files.getlist("doc_files")
-        missing_fields: List[str] = []
         if not full_name:
             missing_fields.append("full name")
+            missing_keys.append("full_name")
         if not phone:
             missing_fields.append("mobile number")
+            missing_keys.append("phone")
         if not email_contact:
             missing_fields.append("email ID or account contact")
+            missing_keys.append("email_contact")
         if has_role("owner") and not vehicle_registration:
             missing_fields.append("vehicle registration details")
+            missing_keys.append("vehicle_registration")
         if not ((account_number and ifsc_code) or upi_id):
             missing_fields.append("payout details (bank account + IFSC or UPI ID)")
+            missing_keys.extend(["account_number", "ifsc_code", "upi_id"])
         db.execute(
             """
             UPDATE user_profiles
@@ -1139,6 +1176,8 @@ def profile() -> str:
         error=error,
         is_owner=has_role("owner"),
         documents=documents,
+        missing_fields=missing_fields,
+        missing_keys=missing_keys,
     )
 
 
@@ -1288,7 +1327,7 @@ def admin_users() -> str:
     rows = db.execute(
         """
         SELECT
-            users.id, users.username, users.role, users.is_admin,
+            users.id, users.username, users.account_name, users.role, users.is_admin,
             IFNULL(profiles.full_name, '') AS full_name,
             IFNULL(profiles.phone, '') AS phone,
             profiles.profile_completed,
@@ -1301,7 +1340,12 @@ def admin_users() -> str:
         ORDER BY users.username COLLATE NOCASE
         """
     ).fetchall()
-    users = [dict(row) for row in rows]
+    users = []
+    for row in rows:
+        record = dict(row)
+        record.setdefault("account_name", "")
+        record["display_name"] = record.get("account_name") or record.get("username", "")
+        users.append(record)
     return render_template("admin_users.html", users=users)
 
 
@@ -1317,12 +1361,24 @@ def admin_user_detail(user_id: int) -> str:
     if account_row is None:
         abort(404)
     account = dict(account_row)
+    account.setdefault("account_name", "")
+    account["display_name"] = account.get("account_name") or account.get("username", "")
     profile = ensure_user_profile(user_id)
     documents = [dict(doc) for doc in fetch_user_documents(user_id)]
     stats = {
         "vehicle_count": db.execute("SELECT COUNT(*) FROM cars WHERE owner_id = ?", (user_id,)).fetchone()[0],
         "trip_count": db.execute("SELECT COUNT(*) FROM rentals WHERE renter_id = ?", (user_id,)).fetchone()[0],
     }
+    car_rows = db.execute(
+        "SELECT * FROM cars WHERE owner_id = ? ORDER BY created_at DESC",
+        (user_id,),
+    ).fetchall()
+    car_images = fetch_car_images([row["id"] for row in car_rows])
+    cars: List[dict] = []
+    for row in car_rows:
+        car = dict(row)
+        car["images"] = car_images.get(row["id"], [])
+        cars.append(car)
     payout_row = db.execute(
         "SELECT account_holder, account_number, ifsc_code, upi_id, updated_at FROM user_payout_details WHERE user_id = ?",
         (user_id,),
@@ -1335,6 +1391,7 @@ def admin_user_detail(user_id: int) -> str:
         documents=documents,
         payout=payout,
         stats=stats,
+        cars=cars,
     )
 
 
@@ -1382,7 +1439,11 @@ def admin_rentals() -> str:
         """
         SELECT rentals.*,
                cars.name AS car_name, cars.brand, cars.model,
-               renters.username AS renter_username, owners.username AS owner_username
+               COALESCE(renters.account_name, renters.username) AS renter_display_name,
+               COALESCE(owners.account_name, owners.username) AS owner_display_name,
+               renters.username AS renter_username,
+               owners.username AS owner_username,
+               cars.id AS car_id
         FROM rentals
         JOIN cars ON cars.id = rentals.car_id
         JOIN users AS renters ON renters.id = rentals.renter_id
@@ -1391,6 +1452,9 @@ def admin_rentals() -> str:
         """
     ).fetchall()
     rentals = [dict(row) for row in rows]
+    car_images = fetch_car_images([row["car_id"] for row in rentals])
+    for rental in rentals:
+        rental["images"] = car_images.get(rental["car_id"], [])
     return render_template(
         "admin_rentals.html",
         rentals=rentals,
@@ -1929,7 +1993,8 @@ def rent_car(car_id: int) -> str:
     db.commit()
 
     car_name = car["name"] or f"{car['brand']} {car['model']}"
-    owner_message = f"{g.user['username']} requested to book your {car_name}."
+    actor_name = display_name(g.user)
+    owner_message = f"{actor_name} requested to book your {car_name}."
     renter_message = f"Booking request sent for {car_name}. We'll notify you once the host responds."
     create_notification(car["owner_id"], owner_message, url_for("owner_cars"))
     create_notification(g.user["id"], renter_message, url_for("rentals"))
@@ -1954,6 +2019,7 @@ def _process_rental_complaint(rental_id: int, category: str, description: str) -
     role = None
     target_user_id = None
     redirect_target = url_for("rentals")
+    actor = display_name(g.user)
     if rental["renter_id"] == g.user["id"]:
         role = "renter"
         target_user_id = rental["owner_id"]
@@ -1973,7 +2039,7 @@ def _process_rental_complaint(rental_id: int, category: str, description: str) -
     car_label = rental["car_name"] or f"{rental['brand']} {rental['model']}"
     create_notification(
         target_user_id,
-        f"{g.user['username']} filed a complaint about the trip with {car_label}.",
+        f"{actor} filed a complaint about the trip with {car_label}.",
         redirect_target,
     )
     return redirect_target
@@ -2035,7 +2101,7 @@ def submit_feedback() -> str:
     for row in admin_rows:
         create_notification(
             row["id"],
-            f"{g.user['username']} shared feedback: {category}.",
+            f"{display_name(g.user)} shared feedback: {category}.",
             feedback_link,
         )
 
@@ -2772,17 +2838,22 @@ def register() -> str:
     message = request.args.get("message")
     form_data = {
         "username": "",
+        "account_name": "",
         "role": "renter",
         "admin_request": False,
     }
     if request.method == "POST":
         username_input = request.form.get("username", "").strip()
+        account_name = request.form.get("account_name", "").strip()
         password = request.form.get("password", "")
         confirm_password = request.form.get("confirm_password", "")
         selected_role = request.form.get("role", "renter").lower()
         admin_request = request.form.get("admin_request")
         admin_code = request.form.get("admin_code", "").strip()
+        if account_name:
+            account_name = account_name[:80]
         form_data["username"] = username_input
+        form_data["account_name"] = account_name
         form_data["role"] = selected_role
         form_data["admin_request"] = bool(admin_request) or selected_role == "admin"
 
@@ -2791,6 +2862,12 @@ def register() -> str:
             error = "Email or mobile number is required."
         elif not contact_type:
             error = "Enter a valid email address or Indian mobile number."
+        if error is None and not account_name:
+            error = "Account name is required."
+        if error is None and len(account_name) < 2:
+            error = "Account name must be at least 2 characters."
+        if error is None and len(account_name) > 60:
+            error = "Account name must be under 60 characters."
         if error is None:
             if password != confirm_password:
                 error = "Passwords do not match."
@@ -2817,8 +2894,8 @@ def register() -> str:
             db = get_db()
             try:
                 db.execute(
-                    "INSERT INTO users (username, password_hash, role, is_admin) VALUES (?, ?, ?, ?)",
-                    (username_to_store, generate_password_hash(password), role_for_db, is_admin),
+                    "INSERT INTO users (username, password_hash, role, is_admin, account_name) VALUES (?, ?, ?, ?, ?)",
+                    (username_to_store, generate_password_hash(password), role_for_db, is_admin, account_name),
                 )
                 db.commit()
             except sqlite3.IntegrityError:

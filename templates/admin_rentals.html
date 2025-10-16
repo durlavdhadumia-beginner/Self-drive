@@ -31,9 +31,25 @@
                             {% for rental in rentals %}
                                 <tr>
                                     <td>{{ rental['id'] }}</td>
-                                    <td>{{ rental['car_name'] }}<br><span class="text-muted small">{{ rental['brand'] }} {{ rental['model'] }}</span></td>
-                                    <td>{{ rental['renter_username'] }}</td>
-                                    <td>{{ rental['owner_username'] }}</td>
+                                    <td>{{ rental['car_name'] }}<br><span class="text-muted small">{{ rental['brand'] }} {{ rental['model'] }}</span>
+                                        {% if rental['images'] %}
+                                            <div class="d-flex flex-wrap gap-1 mt-2">
+                                                {% for image in rental['images'][:4] %}
+                                                    <a href="{{ url_for('serve_upload', filename=image) }}" target="_blank" rel="noopener">
+                                                        <img src="{{ url_for('serve_upload', filename=image) }}" alt="{{ rental['car_name'] }}" class="rounded" style="width:64px;height:42px;object-fit:cover;">
+                                                    </a>
+                                                {% endfor %}
+                                            </div>
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        {{ rental['renter_display_name'] }}<br>
+                                        <span class="text-muted small">{{ rental['renter_username'] }}</span>
+                                    </td>
+                                    <td>
+                                        {{ rental['owner_display_name'] }}<br>
+                                        <span class="text-muted small">{{ rental['owner_username'] }}</span>
+                                    </td>
                                     <td class="text-muted small">{{ rental['start_time'] }} ? {{ rental['end_time'] or 'TBD' }}</td>
                                     <td>{{ rental['status']|capitalize }}</td>
                                     <td>{{ rental['payment_status']|replace('_', ' ')|capitalize }}<br><span class="text-muted small">Due: {{ rental['payment_due_at'] or '-' }}</span><br><span class="text-muted small">Total: Rs {{ rental['total_amount']|round|int }}</span></td>
