@@ -1764,11 +1764,12 @@ def search() -> str:
                 city = detected_city or city
                 if detected_city and not city_display:
                     city_display = detected_city
+            city_filter = city if latitude is None or longitude is None else None
             cars = fetch_available_cars(
                 latitude=latitude,
                 longitude=longitude,
                 radius_km=radius,
-                city=city,
+                city=city_filter,
                 price_min=price_min_hours,
                 price_max=price_max_hours,
                 vehicle_types=filters["vehicle_types"],
@@ -1804,11 +1805,12 @@ def search() -> str:
             radius = float(radius_query) if radius_query else None
             if latitude is not None and longitude is not None:
                 lookup_radius = radius if radius is not None else 10.0
+                city_filter = city if latitude is None or longitude is None else None
                 cars = fetch_available_cars(
                     latitude=latitude,
                     longitude=longitude,
                     radius_km=lookup_radius,
-                    city=city,
+                    city=city_filter,
                     price_min=price_min_hours,
                     price_max=price_max_hours,
                     vehicle_types=filters["vehicle_types"],
@@ -1833,11 +1835,12 @@ def search() -> str:
 
     if not cars and latitude is not None and longitude is not None:
         lookup_radius = radius if radius is not None else 10.0
+        city_filter = city if latitude is None or longitude is None else None
         cars = fetch_available_cars(
             latitude=latitude,
             longitude=longitude,
             radius_km=lookup_radius,
-            city=city,
+            city=city_filter,
             price_min=price_min_hours,
             price_max=price_max_hours,
             vehicle_types=filters["vehicle_types"],
