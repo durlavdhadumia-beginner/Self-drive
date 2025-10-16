@@ -2940,16 +2940,6 @@ def logout() -> str:
     return redirect(url_for("login", message="You have been signed out."))
 
 
-def main() -> None:
-    with app.app_context():
-        init_db()
-    app.run(debug=True, port=5000)
-
-
-if __name__ == "__main__":
-    main()
-
-
 with app.app_context():
     init_db()
 
@@ -2977,4 +2967,12 @@ def terms_and_conditions() -> str:
 @app.route("/cancellations-and-refunds")
 def cancellations_and_refunds() -> str:
     return render_template("cancellations_and_refunds.html")
+
+
+def main() -> None:
+    app.run(debug=True, port=5000)
+
+
+if __name__ == "__main__":
+    main()
 
