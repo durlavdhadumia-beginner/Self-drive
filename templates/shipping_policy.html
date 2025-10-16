@@ -1,0 +1,40 @@
+{% extends "base.html" %}
+{% block title %}Vehicle Delivery Policy | CarRentalNTravel{% endblock %}
+{% block content %}
+<section class="py-5 bg-light">
+    <div class="container">
+        <h1 class="h2 fw-bold mb-4">Vehicle Delivery &amp; Handover Policy</h1>
+        <p class="text-muted">
+            CarRentalNTravel is a self-drive car rental platform. We do not ship physical goods. Every booking includes a vehicle handover or pickup experience arranged between the renter and the host.
+        </p>
+        <div class="card shadow-sm mt-4">
+            <div class="card-body">
+                <h2 class="h5 fw-semibold">Pickup and drop-off</h2>
+                <ul class="text-muted mb-0">
+                    <li>The default pickup point is the address shown on the search map and confirmed in your booking summary.</li>
+                    <li>Hosts may offer door-step delivery within city limits at an additional charge. Delivery availability is shown before you complete the payment.</li>
+                    <li>Exact pickup/drop timings must be respected. Late arrival beyond the allowed grace period can result in rescheduling fees.</li>
+                </ul>
+            </div>
+        </div>
+        <div class="card shadow-sm mt-4">
+            <div class="card-body">
+                <h2 class="h5 fw-semibold">Verification on handover</h2>
+                <ul class="text-muted mb-0">
+                    <li>Government-issued photo ID and driver’s license must be presented during handover.</li>
+                    <li>Fuel level, vehicle condition, and kilometre reading are jointly recorded in the CarRentalNTravel app.</li>
+                    <li>Any add-ons (child seat, GPS device, etc.) will be provided as per the booking confirmation.</li>
+                </ul>
+            </div>
+        </div>
+        <div class="card shadow-sm mt-4">
+            <div class="card-body">
+                <h2 class="h5 fw-semibold">Support</h2>
+                <p class="text-muted mb-0">
+                    For questions related to your pickup, delivery, or add-on services, contact us at <a href="mailto:support@carrentalntravel.com">support@carrentalntravel.com</a> or call +91&nbsp;98765&nbsp;43210.
+                </p>
+            </div>
+        </div>
+    </div>
+</section>
+{% endblock %}

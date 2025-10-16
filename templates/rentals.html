@@ -117,12 +117,31 @@
                                         {% endif %}
 
                                         {% if rental['owner_response'] == 'accepted' and rental['payment_status'] == 'awaiting_payment' %}
-                                            <form method="post" action="{{ url_for('renter_confirm_payment', rental_id=rental['id']) }}" class="d-flex flex-column flex-sm-row gap-2">
-                                                <input type="hidden" name="payment_channel" value="upi/netbanking">
-                                                <button type="submit" class="btn btn-sm btn-success">Confirm payment to DriveNow</button>
-                                                <span class="text-muted small">Due by {{ rental['payment_due_at'] or 'n/a' }}</span>
-                                            </form>
-                                            <div class="text-muted small mt-1">We will notify the host automatically once your payment clears.</div>
+                                            {% if razorpay_key_id %}
+                                                <div class="d-flex flex-column flex-sm-row align-items-sm-center gap-2">
+                                                    <button
+                                                        type="button"
+                                                        class="btn btn-sm btn-success razorpay-pay-btn"
+                                                        data-razorpay-pay
+                                                        data-rental-id="{{ rental['id'] }}"
+                                                        data-car-label="{{ rental['car_name'] or rental['brand'] ~ ' ' ~ rental['model'] }}"
+                                                        data-due="{{ rental['payment_due_at'] or 'n/a' }}"
+                                                    >
+                                                        Pay securely with Razorpay
+                                                    </button>
+                                                    <span class="text-muted small">Due by {{ rental['payment_due_at'] or 'n/a' }}</span>
+                                                </div>
+                                                <div class="text-muted small mt-1">Online payments are processed by Razorpay. You&apos;ll receive instant confirmation once the payment succeeds.</div>
+                                                <noscript>
+                                                    <div class="alert alert-warning mt-2">JavaScript is required for online payments. Please enable it or contact support for alternate options.</div>
+                                                </noscript>
+                                            {% else %}
+                                                <form method="post" action="{{ url_for('renter_confirm_payment', rental_id=rental['id']) }}" class="d-flex flex-column flex-sm-row gap-2">
+                                                    <input type="hidden" name="payment_channel" value="manual">
+                                                    <button type="submit" class="btn btn-sm btn-success">Confirm manual payment</button>
+                                                    <span class="text-muted small">Due by {{ rental['payment_due_at'] or 'n/a' }}</span>
+                                                </form>
+                                            {% endif %}
                                         {% endif %}
 
                                         {% if rental['status'] in ('booked', 'active') %}
@@ -173,4 +192,96 @@
         {% endif %}
     </div>
 </section>
+{% endblock %}
+
+{% block scripts %}
+    {{ super() }}
+    {% if razorpay_key_id %}
+        <script src="https://checkout.razorpay.com/v1/checkout.js"></script>
+        <script>
+            (function () {
+                const payButtons = document.querySelectorAll('[data-razorpay-pay]');
+                if (!payButtons.length) {
+                    return;
+                }
+                if (typeof Razorpay === 'undefined') {
+                    console.error('Razorpay checkout script not loaded.');
+                    return;
+                }
+                payButtons.forEach((button) => {
+                    button.addEventListener('click', async () => {
+                        const rentalId = button.dataset.rentalId;
+                        if (!rentalId) {
+                            return;
+                        }
+                        const originalText = button.textContent;
+                        button.disabled = true;
+                        button.textContent = 'Preparing payment...';
+                        try {
+                            const response = await fetch(`/payments/razorpay/order/${rentalId}`, {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({})
+                            });
+                            const payload = await response.json();
+                            if (!response.ok) {
+                                throw new Error(payload.error || 'Unable to initiate payment.');
+                            }
+                            const options = {
+                                key: payload.key,
+                                amount: payload.order.amount,
+                                currency: payload.order.currency,
+                                name: 'DriveNow Rentals',
+                                description: `Trip: ${payload.rental.description}`,
+                                order_id: payload.order.id,
+                                prefill: {
+                                    name: payload.customer.name || '',
+                                    email: payload.customer.email || '',
+                                    contact: payload.customer.contact || ''
+                                },
+                                notes: {
+                                    rental_id: payload.rental.id
+                                },
+                                theme: { color: '#0d9f5c' },
+                                handler: async function (paymentResponse) {
+                                    try {
+                                        const verifyResponse = await fetch('/payments/razorpay/verify', {
+                                            method: 'POST',
+                                            headers: { 'Content-Type': 'application/json' },
+                                            body: JSON.stringify({
+                                                rental_id: payload.rental.id,
+                                                razorpay_order_id: paymentResponse.razorpay_order_id,
+                                                razorpay_payment_id: paymentResponse.razorpay_payment_id,
+                                                razorpay_signature: paymentResponse.razorpay_signature
+                                            })
+                                        });
+                                        const verifyPayload = await verifyResponse.json();
+                                        if (!verifyResponse.ok) {
+                                            throw new Error(verifyPayload.error || 'Payment verification failed.');
+                                        }
+                                        window.location.reload();
+                                    } catch (err) {
+                                        console.error(err);
+                                        alert(err.message || 'Unable to verify payment. Please contact support if the amount was deducted.');
+                                    }
+                                }
+                            };
+                            const razorpayCheckout = new Razorpay(options);
+                            razorpayCheckout.on('payment.failed', function (failure) {
+                                const description = failure.error && failure.error.description ? failure.error.description : 'Payment failed. Please try again.';
+                                alert(description);
+                            });
+                            razorpayCheckout.open();
+                        } catch (err) {
+                            console.error(err);
+                            alert(err.message || 'Unable to initiate payment. Please try again.');
+                        } finally {
+                            button.disabled = false;
+                            button.textContent = originalText;
+                        }
+                    });
+                });
+            })();
+        </script>
+    {% endif %}
 {% endblock %}

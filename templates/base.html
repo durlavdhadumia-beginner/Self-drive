@@ -183,8 +183,11 @@
 <footer>
     <div class="container d-flex flex-column flex-md-row justify-content-between align-items-center gap-3">
         <span>&copy; {{ now().year }} CarRentalNTravel. Inspired by self-drive platforms.</span>
-        <div class="d-flex gap-3">
-            <span><i class="bi bi-geo-alt-fill"></i> 30+ cities coming soon</span>
+        <div class="d-flex flex-column flex-md-row gap-3">
+            <a class="text-decoration-none text-white-50" href="{{ url_for('terms_and_conditions') }}">Terms &amp; Conditions</a>
+            <a class="text-decoration-none text-white-50" href="{{ url_for('cancellations_and_refunds') }}">Cancellation &amp; Refunds</a>
+            <a class="text-decoration-none text-white-50" href="{{ url_for('shipping_policy') }}">Pickup &amp; Delivery Policy</a>
+            <a class="text-decoration-none text-white-50" href="{{ url_for('contact') }}">Contact Us</a>
         </div>
     </div>
 </footer>

@@ -15,6 +15,7 @@ from flask import (
     Flask,
     abort,
     g,
+    jsonify,
     redirect,
     render_template,
     request,
@@ -22,6 +23,8 @@ from flask import (
     send_from_directory,
     url_for,
 )
+import razorpay
+from razorpay import errors as razorpay_errors
 from werkzeug.security import check_password_hash, generate_password_hash
 from werkzeug.utils import secure_filename
 
@@ -65,6 +68,8 @@ app.config.update(
     UPLOAD_FOLDER=str(UPLOAD_ROOT),
     MAX_CONTENT_LENGTH=16 * 1024 * 1024,  # 16 MB per request
 )
+app.config["RAZORPAY_KEY_ID"] = os.getenv("RAZORPAY_KEY_ID", "")
+app.config["RAZORPAY_KEY_SECRET"] = os.getenv("RAZORPAY_KEY_SECRET", "")
 app.logger.setLevel("INFO")
 
 
@@ -200,6 +205,19 @@ def build_fuel_type_list() -> List[str]:
     return fuel_types
 
 
+def get_razorpay_client() -> Optional[razorpay.Client]:
+    """Return a configured Razorpay client or None if credentials are missing."""
+    key_id = (app.config.get("RAZORPAY_KEY_ID") or "").strip()
+    key_secret = (app.config.get("RAZORPAY_KEY_SECRET") or "").strip()
+    if not key_id or not key_secret:
+        return None
+    client = getattr(g, "_razorpay_client", None)
+    if client is None:
+        client = razorpay.Client(auth=(key_id, key_secret))
+        g._razorpay_client = client
+    return client
+
+
 def init_db() -> None:
     db = get_db()
     db.executescript(
@@ -318,6 +336,9 @@ def init_db() -> None:
             payment_due_at TEXT,
             payment_confirmed_at TEXT,
             payment_channel TEXT DEFAULT 'manual',
+            payment_gateway TEXT DEFAULT '',
+            payment_reference TEXT DEFAULT '',
+            payment_order_id TEXT DEFAULT '',
             company_commission_amount REAL NOT NULL DEFAULT 0,
             owner_payout_amount REAL NOT NULL DEFAULT 0,
             owner_payout_status TEXT NOT NULL DEFAULT 'pending',
@@ -422,6 +443,9 @@ def init_db() -> None:
         "ALTER TABLE rentals ADD COLUMN payment_due_at TEXT",
         "ALTER TABLE rentals ADD COLUMN payment_confirmed_at TEXT",
         "ALTER TABLE rentals ADD COLUMN payment_channel TEXT DEFAULT 'manual'",
+        "ALTER TABLE rentals ADD COLUMN payment_gateway TEXT DEFAULT ''",
+        "ALTER TABLE rentals ADD COLUMN payment_reference TEXT DEFAULT ''",
+        "ALTER TABLE rentals ADD COLUMN payment_order_id TEXT DEFAULT ''",
         "ALTER TABLE rentals ADD COLUMN company_commission_amount REAL NOT NULL DEFAULT 0",
         "ALTER TABLE rentals ADD COLUMN owner_payout_amount REAL NOT NULL DEFAULT 0",
         "ALTER TABLE rentals ADD COLUMN owner_payout_status TEXT NOT NULL DEFAULT 'pending'",
@@ -1859,7 +1883,13 @@ def rentals() -> str:
     ).fetchall()
     awaiting_payment = [row for row in rows if row["payment_status"] == 'awaiting_payment' and row["owner_response"] == 'accepted']
     pending_host_action = [row for row in rows if row["owner_response"] in ('pending', 'counter') and row["status"] == 'booked']
-    return render_template("rentals.html", rentals=rows, awaiting_payment=awaiting_payment, pending_host_action=pending_host_action)
+    return render_template(
+        "rentals.html",
+        rentals=rows,
+        awaiting_payment=awaiting_payment,
+        pending_host_action=pending_host_action,
+        razorpay_key_id=app.config.get("RAZORPAY_KEY_ID"),
+    )
 
 
 @app.route("/rent/<int:car_id>", methods=["POST"])
@@ -2155,6 +2185,199 @@ def renter_respond_rental(rental_id: int) -> str:
     return redirect(url_for("rentals"))
 
 
+def finalize_rental_payment(
+    rental: sqlite3.Row,
+    *,
+    payment_channel: str,
+    payment_gateway: str,
+    payment_reference: str = "",
+    payment_order_id: Optional[str] = None,
+) -> Tuple[float, float]:
+    """Mark the rental as paid, returning (commission, owner_payout)."""
+    db = get_db()
+    total_amount = float(rental["total_amount"] or 0)
+    commission = round(total_amount * COMPANY_COMMISSION_RATE, 2)
+    owner_payout = max(0.0, round(total_amount - commission, 2))
+    now_iso = datetime.utcnow().isoformat()
+    stored_order_id = payment_order_id or rental["payment_order_id"] or ""
+    db.execute(
+        """
+        UPDATE rentals
+        SET payment_status = 'paid',
+            payment_confirmed_at = ?,
+            payment_channel = ?,
+            payment_gateway = ?,
+            payment_reference = ?,
+            payment_order_id = ?,
+            company_commission_amount = ?,
+            owner_payout_amount = ?,
+            owner_payout_status = 'pending',
+            owner_payout_released_at = NULL,
+            payment_due_at = NULL,
+            renter_response = CASE WHEN renter_response = '' THEN 'paid' ELSE renter_response END
+        WHERE id = ?
+        """,
+        (
+            now_iso,
+            payment_channel,
+            payment_gateway,
+            payment_reference,
+            stored_order_id,
+            commission,
+            owner_payout,
+            rental["id"],
+        ),
+    )
+    db.commit()
+    return (commission, owner_payout)
+
+
+@app.route("/payments/razorpay/order/<int:rental_id>", methods=["POST"])
+@login_required
+@role_required("renter", "owner")
+def razorpay_create_order(rental_id: int):
+    client = get_razorpay_client()
+    if client is None:
+        return jsonify({"error": "Razorpay is not configured. Please contact support."}), 503
+    db = get_db()
+    rental = db.execute(
+        """
+        SELECT rentals.*, cars.name AS car_name, cars.brand, cars.model, users.username AS renter_username,
+               profiles.full_name AS renter_name, profiles.phone_number AS renter_phone
+        FROM rentals
+        JOIN cars ON cars.id = rentals.car_id
+        JOIN users ON users.id = rentals.renter_id
+        LEFT JOIN user_profiles AS profiles ON profiles.user_id = rentals.renter_id
+        WHERE rentals.id = ? AND rentals.renter_id = ? AND rentals.owner_response = 'accepted'
+        """,
+        (rental_id, g.user["id"]),
+    ).fetchone()
+    if rental is None:
+        abort(404)
+    if rental["payment_status"] != "awaiting_payment":
+        return jsonify({"error": "Payment is not required for this booking."}), 400
+    total_amount = float(rental["total_amount"] or 0)
+    if total_amount <= 0:
+        return jsonify({"error": "Trip total is zero. Please contact support for manual confirmation."}), 400
+    amount_paise = int(round(total_amount * 100))
+    if amount_paise < 100:
+        return jsonify({"error": "Minimum payment amount should be at least ₹1."}), 400
+    receipt_value = f"rental-{rental_id}-{int(datetime.utcnow().timestamp())}"
+    notes = {
+        "rental_id": str(rental_id),
+        "car": rental["car_name"] or f"{rental['brand']} {rental['model']}",
+    }
+    try:
+        order = client.order.create(
+            {
+                "amount": amount_paise,
+                "currency": "INR",
+                "receipt": receipt_value,
+                "payment_capture": 1,
+                "notes": notes,
+            }
+        )
+    except razorpay_errors.BadRequestError as exc:
+        app.logger.exception("Failed to create Razorpay order for rental %s", rental_id)
+        return jsonify({"error": f"Unable to start payment: {exc}"}), 400
+    except razorpay_errors.ServerError as exc:
+        app.logger.exception("Razorpay server error while creating order for rental %s", rental_id)
+        return jsonify({"error": "Payment provider is temporarily unavailable. Please try again."}), 503
+    db.execute(
+        """
+        UPDATE rentals
+        SET payment_gateway = 'razorpay',
+            payment_order_id = ?,
+            payment_channel = 'razorpay'
+        WHERE id = ?
+        """,
+        (order.get("id"), rental_id),
+    )
+    db.commit()
+    customer_name = (rental["renter_name"] or g.user["username"] or "").strip()
+    customer_contact = (rental["renter_phone"] or rental["renter_username"] or "").strip()[:15]
+    return jsonify(
+        {
+            "order": {
+                "id": order.get("id"),
+                "amount": order.get("amount"),
+                "currency": order.get("currency"),
+            },
+            "key": app.config.get("RAZORPAY_KEY_ID"),
+            "rental": {
+                "id": rental_id,
+                "amount": total_amount,
+                "description": notes["car"],
+            },
+            "customer": {
+                "name": customer_name,
+                "contact": customer_contact,
+                "email": "",
+            },
+        }
+    )
+
+
+@app.route("/payments/razorpay/verify", methods=["POST"])
+@login_required
+@role_required("renter", "owner")
+def razorpay_verify_payment():
+    if not request.is_json:
+        return jsonify({"error": "Invalid payload"}), 400
+    payload = request.get_json() or {}
+    required_keys = {
+        "rental_id",
+        "razorpay_order_id",
+        "razorpay_payment_id",
+        "razorpay_signature",
+    }
+    if not required_keys.issubset(payload):
+        return jsonify({"error": "Missing payment details"}), 400
+    client = get_razorpay_client()
+    if client is None:
+        return jsonify({"error": "Razorpay is not configured. Please contact support."}), 503
+    rental_id = int(payload["rental_id"])
+    db = get_db()
+    rental = db.execute(
+        """
+        SELECT rentals.*, cars.owner_id, cars.name AS car_name, cars.brand, cars.model
+        FROM rentals
+        JOIN cars ON cars.id = rentals.car_id
+        WHERE rentals.id = ? AND rentals.renter_id = ? AND rentals.owner_response = 'accepted'
+        """,
+        (rental_id, g.user["id"]),
+    ).fetchone()
+    if rental is None:
+        abort(404)
+    expected_order_id = (rental["payment_order_id"] or "").strip()
+    if not expected_order_id or expected_order_id != payload["razorpay_order_id"]:
+        return jsonify({"error": "Order mismatch. Please refresh and try again."}), 400
+    try:
+        razorpay.utility.verify_payment_signature(
+            {
+                "razorpay_order_id": payload["razorpay_order_id"],
+                "razorpay_payment_id": payload["razorpay_payment_id"],
+                "razorpay_signature": payload["razorpay_signature"],
+            }
+        )
+    except razorpay_errors.SignatureVerificationError:
+        return jsonify({"error": "Payment verification failed. If amount was deducted, contact support."}), 400
+    finalize_rental_payment(
+        rental,
+        payment_channel="razorpay",
+        payment_gateway="razorpay",
+        payment_reference=payload["razorpay_payment_id"],
+        payment_order_id=payload["razorpay_order_id"],
+    )
+    car_label = rental["car_name"] or f"{rental['brand']} {rental['model']}"
+    create_notification(
+        rental["owner_id"],
+        f"{g.user['username']} completed payment for {car_label}.",
+        url_for("owner_cars"),
+    )
+    return jsonify({"status": "success"})
+
+
 @app.route("/rentals/<int:rental_id>/confirm-payment", methods=["POST"])
 @login_required
 @role_required("renter", "owner")
@@ -2171,27 +2394,13 @@ def renter_confirm_payment(rental_id: int) -> str:
     ).fetchone()
     if rental is None:
         abort(404)
-    now_iso = datetime.utcnow().isoformat()
-    total_amount = float(rental["total_amount"] or 0)
-    commission = round(total_amount * COMPANY_COMMISSION_RATE, 2)
-    owner_payout = max(0.0, round(total_amount - commission, 2))
     payment_channel = request.form.get("payment_channel", "upi/netbanking").strip().lower() or "upi/netbanking"
-    db.execute(
-        """
-        UPDATE rentals
-        SET payment_status = 'paid',
-            payment_confirmed_at = ?,
-            payment_channel = ?,
-            company_commission_amount = ?,
-            owner_payout_amount = ?,
-            owner_payout_status = 'pending',
-            owner_payout_released_at = NULL,
-            renter_response = CASE WHEN renter_response = '' THEN 'paid' ELSE renter_response END
-        WHERE id = ?
-        """,
-        (now_iso, payment_channel, commission, owner_payout, rental_id),
+    finalize_rental_payment(
+        rental,
+        payment_channel=payment_channel,
+        payment_gateway="manual",
+        payment_reference="manual-confirmation",
     )
-    db.commit()
     car_label = rental["car_name"] or f"{rental['brand']} {rental['model']}"
     create_notification(
         rental["owner_id"],
@@ -2835,4 +3044,24 @@ with app.app_context():
 @app.route("/uploads/<path:filename>")
 def serve_upload(filename: str):
     return send_from_directory(UPLOAD_ROOT, filename)
+
+
+@app.route("/contact")
+def contact() -> str:
+    return render_template("contact.html")
+
+
+@app.route("/shipping-policy")
+def shipping_policy() -> str:
+    return render_template("shipping_policy.html")
+
+
+@app.route("/terms-and-conditions")
+def terms_and_conditions() -> str:
+    return render_template("terms_and_conditions.html")
+
+
+@app.route("/cancellations-and-refunds")
+def cancellations_and_refunds() -> str:
+    return render_template("cancellations_and_refunds.html")
 
