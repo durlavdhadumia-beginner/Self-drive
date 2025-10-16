@@ -64,7 +64,7 @@ app = Flask(__name__)
 app.config.update(
     SECRET_KEY="replace-with-a-secure-random-value",
     UPLOAD_FOLDER=str(UPLOAD_ROOT),
-    MAX_CONTENT_LENGTH=16 * 1024 * 1024,  # 16 MB per request
+    MAX_CONTENT_LENGTH=32 * 1024 * 1024,  # 32 MB per request
 )
 app.logger.setLevel("INFO")
 
