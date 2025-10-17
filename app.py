@@ -38,6 +38,7 @@ PROMO_CODES: Dict[str, float] = {
     "FIRSTDRIVE": 0.20,
 }
 COMPANY_COMMISSION_RATE = 0.05
+MAX_CAR_IMAGES = 8
 POPULAR_VEHICLE_TYPES: List[str] = [
     "SUV",
     "Sedan",
@@ -491,14 +492,18 @@ def allowed_file(filename: str) -> bool:
     return "." in filename and filename.rsplit(".", 1)[1].lower() in ALLOWED_EXTENSIONS
 
 
-def save_car_images(car_id: int, files: List) -> List[str]:
+def save_car_images(car_id: int, files: List, limit: Optional[int] = None) -> List[str]:
     if not files:
+        return []
+    if limit is None:
+        limit = MAX_CAR_IMAGES
+    if limit <= 0:
         return []
     saved_paths: List[str] = []
     target_dir = UPLOAD_ROOT.joinpath(str(car_id))
     target_dir.mkdir(parents=True, exist_ok=True)
     db = get_db()
-    for upload in files[:8]:
+    for upload in files[:limit]:
         if not upload or not upload.filename:
             continue
         if not allowed_file(upload.filename):
@@ -2500,6 +2505,231 @@ def owner_update_location(car_id: int) -> str:
         abort(404)
     return redirect(url_for("owner_cars"))
 
+
+@app.route("/owner/cars/<int:car_id>/data")
+@login_required
+@role_required("owner")
+def owner_get_car_data(car_id: int):
+    db = get_db()
+    row = db.execute(
+        "SELECT * FROM cars WHERE id = ? AND owner_id = ?",
+        (car_id, g.user["id"]),
+    ).fetchone()
+    if row is None:
+        abort(404)
+    car = dict(row)
+    image_rows = db.execute(
+        "SELECT id, filename FROM car_images WHERE car_id = ? ORDER BY created_at",
+        (car_id,),
+    ).fetchall()
+    images = [
+        {
+            "id": image_row["id"],
+            "filename": image_row["filename"],
+            "url": url_for("serve_upload", filename=image_row["filename"]),
+        }
+        for image_row in image_rows
+    ]
+    display_name = (car.get("name") or "").strip()
+    if not display_name:
+        brand = (car.get("brand") or "").strip()
+        model = (car.get("model") or "").strip()
+        display_name = f"{brand} {model}".strip()
+    payload = {
+        "id": car["id"],
+        "name": car.get("name") or "",
+        "brand": car.get("brand") or "",
+        "model": car.get("model") or "",
+        "licence_plate": car.get("licence_plate") or "",
+        "vehicle_type": car.get("vehicle_type") or "",
+        "size_category": car.get("size_category") or "",
+        "fuel_type": car.get("fuel_type") or "",
+        "transmission": car.get("transmission") or "",
+        "city": car.get("city") or "",
+        "seats": car.get("seats") or 0,
+        "rate_per_hour": car.get("rate_per_hour") or 0,
+        "daily_rate": car.get("daily_rate") or 0,
+        "has_gps": bool(car.get("has_gps")),
+        "image_url": car.get("image_url") or "",
+        "description": car.get("description") or "",
+        "latitude": car.get("latitude"),
+        "longitude": car.get("longitude"),
+        "images": images,
+        "is_available": bool(car.get("is_available")),
+        "display_name": display_name,
+        "detail_url": url_for("owner_get_car_data", car_id=car_id),
+        "update_url": url_for("owner_update_car", car_id=car_id),
+    }
+    return jsonify({"car": payload})
+
+
+@app.route("/owner/cars/<int:car_id>/update", methods=["POST"])
+@login_required
+@role_required("owner")
+def owner_update_car(car_id: int):
+    db = get_db()
+    existing = db.execute(
+        "SELECT * FROM cars WHERE id = ? AND owner_id = ?",
+        (car_id, g.user["id"]),
+    ).fetchone()
+    if existing is None:
+        abort(404)
+    existing_car = dict(existing)
+    form = request.form
+
+    def parse_int(value: Optional[str], default: int) -> int:
+        try:
+            return int(value)
+        except (TypeError, ValueError):
+            return default
+
+    def parse_float(value: Optional[str], default: float) -> float:
+        try:
+            if value is None or value == "":
+                return default
+            return float(value)
+        except (TypeError, ValueError):
+            return default
+
+    name = (form.get("name") or "").strip()
+    brand = (form.get("brand") or existing_car.get("brand") or "").strip()
+    model = (form.get("model") or existing_car.get("model") or "").strip()
+    if not brand:
+        brand = "Unknown"
+    if not model:
+        model = "Unknown"
+    if not name:
+        name = f"{brand} {model}".strip()
+    licence_plate = (form.get("licence_plate") or existing_car.get("licence_plate") or "").strip()
+    vehicle_type = (form.get("vehicle_type") or existing_car.get("vehicle_type") or "").strip()
+    size_category = (form.get("size_category") or existing_car.get("size_category") or "").strip()
+    fuel_type = (form.get("fuel_type") or existing_car.get("fuel_type") or "").strip()
+    transmission = (form.get("transmission") or existing_car.get("transmission") or "").strip()
+    description = (form.get("description") or existing_car.get("description") or "").strip()
+    seats = parse_int(form.get("seats"), existing_car.get("seats") or 4)
+    rate_per_hour = parse_float(form.get("rate_per_hour"), existing_car.get("rate_per_hour") or 0.0)
+    daily_rate = parse_float(form.get("daily_rate"), existing_car.get("daily_rate") or 0.0)
+    image_url = (form.get("image_url") or existing_car.get("image_url") or "").strip()
+    latitude = parse_float(form.get("latitude"), existing_car.get("latitude") or 0.0)
+    longitude = parse_float(form.get("longitude"), existing_car.get("longitude") or 0.0)
+    has_gps = 1 if form.get("has_gps") in {"on", "1", "true", "yes"} else 0
+    city_raw = (form.get("city") or existing_car.get("city") or "").strip()
+    city_value = city_raw.split(",")[0].strip() if city_raw else ""
+
+    db.execute(
+        """
+        UPDATE cars
+        SET name = ?, brand = ?, model = ?, licence_plate = ?, seats = ?, rate_per_hour = ?, daily_rate = ?,
+            vehicle_type = ?, size_category = ?, has_gps = ?, fuel_type = ?, transmission = ?, city = ?,
+            image_url = ?, description = ?, latitude = ?, longitude = ?, updated_at = ?
+        WHERE id = ? AND owner_id = ?
+        """,
+        (
+            name,
+            brand,
+            model,
+            licence_plate,
+            seats,
+            rate_per_hour,
+            daily_rate,
+            vehicle_type,
+            size_category,
+            has_gps,
+            fuel_type,
+            transmission,
+            city_value,
+            image_url,
+            description,
+            latitude,
+            longitude,
+            datetime.utcnow().isoformat(),
+            car_id,
+            g.user["id"],
+        ),
+    )
+
+    image_rows = db.execute(
+        "SELECT id, filename FROM car_images WHERE car_id = ? ORDER BY created_at",
+        (car_id,),
+    ).fetchall()
+    delete_ids = {
+        int(value)
+        for value in form.getlist("delete_images")
+        if value and value.isdigit()
+    }
+    if delete_ids:
+        rows_to_delete = [row for row in image_rows if row["id"] in delete_ids]
+        if rows_to_delete:
+            placeholders = ",".join("?" for _ in rows_to_delete)
+            params = [car_id] + [row["id"] for row in rows_to_delete]
+            db.execute(
+                f"DELETE FROM car_images WHERE car_id = ? AND id IN ({placeholders})",
+                params,
+            )
+            for row in rows_to_delete:
+                file_path = UPLOAD_ROOT.joinpath(row["filename"])
+                try:
+                    file_path.unlink()
+                except FileNotFoundError:
+                    pass
+        image_rows = [row for row in image_rows if row["id"] not in delete_ids]
+
+    remaining_count = len(image_rows)
+    new_files = request.files.getlist("new_photos")
+    available_slots = max(0, MAX_CAR_IMAGES - remaining_count)
+    if available_slots and new_files:
+        save_car_images(car_id, new_files, limit=available_slots)
+
+    db.commit()
+
+    updated = db.execute(
+        "SELECT * FROM cars WHERE id = ? AND owner_id = ?",
+        (car_id, g.user["id"]),
+    ).fetchone()
+    image_rows = db.execute(
+        "SELECT id, filename FROM car_images WHERE car_id = ? ORDER BY created_at",
+        (car_id,),
+    ).fetchall()
+    image_payload = [
+        {
+            "id": row["id"],
+            "filename": row["filename"],
+            "url": url_for("serve_upload", filename=row["filename"]),
+        }
+        for row in image_rows
+    ]
+    updated_car = dict(updated)
+    display_name = (updated_car.get("name") or "").strip()
+    if not display_name:
+        brand = (updated_car.get("brand") or "").strip()
+        model = (updated_car.get("model") or "").strip()
+        display_name = f"{brand} {model}".strip()
+    response = {
+        "id": updated_car["id"],
+        "name": updated_car.get("name") or "",
+        "brand": updated_car.get("brand") or "",
+        "model": updated_car.get("model") or "",
+        "licence_plate": updated_car.get("licence_plate") or "",
+        "vehicle_type": updated_car.get("vehicle_type") or "",
+        "size_category": updated_car.get("size_category") or "",
+        "fuel_type": updated_car.get("fuel_type") or "",
+        "transmission": updated_car.get("transmission") or "",
+        "city": updated_car.get("city") or "",
+        "seats": updated_car.get("seats") or 0,
+        "rate_per_hour": updated_car.get("rate_per_hour") or 0,
+        "daily_rate": updated_car.get("daily_rate") or 0,
+        "has_gps": bool(updated_car.get("has_gps")),
+        "image_url": updated_car.get("image_url") or "",
+        "description": updated_car.get("description") or "",
+        "latitude": updated_car.get("latitude"),
+        "longitude": updated_car.get("longitude"),
+        "images": image_payload,
+        "is_available": bool(updated_car.get("is_available")),
+        "display_name": display_name,
+        "detail_url": url_for("owner_get_car_data", car_id=car_id),
+        "update_url": url_for("owner_update_car", car_id=car_id),
+    }
+    return jsonify({"success": True, "car": response})
 
 @app.route("/owner/rentals/<int:rental_id>/start", methods=["POST"])
 @login_required

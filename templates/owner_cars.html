@@ -32,46 +32,6 @@
             </div>
         </div>
 
-        <div class="card card-zoom mb-4">
-            <div class="card-body">
-                <h2 class="h5 fw-semibold mb-3">Need to raise a complaint or share feedback?</h2>
-                <p class="text-muted small mb-3">Flag concerns about renters, vehicle condition on return, payouts, or any platform issues. Our support desk will step in quickly.</p>
-                <form class="row g-3 align-items-end" method="post" action="{{ url_for('submit_feedback') }}">
-                    <input type="hidden" name="redirect_endpoint" value="owner_cars">
-                    <input type="hidden" name="feedback_role" value="owner">
-                    <div class="col-md-4">
-                        <label class="form-label small" for="host-feedback-trip">Booking (optional)</label>
-                        <select class="form-select" id="host-feedback-trip" name="rental_id">
-                            <option value="" selected>General platform feedback</option>
-                            {% for rental in rentals %}
-                                <option value="{{ rental['id'] }}">
-                                    {{ rental['car_name'] }} with {{ rental['renter_username'] }} ({{ rental['start_time'] }} to {{ rental['end_time'] or 'TBD' }})
-                                </option>
-                            {% endfor %}
-                        </select>
-                    </div>
-                    <div class="col-md-3">
-                        <label class="form-label small" for="host-feedback-category">Category</label>
-                        <select class="form-select" id="host-feedback-category" name="category">
-                            <option value="Platform issue">Platform issue</option>
-                            <option value="Vehicle damage">Vehicle damage</option>
-                            <option value="Late return">Late return</option>
-                            <option value="Payment concern">Payment concern</option>
-                            <option value="Renter conduct">Renter conduct</option>
-                            <option value="Other">Other</option>
-                        </select>
-                    </div>
-                    <div class="col-md-5">
-                        <label class="form-label small" for="host-feedback-description">Describe the issue</label>
-                        <textarea class="form-control" id="host-feedback-description" name="description" rows="2" placeholder="Provide context so we can assist" required></textarea>
-                    </div>
-                    <div class="col-12 text-end">
-                        <button type="submit" class="btn btn-outline-success">Send to support</button>
-                    </div>
-                </form>
-            </div>
-        </div>
-
         {% if pending_payments %}
         <div class="alert alert-info d-flex flex-column flex-lg-row justify-content-between align-items-lg-center gap-2 mb-4">
             {% set pending_total = pending_payments|sum(attribute='total_amount') %}
@@ -89,34 +49,43 @@
                         {% if cars %}
                         <div class="list-group list-group-flush">
                             {% for car in cars %}
-                            <div class="list-group-item py-4">
+                            <div class="list-group-item py-4" data-car-card="{{ car['id'] }}" data-detail-url="{{ url_for('owner_get_car_data', car_id=car['id']) }}" data-update-url="{{ url_for('owner_update_car', car_id=car['id']) }}">
                                 <div class="d-flex justify-content-between align-items-start mb-3">
                                     <div>
-                                        <h3 class="h5 mb-1">{{ car['name'] or car['brand'] ~ ' ' ~ car['model'] }}</h3>
-                                        <p class="text-muted small mb-0">{{ car['brand'] }} {{ car['model'] }} - {{ car['city'] or 'City not set' }}</p>
+                                        <h3 class="h5 mb-1" data-role="car-name">{{ car['name'] or car['brand'] ~ ' ' ~ car['model'] }}</h3>
+                                        <p class="text-muted small mb-0" data-role="car-subtitle">{{ car['brand'] }} {{ car['model'] }} - {{ car['city'] or 'City not set' }}</p>
                                     </div>
-                                    <span class="badge {{ 'bg-success' if car['is_available'] else 'bg-secondary' }}">
+                                    <span class="badge {{ 'bg-success' if car['is_available'] else 'bg-secondary' }}" data-role="car-availability">
                                         {{ 'Available' if car['is_available'] else 'Unavailable' }}
                                     </span>
                                 </div>
-                                {% if car['images'] %}
-                                <div class="d-flex flex-wrap gap-2 mb-3">
+                                <div class="d-flex flex-wrap gap-2 mb-3" data-role="car-gallery">
+                                    {% if car['images'] %}
                                     {% for image in car['images'] %}
-                                    <img src="{{ (image if image.lower().startswith('http') else url_for('serve_upload', filename=image)) }}"
-                                        alt="{{ car['name'] }}" class="rounded"
-                                        style="width:96px;height:64px;object-fit:cover;">
+                                    <button type="button" class="btn btn-link p-0 car-edit-trigger" data-car-id="{{ car['id'] }}" aria-label="Manage {{ car['name'] or car['brand'] ~ ' ' ~ car['model'] }}">
+                                        <img src="{{ (image if image.lower().startswith('http') else url_for('serve_upload', filename=image)) }}"
+                                            alt="{{ car['name'] }}" class="rounded"
+                                            style="width:96px;height:64px;object-fit:cover;">
+                                    </button>
                                     {% endfor %}
+                                    {% else %}
+                                    <button type="button" class="btn btn-outline-secondary car-edit-trigger" data-car-id="{{ car['id'] }}">
+                                        <i class="bi bi-plus-circle me-1"></i>Add photos
+                                    </button>
+                                    {% endif %}
                                 </div>
-                                {% endif %}
                                 <div class="row text-muted small mb-3">
-                                    <div class="col-sm-6">Licence: {{ car['licence_plate'] }}</div>
-                                    <div class="col-sm-6">Seats: {{ car['seats'] }}</div>
-                                    <div class="col-sm-6">Hourly rate: Rs {{ '%.0f'|format(car['rate_per_hour']) }}</div>
-                                    <div class="col-sm-6">Daily rate: Rs {{ '%.0f'|format(car['daily_rate']) }}</div>
-                                    <div class="col-sm-6">Fuel type: {{ car['fuel_type'] or 'NA' }}</div>
-                                    <div class="col-sm-6">Transmission: {{ car['transmission'] or 'NA' }}</div>
+                                    <div class="col-sm-6" data-role="car-licence">Licence: {{ car['licence_plate'] }}</div>
+                                    <div class="col-sm-6" data-role="car-seats">Seats: {{ car['seats'] }}</div>
+                                    <div class="col-sm-6" data-role="car-rate-hour">Hourly rate: Rs {{ '%.0f'|format(car['rate_per_hour']) }}</div>
+                                    <div class="col-sm-6" data-role="car-rate-day">Daily rate: Rs {{ '%.0f'|format(car['daily_rate']) }}</div>
+                                    <div class="col-sm-6" data-role="car-fuel">Fuel type: {{ car['fuel_type'] or 'NA' }}</div>
+                                    <div class="col-sm-6" data-role="car-transmission">Transmission: {{ car['transmission'] or 'NA' }}</div>
                                 </div>
                                 <div class="d-flex flex-wrap gap-3 align-items-center">
+                                    <button type="button" class="btn btn-outline-primary btn-sm car-edit-trigger" data-car-id="{{ car['id'] }}">
+                                        <i class="bi bi-pencil-square me-1"></i>Manage listing
+                                    </button>
                                     <form method="post" action="{{ url_for('owner_toggle_availability', car_id=car['id']) }}">
                                         <button type="submit"
                                             class="btn btn-sm {{ 'btn-outline-secondary' if car['is_available'] else 'btn-outline-success' }}">
@@ -142,131 +111,6 @@
                 </div>
             </div>
                         <div class="col-lg-5">
-                <div class="card card-zoom mb-4">
-                    <div class="card-body">
-                        <h2 class="h5 fw-semibold mb-3">List a new vehicle</h2>
-                        <form method="post" action="{{ url_for('owner_add_car') }}" enctype="multipart/form-data" class="row g-3">
-                            <div class="col-md-6">
-                                <label class="form-label" for="vehicle_type">Vehicle type</label>
-                                <select class="form-select" id="vehicle_type" name="vehicle_type" required>
-                                    <option value="">Select type</option>
-                                    {% for label in popular_vehicle_types %}
-                                        <option value="{{ label }}">{{ label }}</option>
-                                    {% endfor %}
-                                    {% for label in other_vehicle_types %}
-                                        <option value="{{ label }}">{{ label }}</option>
-                                    {% endfor %}
-                                </select>
-                            </div>
-                            <div class="col-md-6">
-                                <label class="form-label" for="size_category">Size category</label>
-                                <input type="text" class="form-control" id="size_category" name="size_category" placeholder="Compact / Cruiser">
-                            </div>
-                            <div class="col-md-6">
-                                <label class="form-label" for="name">Listing name</label>
-                                <input type="text" class="form-control" id="name" name="name" placeholder="e.g. Swift Automatic">
-                            </div>
-                            <div class="col-md-6">
-                                <label class="form-label" for="brand">Brand</label>
-                                <input type="text" class="form-control" id="brand" name="brand" required>
-                            </div>
-                            <div class="col-md-6">
-                                <label class="form-label" for="model">Model</label>
-                                <input type="text" class="form-control" id="model" name="model" required>
-                            </div>
-                            <div class="col-md-6">
-                                <label class="form-label" for="licence_plate">Registration number</label>
-                                <input type="text" class="form-control" id="licence_plate" name="licence_plate" required>
-                            </div>
-                            <div class="col-md-6">
-                                <label class="form-label" for="seats">Seats</label>
-                                <input type="number" class="form-control" id="seats" name="seats" min="1" max="12" value="4">
-                            </div>
-                            <div class="col-md-6">
-                                <label class="form-label" for="rate_unit">Rate type</label>
-                                <select class="form-select" id="rate_unit" name="rate_unit">
-                                    <option value="hour" selected>Per hour</option>
-                                    <option value="day">Per day</option>
-                                </select>
-                            </div>
-                            <div class="col-md-6">
-                                <label class="form-label" for="rate_amount">Rate amount (&#8377;)</label>
-                                <input type="number" class="form-control" id="rate_amount" name="rate_amount" min="0" step="1" value="350">
-                                <div class="form-text">We auto-calculate the complementary daily or hourly price.</div>
-                            </div>
-                            <div class="col-md-6">
-                                <label class="form-label" for="fuel_type">Fuel type</label>
-                                <input type="text" class="form-control" id="fuel_type" name="fuel_type" placeholder="Select or type" list="fuel-type-options" autocomplete="off">
-                                <datalist id="fuel-type-options">
-                                    {% for fuel in fuel_types %}
-                                        <option value="{{ fuel }}"></option>
-                                    {% endfor %}
-                                </datalist>
-                            </div>
-                            <div class="col-md-6">
-                                <label class="form-label" for="transmission">Transmission</label>
-                                <input type="text" class="form-control" id="transmission" name="transmission" placeholder="Manual / Automatic">
-                            </div>
-                            <div class="col-md-6">
-                                <label class="form-label" for="city">City</label>
-                                <input type="text" class="form-control" id="city" name="city" placeholder="Start typing a city" autocomplete="off" list="owner-city-options">
-                                <datalist id="owner-city-options">
-                                    {% for entry in city_entries %}
-                                        {% set label = entry.name ~ (', ' ~ entry.state if entry.state) %}
-                                        <option value="{{ label }}"></option>
-                                    {% endfor %}
-                                </datalist>
-                                <div class="form-text">Pick a city from the list. If it isn&#39;t there, drop a pin on the map below.</div>
-                            </div>
-                            <div class="col-12">
-                                <div id="owner-map" class="host-location-map rounded-4 border"></div>
-                                <div class="form-text">Click anywhere on the map to position this vehicle accurately.</div>
-                            </div>
-                            <div class="col-md-6">
-                                <label class="form-label" for="latitude">Latitude</label>
-                                <input type="text" class="form-control" id="latitude" name="latitude" placeholder="12.9716" required inputmode="decimal" autocomplete="off">
-                            </div>
-                            <div class="col-md-6">
-                                <label class="form-label" for="longitude">Longitude</label>
-                                <input type="text" class="form-control" id="longitude" name="longitude" placeholder="77.5946" required inputmode="decimal" autocomplete="off">
-                            </div>
-                            <div class="col-12">
-                                <div class="form-check">
-                                    <input class="form-check-input" type="checkbox" id="vehicle_has_gps" name="has_gps" {% if g.profile and g.profile.get('gps_tracking') %}checked{% endif %}>
-                                    <label class="form-check-label" for="vehicle_has_gps">This vehicle has a GPS device installed</label>
-                                </div>
-                            </div>
-                            <div class="col-12">
-                                <label class="form-label" for="image_url">Primary image URL</label>
-                                <input type="url" class="form-control" id="image_url" name="image_url" placeholder="https://...">
-                            </div>
-                            <div class="col-12">
-                                <label class="form-label" for="photos">Upload gallery images</label>
-                                <div id="photo-input-list" class="d-flex flex-column gap-2">
-                                    <div class="input-group photo-input-row" data-role="photo-input-row">
-                                        <input type="file" class="form-control" id="photos" name="photos" accept="image/*" aria-label="Gallery image 1">
-                                        <button type="button" class="btn btn-outline-danger" data-role="remove-photo" title="Remove image">
-                                            <i class="bi bi-x-lg"></i>
-                                        </button>
-                                    </div>
-                                </div>
-                                <div class="d-flex justify-content-between align-items-center mt-2">
-                                    <div class="form-text mb-0">Upload up to 8 images (PNG, JPG, GIF, WEBP).</div>
-                                    <button type="button" class="btn btn-outline-success btn-sm" id="add-photo-input">
-                                        <i class="bi bi-plus-circle"></i> Add another
-                                    </button>
-                                </div>
-                            </div>
-                            <div class="col-12">
-                                <label class="form-label" for="description">Highlights</label>
-                                <textarea class="form-control" id="description" name="description" rows="3" placeholder="Mention delivery options, add-ons, insurance, etc."></textarea>
-                            </div>
-                            <div class="col-12 d-grid">
-                                <button type="submit" class="btn btn-success">List vehicle</button>
-                            </div>
-                        </form>
-                    </div>
-                </div>
                 <div class="card card-zoom mb-4">
                     <div class="card-body">
                         <h2 class="h5 fw-semibold mb-3">Pending booking requests</h2>
@@ -392,6 +236,285 @@
                         {% endif %}
                     </div>
                 </div>
+                <div class="card card-zoom mt-4">
+                    <div class="card-body">
+                        <h2 class="h5 fw-semibold mb-3">List a new vehicle</h2>
+                        <form method="post" action="{{ url_for('owner_add_car') }}" enctype="multipart/form-data" class="row g-3">
+                            <div class="col-md-6">
+                                <label class="form-label" for="vehicle_type">Vehicle type</label>
+                                <select class="form-select" id="vehicle_type" name="vehicle_type" required>
+                                    <option value="">Select type</option>
+                                    {% for label in popular_vehicle_types %}
+                                        <option value="{{ label }}">{{ label }}</option>
+                                    {% endfor %}
+                                    {% for label in other_vehicle_types %}
+                                        <option value="{{ label }}">{{ label }}</option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label" for="size_category">Size category</label>
+                                <input type="text" class="form-control" id="size_category" name="size_category" placeholder="Compact / Cruiser">
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label" for="name">Listing name</label>
+                                <input type="text" class="form-control" id="name" name="name" placeholder="e.g. Swift Automatic">
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label" for="brand">Brand</label>
+                                <input type="text" class="form-control" id="brand" name="brand" required>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label" for="model">Model</label>
+                                <input type="text" class="form-control" id="model" name="model" required>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label" for="licence_plate">Registration number</label>
+                                <input type="text" class="form-control" id="licence_plate" name="licence_plate" required>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label" for="seats">Seats</label>
+                                <input type="number" class="form-control" id="seats" name="seats" min="1" max="12" value="4">
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label" for="rate_unit">Rate type</label>
+                                <select class="form-select" id="rate_unit" name="rate_unit">
+                                    <option value="hour" selected>Per hour</option>
+                                    <option value="day">Per day</option>
+                                </select>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label" for="rate_amount">Rate amount (&#8377;)</label>
+                                <input type="number" class="form-control" id="rate_amount" name="rate_amount" min="0" step="1" value="350">
+                                <div class="form-text">We auto-calculate the complementary daily or hourly price.</div>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label" for="fuel_type">Fuel type</label>
+                                <input type="text" class="form-control" id="fuel_type" name="fuel_type" placeholder="Select or type" list="fuel-type-options" autocomplete="off">
+                                <datalist id="fuel-type-options">
+                                    {% for fuel in fuel_types %}
+                                        <option value="{{ fuel }}"></option>
+                                    {% endfor %}
+                                </datalist>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label" for="transmission">Transmission</label>
+                                <input type="text" class="form-control" id="transmission" name="transmission" placeholder="Manual / Automatic">
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label" for="city">City</label>
+                                <input type="text" class="form-control" id="city" name="city" placeholder="Start typing a city" autocomplete="off" list="owner-city-options">
+                                <datalist id="owner-city-options">
+                                    {% for entry in city_entries %}
+                                        {% set label = entry.name ~ (', ' ~ entry.state if entry.state) %}
+                                        <option value="{{ label }}"></option>
+                                    {% endfor %}
+                                </datalist>
+                                <div class="form-text">Pick a city from the list. If it isn&#39;t there, drop a pin on the map below.</div>
+                            </div>
+                            <div class="col-12">
+                                <div id="owner-map" class="host-location-map rounded-4 border"></div>
+                                <div class="form-text">Click anywhere on the map to position this vehicle accurately.</div>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label" for="latitude">Latitude</label>
+                                <input type="text" class="form-control" id="latitude" name="latitude" placeholder="12.9716" required inputmode="decimal" autocomplete="off">
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label" for="longitude">Longitude</label>
+                                <input type="text" class="form-control" id="longitude" name="longitude" placeholder="77.5946" required inputmode="decimal" autocomplete="off">
+                            </div>
+                            <div class="col-12">
+                                <div class="form-check">
+                                    <input class="form-check-input" type="checkbox" id="vehicle_has_gps" name="has_gps" {% if g.profile and g.profile.get('gps_tracking') %}checked{% endif %}>
+                                    <label class="form-check-label" for="vehicle_has_gps">This vehicle has a GPS device installed</label>
+                                </div>
+                            </div>
+                            <div class="col-12">
+                                <label class="form-label" for="image_url">Primary image URL</label>
+                                <input type="url" class="form-control" id="image_url" name="image_url" placeholder="https://...">
+                            </div>
+                            <div class="col-12">
+                                <label class="form-label" for="photos">Upload gallery images</label>
+                                <div id="photo-input-list" class="d-flex flex-column gap-2">
+                                    <div class="input-group photo-input-row" data-role="photo-input-row">
+                                        <input type="file" class="form-control" id="photos" name="photos" accept="image/*" aria-label="Gallery image 1">
+                                        <button type="button" class="btn btn-outline-danger" data-role="remove-photo" title="Remove image">
+                                            <i class="bi bi-x-lg"></i>
+                                        </button>
+                                    </div>
+                                </div>
+                                <div class="d-flex justify-content-between align-items-center mt-2">
+                                    <div class="form-text mb-0">Upload up to 8 images (PNG, JPG, GIF, WEBP).</div>
+                                    <button type="button" class="btn btn-outline-success btn-sm" id="add-photo-input">
+                                        <i class="bi bi-plus-circle"></i> Add another
+                                    </button>
+                                </div>
+                            </div>
+                            <div class="col-12">
+                                <label class="form-label" for="description">Highlights</label>
+                                <textarea class="form-control" id="description" name="description" rows="3" placeholder="Mention delivery options, add-ons, insurance, etc."></textarea>
+                            </div>
+                            <div class="col-12 d-grid">
+                                <button type="submit" class="btn btn-success">List vehicle</button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="card card-zoom mt-4">
+            <div class="card-body">
+                <h2 class="h5 fw-semibold mb-3">Need to raise a complaint or share feedback?</h2>
+                <p class="text-muted small mb-3">Flag concerns about renters, vehicle condition on return, payouts, or any platform issues. Our support desk will step in quickly.</p>
+                <form class="row g-3 align-items-end" method="post" action="{{ url_for('submit_feedback') }}">
+                    <input type="hidden" name="redirect_endpoint" value="owner_cars">
+                    <input type="hidden" name="feedback_role" value="owner">
+                    <div class="col-md-4">
+                        <label class="form-label small" for="host-feedback-trip">Booking (optional)</label>
+                        <select class="form-select" id="host-feedback-trip" name="rental_id">
+                            <option value="" selected>General platform feedback</option>
+                            {% for rental in rentals %}
+                                <option value="{{ rental['id'] }}">
+                                    {{ rental['car_name'] }} with {{ rental['renter_username'] }} ({{ rental['start_time'] }} to {{ rental['end_time'] or 'TBD' }})
+                                </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label small" for="host-feedback-category">Category</label>
+                        <select class="form-select" id="host-feedback-category" name="category">
+                            <option value="Platform issue">Platform issue</option>
+                            <option value="Vehicle damage">Vehicle damage</option>
+                            <option value="Late return">Late return</option>
+                            <option value="Payment concern">Payment concern</option>
+                            <option value="Renter conduct">Renter conduct</option>
+                            <option value="Other">Other</option>
+                        </select>
+                    </div>
+                    <div class="col-md-5">
+                        <label class="form-label small" for="host-feedback-description">Describe the issue</label>
+                        <textarea class="form-control" id="host-feedback-description" name="description" rows="2" placeholder="Provide context so we can assist" required></textarea>
+                    </div>
+                    <div class="col-12 text-end">
+                        <button type="submit" class="btn btn-outline-success">Send to support</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+        <div class="modal fade" id="editCarModal" tabindex="-1" aria-hidden="true">
+            <div class="modal-dialog modal-lg modal-dialog-scrollable">
+                <div class="modal-content">
+                    <form id="edit-car-form" enctype="multipart/form-data">
+                        <div class="modal-header">
+                            <h5 class="modal-title" id="edit-car-modal-label">Manage vehicle</h5>
+                            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                        </div>
+                        <div class="modal-body">
+                            <div id="edit-car-feedback" class="alert d-none" role="alert"></div>
+                            <input type="hidden" name="car_id" id="edit-car-id">
+                            <div class="row g-3">
+                                <div class="col-md-6">
+                                    <label class="form-label" for="edit-vehicle-type">Vehicle type</label>
+                                    <select class="form-select" id="edit-vehicle-type" name="vehicle_type" required>
+                                        <option value="">Select type</option>
+                                        {% for label in popular_vehicle_types %}
+                                            <option value="{{ label }}">{{ label }}</option>
+                                        {% endfor %}
+                                        {% for label in other_vehicle_types %}
+                                            <option value="{{ label }}">{{ label }}</option>
+                                        {% endfor %}
+                                    </select>
+                                </div>
+                                <div class="col-md-6">
+                                    <label class="form-label" for="edit-size-category">Size category</label>
+                                    <input type="text" class="form-control" id="edit-size-category" name="size_category" placeholder="Compact / Cruiser">
+                                </div>
+                                <div class="col-md-6">
+                                    <label class="form-label" for="edit-name">Listing name</label>
+                                    <input type="text" class="form-control" id="edit-name" name="name" placeholder="e.g. Swift Automatic">
+                                </div>
+                                <div class="col-md-6">
+                                    <label class="form-label" for="edit-brand">Brand</label>
+                                    <input type="text" class="form-control" id="edit-brand" name="brand" required>
+                                </div>
+                                <div class="col-md-6">
+                                    <label class="form-label" for="edit-model">Model</label>
+                                    <input type="text" class="form-control" id="edit-model" name="model" required>
+                                </div>
+                                <div class="col-md-6">
+                                    <label class="form-label" for="edit-licence">Registration number</label>
+                                    <input type="text" class="form-control" id="edit-licence" name="licence_plate" required>
+                                </div>
+                                <div class="col-md-6">
+                                    <label class="form-label" for="edit-seats">Seats</label>
+                                    <input type="number" class="form-control" id="edit-seats" name="seats" min="1" max="12">
+                                </div>
+                                <div class="col-md-6">
+                                    <label class="form-label" for="edit-fuel">Fuel type</label>
+                                    <input type="text" class="form-control" id="edit-fuel" name="fuel_type" placeholder="Select or type" list="fuel-type-options" autocomplete="off">
+                                </div>
+                                <div class="col-md-6">
+                                    <label class="form-label" for="edit-transmission">Transmission</label>
+                                    <input type="text" class="form-control" id="edit-transmission" name="transmission" placeholder="Manual / Automatic">
+                                </div>
+                                <div class="col-md-6">
+                                    <label class="form-label" for="edit-city">City</label>
+                                    <input type="text" class="form-control" id="edit-city" name="city" placeholder="Start typing a city" autocomplete="off" list="owner-city-options">
+                                </div>
+                                <div class="col-md-6">
+                                    <label class="form-label" for="edit-rate-hour">Hourly rate (&#8377;)</label>
+                                    <input type="number" class="form-control" id="edit-rate-hour" name="rate_per_hour" min="0" step="1">
+                                </div>
+                                <div class="col-md-6">
+                                    <label class="form-label" for="edit-rate-day">Daily rate (&#8377;)</label>
+                                    <input type="number" class="form-control" id="edit-rate-day" name="daily_rate" min="0" step="1">
+                                </div>
+                                <div class="col-md-6">
+                                    <label class="form-label" for="edit-latitude">Latitude</label>
+                                    <input type="text" class="form-control" id="edit-latitude" name="latitude" inputmode="decimal" autocomplete="off">
+                                </div>
+                                <div class="col-md-6">
+                                    <label class="form-label" for="edit-longitude">Longitude</label>
+                                    <input type="text" class="form-control" id="edit-longitude" name="longitude" inputmode="decimal" autocomplete="off">
+                                </div>
+                                <div class="col-md-6">
+                                    <div class="form-check mt-4">
+                                        <input class="form-check-input" type="checkbox" id="edit-has-gps" name="has_gps">
+                                        <label class="form-check-label" for="edit-has-gps">This vehicle has a GPS device installed</label>
+                                    </div>
+                                </div>
+                                <div class="col-12">
+                                    <label class="form-label" for="edit-image-url">Primary image URL</label>
+                                    <input type="url" class="form-control" id="edit-image-url" name="image_url" placeholder="https://...">
+                                </div>
+                                <div class="col-12">
+                                    <label class="form-label">Current gallery</label>
+                                    <div id="edit-current-images" class="d-flex flex-wrap gap-3"></div>
+                                    <div class="form-text">Remove images you no longer want to show. Changes apply after saving.</div>
+                                </div>
+                <div class="col-12">
+                                    <label class="form-label" for="edit-photo-input-list">Add new gallery photos</label>
+                                    <div id="edit-photo-input-list" class="d-flex flex-column gap-2"></div>
+                                    <div class="d-flex justify-content-between align-items-center mt-2">
+                                        <div class="form-text mb-0" id="edit-photo-helper">Upload additional images (max 8 in total).</div>
+                                        <button type="button" class="btn btn-outline-success btn-sm" id="add-edit-photo-input">
+                                            <i class="bi bi-plus-circle"></i> Add another
+                                        </button>
+                                    </div>
+                                </div>
+                                <div class="col-12">
+                                    <label class="form-label" for="edit-description">Highlights</label>
+                                    <textarea class="form-control" id="edit-description" name="description" rows="3" placeholder="Mention delivery options, add-ons, insurance, etc."></textarea>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="modal-footer">
+                            <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+                            <button type="submit" class="btn btn-success">Save changes</button>
+                        </div>
+                    </form>
+                </div>
             </div>
         </div>
     </div>
@@ -399,182 +522,9 @@
 {% endblock %}
 {% block scripts %}
     {{ super() }}
+    <script>window.OWNER_CITY_ENTRIES = {{ city_entries|tojson|safe }};</script>
     <script src="{{ url_for('static', filename='vendor/leaflet/leaflet.js') }}"></script>
-    <script>
-        document.addEventListener('DOMContentLoaded', () => {
-            const photoContainer = document.getElementById('photo-input-list');
-            const addPhotoBtn = document.getElementById('add-photo-input');
-            const MAX_PHOTOS = 8;
-            const attachRowHandlers = (row) => {
-                const input = row.querySelector('input[type="file"]');
-                const removeBtn = row.querySelector('[data-role="remove-photo"]');
-                if (input) {
-                    input.addEventListener('change', () => ensureSpareSlot());
-                }
-                if (removeBtn) {
-                    removeBtn.addEventListener('click', () => {
-                        const rows = photoContainer.querySelectorAll('[data-role="photo-input-row"]');
-                        if (rows.length === 1) {
-                            if (input) {
-                                input.value = '';
-                            }
-                            updatePhotoControls();
-                            return;
-                        }
-                        row.remove();
-                        ensureSpareSlot();
-                    });
-                }
-            };
-            const updatePhotoControls = () => {
-                if (!photoContainer || !addPhotoBtn) {
-                    return;
-                }
-                const rows = photoContainer.querySelectorAll('[data-role="photo-input-row"]');
-                const canAdd = rows.length < MAX_PHOTOS;
-                addPhotoBtn.disabled = !canAdd;
-                rows.forEach((row) => {
-                    const removeBtn = row.querySelector('[data-role="remove-photo"]');
-                    if (removeBtn) {
-                        removeBtn.disabled = rows.length === 1;
-                    }
-                });
-            };
-            const addPhotoRow = (focusInput = true) => {
-                if (!photoContainer) {
-                    return;
-                }
-                const currentCount = photoContainer.querySelectorAll('[data-role="photo-input-row"]').length;
-                if (currentCount >= MAX_PHOTOS) {
-                    updatePhotoControls();
-                    return;
-                }
-                const row = document.createElement('div');
-                row.className = 'input-group photo-input-row';
-                row.dataset.role = 'photo-input-row';
-                const input = document.createElement('input');
-                input.type = 'file';
-                input.name = 'photos';
-                input.accept = 'image/*';
-                input.className = 'form-control';
-                input.setAttribute('aria-label', `Gallery image ${currentCount + 1}`);
-                const removeBtn = document.createElement('button');
-                removeBtn.type = 'button';
-                removeBtn.className = 'btn btn-outline-danger';
-                removeBtn.dataset.role = 'remove-photo';
-                removeBtn.title = 'Remove image';
-                removeBtn.innerHTML = '<i class="bi bi-x-lg"></i>';
-                row.appendChild(input);
-                row.appendChild(removeBtn);
-                photoContainer.appendChild(row);
-                attachRowHandlers(row);
-                updatePhotoControls();
-                if (focusInput) {
-                    input.focus();
-                }
-            };
-            const ensureSpareSlot = () => {
-                if (!photoContainer) {
-                    return;
-                }
-                const rows = photoContainer.querySelectorAll('[data-role="photo-input-row"]');
-                const hasEmpty = Array.from(rows).some((row) => {
-                    const input = row.querySelector('input[type="file"]');
-                    return input && input.files && input.files.length === 0;
-                });
-                if (!hasEmpty && rows.length < MAX_PHOTOS) {
-                    addPhotoRow(false);
-                } else {
-                    updatePhotoControls();
-                }
-            };
-            if (photoContainer && addPhotoBtn) {
-                Array.from(photoContainer.querySelectorAll('[data-role="photo-input-row"]')).forEach(attachRowHandlers);
-                addPhotoBtn.addEventListener('click', () => {
-                    addPhotoRow();
-                    ensureSpareSlot();
-                });
-                ensureSpareSlot();
-            }
-            const mapElement = document.getElementById('owner-map');
-            if (!mapElement || typeof L === 'undefined') {
-                return;
-            }
-            const cityInput = document.getElementById('city');
-            const latitudeField = document.getElementById('latitude');
-            const longitudeField = document.getElementById('longitude');
-            const cityEntries = {{ city_entries|tojson|safe }};
-            const buildLabel = (entry) => {
-                const name = (entry.name || '').trim();
-                const state = (entry.state || '').trim();
-                return state ? `${name}, ${state}` : name;
-            };
-            const findCity = (label) => {
-                if (!label) {
-                    return null;
-                }
-                const normalised = label.trim().toLowerCase();
-                return cityEntries.find((entry) => buildLabel(entry).toLowerCase() === normalised) || null;
-            };
-            const DEFAULT_VIEW = { lat: 20.5937, lng: 78.9629, zoom: 5 };
-            const map = L.map(mapElement, { zoomControl: true });
-            map.setView([DEFAULT_VIEW.lat, DEFAULT_VIEW.lng], DEFAULT_VIEW.zoom);
-            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-                maxZoom: 18,
-                attribution: '&copy; <a href="https://www.openstreetmap.org">OpenStreetMap</a> contributors'
-            }).addTo(map);
-            let marker = null;
-            const ensureMapSize = () => map.invalidateSize();
-            map.whenReady(() => {
-                ensureMapSize();
-                setTimeout(ensureMapSize, 150);
-            });
-            window.addEventListener('resize', ensureMapSize);
-            const setMarker = (lat, lng) => {
-                if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
-                    return;
-                }
-                if (marker) {
-                    marker.setLatLng([lat, lng]);
-                } else {
-                    marker = L.marker([lat, lng], { draggable: true }).addTo(map);
-                    marker.on('dragend', (event) => {
-                        const pos = event.target.getLatLng();
-                        latitudeField.value = pos.lat.toFixed(6);
-                        longitudeField.value = pos.lng.toFixed(6);
-                    });
-                }
-                latitudeField.value = lat.toFixed(6);
-                longitudeField.value = lng.toFixed(6);
-            };
-            const focusOn = (lat, lng, zoom = 13) => {
-                if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
-                    return;
-                }
-                map.setView([lat, lng], zoom);
-                setMarker(lat, lng);
-            };
-            const handleCitySelection = () => {
-                const entry = findCity(cityInput.value);
-                if (entry && Number.isFinite(entry.latitude) && Number.isFinite(entry.longitude)) {
-                    focusOn(entry.latitude, entry.longitude, 11);
-                }
-            };
-            if (cityInput) {
-                cityInput.addEventListener('change', handleCitySelection);
-                cityInput.addEventListener('blur', handleCitySelection);
-            }
-            map.on('click', (event) => {
-                focusOn(event.latlng.lat, event.latlng.lng);
-            });
-            const latExisting = parseFloat(latitudeField.value);
-            const lngExisting = parseFloat(longitudeField.value);
-            if (Number.isFinite(latExisting) && Number.isFinite(lngExisting)) {
-                focusOn(latExisting, lngExisting);
-            } else {
-                handleCitySelection();
-            }
-        });
-    </script>
+    <script src="{{ url_for('static', filename='js/owner_dashboard.js') }}"></script>
 {% endblock %}
+
 
