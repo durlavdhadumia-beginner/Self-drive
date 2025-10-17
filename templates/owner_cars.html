@@ -10,6 +10,14 @@
             width: 100%;
             background: linear-gradient(135deg, rgba(236, 253, 245, 0.4), rgba(209, 250, 229, 0.2));
         }
+        .edit-car-modal-body {
+            max-height: calc(100vh - 180px);
+            overflow-y: auto;
+        }
+        .edit-car-modal-map {
+            height: 240px;
+            min-height: 240px;
+        }
     </style>
 {% endblock %}
 {% block content %}
@@ -408,7 +416,7 @@
                             <h5 class="modal-title" id="edit-car-modal-label">Manage vehicle</h5>
                             <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
                         </div>
-                        <div class="modal-body">
+                        <div class="modal-body edit-car-modal-body">
                             <div id="edit-car-feedback" class="alert d-none" role="alert"></div>
                             <input type="hidden" name="car_id" id="edit-car-id">
                             <div class="row g-3">
@@ -467,7 +475,7 @@
                                 <div class="col-12">
                                     <label class="form-label" for="edit-city">Location</label>
                                     <input type="text" class="form-control mb-2" id="edit-city" name="city" placeholder="Start typing a city" autocomplete="off" list="owner-city-options">
-                                    <div id="edit-location-map" class="host-location-map rounded-4 border"></div>
+                                    <div id="edit-location-map" class="host-location-map edit-car-modal-map rounded-4 border"></div>
                                     <div class="form-text mt-2">Search for a city or drag the marker to reposition your vehicle. Coordinates update automatically.</div>
                                     <div class="small text-muted mt-1" id="edit-location-summary"></div>
                                 </div>

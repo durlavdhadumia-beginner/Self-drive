@@ -277,7 +277,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (editMap) {
             return;
         }
-        editMap = L.map(editLocationMapEl, { zoomControl: true });
+        editMap = L.map(editLocationMapEl, { zoomControl: true, scrollWheelZoom: false });
         editMap.setView([DEFAULT_MAP_VIEW.lat, DEFAULT_MAP_VIEW.lng], DEFAULT_MAP_VIEW.zoom);
         L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
             maxZoom: 18,
@@ -639,7 +639,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const cityInput = document.getElementById('city');
         const latitudeField = document.getElementById('latitude');
         const longitudeField = document.getElementById('longitude');
-        const map = L.map(ownerMapElement, { zoomControl: true });
+        const map = L.map(ownerMapElement, { zoomControl: true, scrollWheelZoom: false });
         map.setView([DEFAULT_MAP_VIEW.lat, DEFAULT_MAP_VIEW.lng], DEFAULT_MAP_VIEW.zoom);
         L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
             maxZoom: 18,
@@ -706,3 +706,4 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 });
+
