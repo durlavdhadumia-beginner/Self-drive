@@ -81,24 +81,22 @@
                                     <div class="col-sm-6" data-role="car-rate-day">Daily rate: Rs {{ '%.0f'|format(car['daily_rate']) }}</div>
                                     <div class="col-sm-6" data-role="car-fuel">Fuel type: {{ car['fuel_type'] or 'NA' }}</div>
                                     <div class="col-sm-6" data-role="car-transmission">Transmission: {{ car['transmission'] or 'NA' }}</div>
+                                    <div class="col-12 mt-2" data-role="car-location-label">
+                                        Location: {{ car['city'] or 'Location not set' }}
+                                    </div>
                                 </div>
                                 <div class="d-flex flex-wrap gap-3 align-items-center">
                                     <button type="button" class="btn btn-outline-primary btn-sm car-edit-trigger" data-car-id="{{ car['id'] }}">
                                         <i class="bi bi-pencil-square me-1"></i>Manage listing
+                                    </button>
+                                    <button type="button" class="btn btn-outline-secondary btn-sm car-location-trigger" data-car-id="{{ car['id'] }}">
+                                        <i class="bi bi-geo-alt me-1"></i>Update car location
                                     </button>
                                     <form method="post" action="{{ url_for('owner_toggle_availability', car_id=car['id']) }}">
                                         <button type="submit"
                                             class="btn btn-sm {{ 'btn-outline-secondary' if car['is_available'] else 'btn-outline-success' }}">
                                             {% if car['is_available'] %}Mark unavailable{% else %}Mark available{% endif %}
                                         </button>
-                                    </form>
-                                    <form method="post" action="{{ url_for('owner_update_location', car_id=car['id']) }}"
-                                        class="d-flex flex-wrap gap-2">
-                                        <input type="text" class="form-control form-control-sm" name="latitude"
-                                            placeholder="Latitude" required>
-                                        <input type="text" class="form-control form-control-sm" name="longitude"
-                                            placeholder="Longitude" required>
-                                        <button type="submit" class="btn btn-sm btn-outline-success">Update GPS</button>
                                     </form>
                                 </div>
                             </div>
@@ -459,10 +457,6 @@
                                     <input type="text" class="form-control" id="edit-transmission" name="transmission" placeholder="Manual / Automatic">
                                 </div>
                                 <div class="col-md-6">
-                                    <label class="form-label" for="edit-city">City</label>
-                                    <input type="text" class="form-control" id="edit-city" name="city" placeholder="Start typing a city" autocomplete="off" list="owner-city-options">
-                                </div>
-                                <div class="col-md-6">
                                     <label class="form-label" for="edit-rate-hour">Hourly rate (&#8377;)</label>
                                     <input type="number" class="form-control" id="edit-rate-hour" name="rate_per_hour" min="0" step="1">
                                 </div>
@@ -470,14 +464,15 @@
                                     <label class="form-label" for="edit-rate-day">Daily rate (&#8377;)</label>
                                     <input type="number" class="form-control" id="edit-rate-day" name="daily_rate" min="0" step="1">
                                 </div>
-                                <div class="col-md-6">
-                                    <label class="form-label" for="edit-latitude">Latitude</label>
-                                    <input type="text" class="form-control" id="edit-latitude" name="latitude" inputmode="decimal" autocomplete="off">
+                                <div class="col-12">
+                                    <label class="form-label" for="edit-city">Location</label>
+                                    <input type="text" class="form-control mb-2" id="edit-city" name="city" placeholder="Start typing a city" autocomplete="off" list="owner-city-options">
+                                    <div id="edit-location-map" class="host-location-map rounded-4 border"></div>
+                                    <div class="form-text mt-2">Search for a city or drag the marker to reposition your vehicle. Coordinates update automatically.</div>
+                                    <div class="small text-muted mt-1" id="edit-location-summary"></div>
                                 </div>
-                                <div class="col-md-6">
-                                    <label class="form-label" for="edit-longitude">Longitude</label>
-                                    <input type="text" class="form-control" id="edit-longitude" name="longitude" inputmode="decimal" autocomplete="off">
-                                </div>
+                                <input type="hidden" id="edit-latitude" name="latitude">
+                                <input type="hidden" id="edit-longitude" name="longitude">
                                 <div class="col-md-6">
                                     <div class="form-check mt-4">
                                         <input class="form-check-input" type="checkbox" id="edit-has-gps" name="has_gps">

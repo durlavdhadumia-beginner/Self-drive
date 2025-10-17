@@ -1,5 +1,29 @@
 document.addEventListener('DOMContentLoaded', () => {
     const MAX_GALLERY_IMAGES = 8;
+    const DEFAULT_MAP_VIEW = { lat: 20.5937, lng: 78.9629, zoom: 5 };
+    const CITY_ENTRIES = Array.isArray(window.OWNER_CITY_ENTRIES) ? window.OWNER_CITY_ENTRIES : [];
+
+    const buildCityLabel = (entry) => {
+        if (!entry) {
+            return '';
+        }
+        const name = (entry.name || '').trim();
+        const state = (entry.state || '').trim();
+        return state ? `${name}, ${state}` : name;
+    };
+
+    const findCityEntry = (label) => {
+        if (!label) {
+            return null;
+        }
+        const normalised = label.trim().toLowerCase();
+        return CITY_ENTRIES.find((entry) => buildCityLabel(entry).toLowerCase() === normalised) || null;
+    };
+
+    const toFixedIfFinite = (value, digits = 6) => {
+        const numeric = Number(value);
+        return Number.isFinite(numeric) ? numeric.toFixed(digits) : '';
+    };
 
     const createPhotoManager = ({ containerId, addButtonId, inputName, initialMax = MAX_GALLERY_IMAGES }) => {
         const container = document.getElementById(containerId);
@@ -16,20 +40,21 @@ document.addEventListener('DOMContentLoaded', () => {
                 addButton.disabled = true;
                 return;
             }
-            const rows = getRows();
-            addButton.disabled = rows.length >= maxInputs;
+            addButton.disabled = getRows().length >= maxInputs;
         };
 
         const buildRow = () => {
             const row = document.createElement('div');
             row.className = 'input-group photo-input-row';
             row.dataset.role = 'photo-input-row';
+
             const input = document.createElement('input');
             input.type = 'file';
             input.name = inputName;
             input.accept = 'image/*';
             input.className = 'form-control';
             input.addEventListener('change', () => ensureSpare());
+
             const removeBtn = document.createElement('button');
             removeBtn.type = 'button';
             removeBtn.className = 'btn btn-outline-danger';
@@ -45,82 +70,79 @@ document.addEventListener('DOMContentLoaded', () => {
                 row.remove();
                 ensureSpare();
             });
-            row.appendChild(input);
-            row.appendChild(removeBtn);
-            return row;
-        };
 
-        const ensureSpare = () => {
-            if (maxInputs <= 0) {
-                container.innerHTML = '';
-                updateAddButtonState();
-                return;
-            }
-            const rows = getRows();
-            const hasEmpty = rows.some((row) => {
-                const input = row.querySelector('input[type="file"]');
-                return input && input.files.length === 0;
-            });
-            if (!hasEmpty && rows.length < maxInputs) {
-                container.appendChild(buildRow());
-            }
+        row.appendChild(input);
+        row.appendChild(removeBtn);
+        return row;
+    };
+
+    const ensureSpare = () => {
+        if (maxInputs <= 0) {
+            container.innerHTML = '';
             updateAddButtonState();
-        };
+            return;
+        }
+        const rows = getRows();
+        const hasEmpty = rows.some((row) => {
+            const input = row.querySelector('input[type="file"]');
+            return input && input.files.length === 0;
+        });
+        if (!hasEmpty && rows.length < maxInputs) {
+            container.appendChild(buildRow());
+        }
+        updateAddButtonState();
+    };
 
-        const addRow = (focusInput = true) => {
-            if (maxInputs > 0) {
-                const rows = getRows();
-                if (rows.length >= maxInputs) {
-                    updateAddButtonState();
-                    return;
-                }
-            }
-            const newRow = buildRow();
-            container.appendChild(newRow);
+    const addRow = (focusInput = true) => {
+        if (maxInputs > 0 && getRows().length >= maxInputs) {
             updateAddButtonState();
-            if (focusInput) {
-                const input = newRow.querySelector('input[type="file"]');
-                if (input) {
-                    input.focus();
-                }
+            return;
+        }
+        const row = buildRow();
+        container.appendChild(row);
+        updateAddButtonState();
+        if (focusInput) {
+            const input = row.querySelector('input[type="file"]');
+            if (input) {
+                input.focus();
             }
-        };
+        }
+    };
 
-        const reset = (newMax = initialMax) => {
-            maxInputs = typeof newMax === 'number' ? newMax : initialMax;
+    const reset = (newMax = initialMax) => {
+        maxInputs = typeof newMax === 'number' ? newMax : initialMax;
+        if (maxInputs < 0) {
+            maxInputs = 0;
+        }
+        container.innerHTML = '';
+        if (maxInputs > 0) {
+            container.appendChild(buildRow());
+        }
+        updateAddButtonState();
+        ensureSpare();
+    };
+
+    addButton.addEventListener('click', () => {
+        addRow();
+        ensureSpare();
+    });
+
+    reset(initialMax);
+
+    return {
+        reset,
+        setMax: (value) => {
+            maxInputs = typeof value === 'number' ? value : maxInputs;
             if (maxInputs < 0) {
                 maxInputs = 0;
             }
-            container.innerHTML = '';
-            if (maxInputs > 0) {
-                container.appendChild(buildRow());
-            }
-            updateAddButtonState();
             ensureSpare();
-        };
-
-        addButton.addEventListener('click', () => {
-            addRow();
-            ensureSpare();
-        });
-
-        reset(initialMax);
-
-        return {
-            container,
-            reset,
-            setMax: (value) => {
-                maxInputs = typeof value === 'number' ? value : maxInputs;
-                if (maxInputs < 0) {
-                    maxInputs = 0;
-                }
-                ensureSpare();
-            },
-            ensureSpare,
-        };
+        },
+        ensureSpare,
+    };
     };
 
-    createPhotoManager({
+    const addPhotoManager = createPhotoManager({
         containerId: 'photo-input-list',
         addButtonId: 'add-photo-input',
         inputName: 'photos',
@@ -139,24 +161,37 @@ document.addEventListener('DOMContentLoaded', () => {
     const feedbackEl = document.getElementById('edit-car-feedback');
     const currentImagesContainer = document.getElementById('edit-current-images');
     const photoHelper = document.getElementById('edit-photo-helper');
+    const editCityInput = document.getElementById('edit-city');
+    const editLatInput = document.getElementById('edit-latitude');
+    const editLngInput = document.getElementById('edit-longitude');
+    const editHasGpsInput = document.getElementById('edit-has-gps');
+    const editImageUrlInput = document.getElementById('edit-image-url');
+    const editDescriptionInput = document.getElementById('edit-description');
+    const editLocationSummary = document.getElementById('edit-location-summary');
+    const editLocationMapEl = document.getElementById('edit-location-map');
     const editModal = editModalEl ? new bootstrap.Modal(editModalEl) : null;
 
+    let editMap = null;
+    let editMarker = null;
+    let modalOpenIntent = null;
     let currentCardElement = null;
     let existingImages = [];
     const imagesMarkedForDeletion = new Set();
 
     const resetFeedback = () => {
-        if (feedbackEl) {
-            feedbackEl.textContent = '';
-            feedbackEl.className = 'alert d-none';
+        if (!feedbackEl) {
+            return;
         }
+        feedbackEl.textContent = '';
+        feedbackEl.className = 'alert d-none';
     };
 
     const showFeedback = (message, type = 'success') => {
-        if (feedbackEl) {
-            feedbackEl.textContent = message;
-            feedbackEl.className = `alert alert-${type}`;
+        if (!feedbackEl) {
+            return;
         }
+        feedbackEl.textContent = message;
+        feedbackEl.className = `alert alert-${type}`;
     };
 
     const updatePhotoLimitMessage = (allowed) => {
@@ -171,14 +206,14 @@ document.addEventListener('DOMContentLoaded', () => {
     };
 
     const updateNewPhotoLimit = () => {
-        const allowed = MAX_GALLERY_IMAGES - (existingImages.length - imagesMarkedForDeletion.size);
+        const remaining = MAX_GALLERY_IMAGES - (existingImages.length - imagesMarkedForDeletion.size);
         if (editPhotoManager) {
-            editPhotoManager.setMax(Math.max(allowed, 0));
-            if (allowed > 0) {
+            editPhotoManager.setMax(Math.max(remaining, 0));
+            if (remaining > 0) {
                 editPhotoManager.ensureSpare();
             }
         }
-        updatePhotoLimitMessage(Math.max(allowed, 0));
+        updatePhotoLimitMessage(Math.max(remaining, 0));
     };
 
     const renderExistingImages = () => {
@@ -187,10 +222,10 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         currentImagesContainer.innerHTML = '';
         if (!existingImages.length) {
-            const emptyMessage = document.createElement('p');
-            emptyMessage.className = 'text-muted small mb-0';
-            emptyMessage.textContent = 'No gallery photos yet.';
-            currentImagesContainer.appendChild(emptyMessage);
+            const emptyState = document.createElement('p');
+            emptyState.className = 'text-muted small mb-0';
+            emptyState.textContent = 'No gallery photos yet.';
+            currentImagesContainer.appendChild(emptyState);
             updateNewPhotoLimit();
             return;
         }
@@ -198,6 +233,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const wrapper = document.createElement('div');
             wrapper.className = 'd-flex flex-column align-items-center edit-image-item';
             wrapper.style.width = '110px';
+
             const img = document.createElement('img');
             img.src = image.url || image.filename;
             img.alt = image.filename || 'Vehicle photo';
@@ -207,6 +243,7 @@ document.addEventListener('DOMContentLoaded', () => {
             if (imagesMarkedForDeletion.has(image.id)) {
                 img.classList.add('opacity-50');
             }
+
             const removeBtn = document.createElement('button');
             removeBtn.type = 'button';
             removeBtn.className = 'btn btn-sm w-100';
@@ -225,6 +262,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
                 renderExistingImages();
             });
+
             wrapper.appendChild(img);
             wrapper.appendChild(removeBtn);
             currentImagesContainer.appendChild(wrapper);
@@ -232,74 +270,91 @@ document.addEventListener('DOMContentLoaded', () => {
         updateNewPhotoLimit();
     };
 
-    const setSelectValue = (select, value) => {
-        if (!select) {
+    const ensureEditMap = () => {
+        if (!editLocationMapEl || typeof L === 'undefined') {
             return;
         }
-        const normalised = value || '';
-        let found = false;
-        Array.from(select.options).forEach((option) => {
-            if (option.value === normalised) {
-                found = true;
-            }
-        });
-        if (!found && normalised) {
-            const opt = new Option(normalised, normalised, true, true);
-            select.appendChild(opt);
+        if (editMap) {
+            return;
         }
-        select.value = normalised;
+        editMap = L.map(editLocationMapEl, { zoomControl: true });
+        editMap.setView([DEFAULT_MAP_VIEW.lat, DEFAULT_MAP_VIEW.lng], DEFAULT_MAP_VIEW.zoom);
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            maxZoom: 18,
+            attribution: '&copy; <a href="https://www.openstreetmap.org">OpenStreetMap</a> contributors',
+        }).addTo(editMap);
+        editMarker = L.marker([DEFAULT_MAP_VIEW.lat, DEFAULT_MAP_VIEW.lng], { draggable: true }).addTo(editMap);
+        editMarker.on('dragend', (event) => {
+            const pos = event.target.getLatLng();
+            setEditLocation(pos.lat, pos.lng, { pan: false });
+        });
+        editMap.on('click', (event) => {
+            setEditLocation(event.latlng.lat, event.latlng.lng);
+        });
+        if (editModalEl) {
+            editModalEl.addEventListener('shown.bs.modal', () => {
+                editMap.invalidateSize();
+                if (editMarker) {
+                    editMap.panTo(editMarker.getLatLng());
+                }
+                if (modalOpenIntent === 'location') {
+                    editLocationMapEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                    if (editCityInput) {
+                        editCityInput.focus();
+                    }
+                }
+                modalOpenIntent = null;
+            });
+        }
     };
 
-    const populateEditForm = (car) => {
-        const modalTitle = document.getElementById('edit-car-modal-label');
-        if (modalTitle) {
-            modalTitle.textContent = car.display_name ? `Manage ${car.display_name}` : 'Manage vehicle';
+    const updateLocationSummary = () => {
+        if (!editLocationSummary) {
+            return;
         }
-        const idField = document.getElementById('edit-car-id');
-        if (idField) {
-            idField.value = car.id || '';
+        const pieces = [];
+        if (editCityInput && editCityInput.value.trim()) {
+            pieces.push(editCityInput.value.trim());
         }
-        setSelectValue(document.getElementById('edit-vehicle-type'), car.vehicle_type || '');
-        const sizeField = document.getElementById('edit-size-category');
-        if (sizeField) sizeField.value = car.size_category || '';
-        const nameField = document.getElementById('edit-name');
-        if (nameField) nameField.value = car.name || '';
-        const brandField = document.getElementById('edit-brand');
-        if (brandField) brandField.value = car.brand || '';
-        const modelField = document.getElementById('edit-model');
-        if (modelField) modelField.value = car.model || '';
-        const licenceField = document.getElementById('edit-licence');
-        if (licenceField) licenceField.value = car.licence_plate || '';
-        const seatsField = document.getElementById('edit-seats');
-        if (seatsField) seatsField.value = car.seats ?? '';
-        const fuelField = document.getElementById('edit-fuel');
-        if (fuelField) fuelField.value = car.fuel_type || '';
-        const transmissionField = document.getElementById('edit-transmission');
-        if (transmissionField) transmissionField.value = car.transmission || '';
-        const cityField = document.getElementById('edit-city');
-        if (cityField) cityField.value = car.city || '';
-        const rateHourField = document.getElementById('edit-rate-hour');
-        if (rateHourField) rateHourField.value = car.rate_per_hour ?? '';
-        const rateDayField = document.getElementById('edit-rate-day');
-        if (rateDayField) rateDayField.value = car.daily_rate ?? '';
-        const latField = document.getElementById('edit-latitude');
-        if (latField) latField.value = car.latitude ?? '';
-        const lngField = document.getElementById('edit-longitude');
-        if (lngField) lngField.value = car.longitude ?? '';
-        const hasGpsField = document.getElementById('edit-has-gps');
-        if (hasGpsField) hasGpsField.checked = !!car.has_gps;
-        const imageUrlField = document.getElementById('edit-image-url');
-        if (imageUrlField) imageUrlField.value = car.image_url || '';
-        const descriptionField = document.getElementById('edit-description');
-        if (descriptionField) descriptionField.value = car.description || '';
-        existingImages = Array.isArray(car.images) ? car.images : [];
-        imagesMarkedForDeletion.clear();
-        renderExistingImages();
-        if (editPhotoManager) {
-            editPhotoManager.reset(MAX_GALLERY_IMAGES);
-            updateNewPhotoLimit();
+        if (editLatInput && editLngInput && editLatInput.value && editLngInput.value) {
+            pieces.push(`Lat ${toFixedIfFinite(editLatInput.value, 4)}, Lng ${toFixedIfFinite(editLngInput.value, 4)}`);
         }
+        editLocationSummary.textContent = pieces.length ? pieces.join(' • ') : 'Location not set';
     };
+
+    const setEditLocation = (lat, lng, { pan = true } = {}) => {
+        if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
+            return;
+        }
+        if (editLatInput) {
+            editLatInput.value = Number(lat).toFixed(6);
+        }
+        if (editLngInput) {
+            editLngInput.value = Number(lng).toFixed(6);
+        }
+        ensureEditMap();
+        if (editMarker) {
+            editMarker.setLatLng([lat, lng]);
+        }
+        if (pan && editMap) {
+            const zoom = editMap.getZoom();
+            editMap.setView([lat, lng], Math.max(zoom, 13));
+        }
+        updateLocationSummary();
+    };
+
+    if (editCityInput) {
+        const handleEditCityChange = () => {
+            const entry = findCityEntry(editCityInput.value);
+            if (entry && Number.isFinite(entry.latitude) && Number.isFinite(entry.longitude)) {
+                setEditLocation(entry.latitude, entry.longitude);
+            } else {
+                updateLocationSummary();
+            }
+        };
+        editCityInput.addEventListener('change', handleEditCityChange);
+        editCityInput.addEventListener('blur', handleEditCityChange);
+    }
 
     const refreshCarCard = (cardEl, car) => {
         if (!cardEl) {
@@ -329,31 +384,39 @@ document.addEventListener('DOMContentLoaded', () => {
             availabilityEl.classList.toggle('bg-secondary', !available);
         }
         const licenceEl = cardEl.querySelector('[data-role="car-licence"]');
-        if (licenceEl) licenceEl.textContent = `Licence: ${car.licence_plate || ''}`;
+        if (licenceEl) {
+            licenceEl.textContent = `Licence: ${car.licence_plate || ''}`;
+        }
         const seatsEl = cardEl.querySelector('[data-role="car-seats"]');
-        if (seatsEl) seatsEl.textContent = `Seats: ${car.seats ?? ''}`;
+        if (seatsEl) {
+            seatsEl.textContent = `Seats: ${car.seats ?? ''}`;
+        }
         const rateHourEl = cardEl.querySelector('[data-role="car-rate-hour"]');
-        if (rateHourEl) rateHourEl.textContent = `Hourly rate: Rs ${Math.round(car.rate_per_hour ?? 0)}`;
+        if (rateHourEl) {
+            rateHourEl.textContent = `Hourly rate: Rs ${Math.round(car.rate_per_hour ?? 0)}`;
+        }
         const rateDayEl = cardEl.querySelector('[data-role="car-rate-day"]');
-        if (rateDayEl) rateDayEl.textContent = `Daily rate: Rs ${Math.round(car.daily_rate ?? 0)}`;
+        if (rateDayEl) {
+            rateDayEl.textContent = `Daily rate: Rs ${Math.round(car.daily_rate ?? 0)}`;
+        }
         const fuelEl = cardEl.querySelector('[data-role="car-fuel"]');
-        if (fuelEl) fuelEl.textContent = `Fuel type: ${car.fuel_type || 'NA'}`;
+        if (fuelEl) {
+            fuelEl.textContent = `Fuel type: ${car.fuel_type || 'NA'}`;
+        }
         const transEl = cardEl.querySelector('[data-role="car-transmission"]');
-        if (transEl) transEl.textContent = `Transmission: ${car.transmission || 'NA'}`;
-        const toggleBtn = cardEl.querySelector('form[action*="owner_toggle_availability"] button');
-        if (toggleBtn) {
-            const available = Boolean(car.is_available);
-            toggleBtn.textContent = available ? 'Mark unavailable' : 'Mark available';
-            toggleBtn.classList.toggle('btn-outline-secondary', available);
-            toggleBtn.classList.toggle('btn-outline-success', !available);
+        if (transEl) {
+            transEl.textContent = `Transmission: ${car.transmission || 'NA'}`;
         }
-        const latInput = cardEl.querySelector('form[action*="owner_update_location"] input[name="latitude"]');
-        if (latInput && car.latitude !== undefined && car.latitude !== null) {
-            latInput.value = car.latitude;
-        }
-        const lngInput = cardEl.querySelector('form[action*="owner_update_location"] input[name="longitude"]');
-        if (lngInput && car.longitude !== undefined && car.longitude !== null) {
-            lngInput.value = car.longitude;
+        const locationLabel = cardEl.querySelector('[data-role="car-location-label"]');
+        if (locationLabel) {
+            const parts = [];
+            if (car.city) {
+                parts.push(car.city);
+            }
+            if (Number.isFinite(car.latitude) && Number.isFinite(car.longitude)) {
+                parts.push(`Lat ${Number(car.latitude).toFixed(4)}, Lng ${Number(car.longitude).toFixed(4)}`);
+            }
+            locationLabel.textContent = parts.length ? `Location: ${parts.join(' • ')}` : 'Location: Not set';
         }
         const gallery = cardEl.querySelector('[data-role="car-gallery"]');
         if (gallery) {
@@ -376,37 +439,122 @@ document.addEventListener('DOMContentLoaded', () => {
                     gallery.appendChild(button);
                 });
             } else {
-                const addButton = document.createElement('button');
-                addButton.type = 'button';
-                addButton.className = 'btn btn-outline-secondary car-edit-trigger';
-                addButton.dataset.carId = car.id;
-                addButton.innerHTML = '<i class="bi bi-plus-circle me-1"></i>Add photos';
-                gallery.appendChild(addButton);
+                const addBtn = document.createElement('button');
+                addBtn.type = 'button';
+                addBtn.className = 'btn btn-outline-secondary car-edit-trigger';
+                addBtn.dataset.carId = car.id;
+                addBtn.innerHTML = '<i class="bi bi-plus-circle me-1"></i>Add photos';
+                gallery.appendChild(addBtn);
             }
+        }
+        const toggleBtn = cardEl.querySelector('form[action*="owner_toggle_availability"] button');
+        if (toggleBtn) {
+            const available = Boolean(car.is_available);
+            toggleBtn.textContent = available ? 'Mark unavailable' : 'Mark available';
+            toggleBtn.classList.toggle('btn-outline-secondary', available);
+            toggleBtn.classList.toggle('btn-outline-success', !available);
         }
     };
 
-    document.addEventListener('click', async (event) => {
-        const trigger = event.target.closest('.car-edit-trigger');
-        if (!trigger) {
-            return;
+    const populateEditForm = (car) => {
+        const modalTitle = document.getElementById('edit-car-modal-label');
+        if (modalTitle) {
+            modalTitle.textContent = car.display_name ? `Manage ${car.display_name}` : 'Manage vehicle';
         }
-        const cardEl = trigger.closest('[data-car-card]');
+        const idField = document.getElementById('edit-car-id');
+        if (idField) {
+            idField.value = car.id || '';
+        }
+        const setInputValue = (selector, value = '') => {
+            const element = document.getElementById(selector);
+            if (element) {
+                element.value = value || '';
+            }
+        };
+        const setSelectValue = (selector, value = '') => {
+            const element = document.getElementById(selector);
+            if (!element) {
+                return;
+            }
+            let found = false;
+            Array.from(element.options).forEach((option) => {
+                if (option.value === value) {
+                    found = true;
+                }
+            });
+            if (!found && value) {
+                const opt = new Option(value, value, true, true);
+                element.appendChild(opt);
+            }
+            element.value = value || '';
+        };
+
+        setSelectValue('edit-vehicle-type', car.vehicle_type || '');
+        setInputValue('edit-size-category', car.size_category || '');
+        setInputValue('edit-name', car.name || '');
+        setInputValue('edit-brand', car.brand || '');
+        setInputValue('edit-model', car.model || '');
+        setInputValue('edit-licence', car.licence_plate || '');
+        setInputValue('edit-seats', car.seats ?? '');
+        setInputValue('edit-fuel', car.fuel_type || '');
+        setInputValue('edit-transmission', car.transmission || '');
+        if (editCityInput) {
+            editCityInput.value = car.city || '';
+        }
+        setInputValue('edit-rate-hour', car.rate_per_hour ?? '');
+        setInputValue('edit-rate-day', car.daily_rate ?? '');
+        if (editHasGpsInput) {
+            editHasGpsInput.checked = !!car.has_gps;
+        }
+        if (editImageUrlInput) {
+            editImageUrlInput.value = car.image_url || '';
+        }
+        if (editDescriptionInput) {
+            editDescriptionInput.value = car.description || '';
+        }
+
+        ensureEditMap();
+        const lat = Number(car.latitude);
+        const lng = Number(car.longitude);
+        if (Number.isFinite(lat) && Number.isFinite(lng)) {
+            setEditLocation(lat, lng);
+        } else {
+            const entry = findCityEntry(car.city || '');
+            if (entry && Number.isFinite(entry.latitude) && Number.isFinite(entry.longitude)) {
+                setEditLocation(entry.latitude, entry.longitude, { pan: false });
+            } else {
+                setEditLocation(DEFAULT_MAP_VIEW.lat, DEFAULT_MAP_VIEW.lng, { pan: false });
+            }
+        }
+        updateLocationSummary();
+
+        existingImages = Array.isArray(car.images) ? car.images : [];
+        imagesMarkedForDeletion.clear();
+        renderExistingImages();
+        if (editPhotoManager) {
+            editPhotoManager.reset(MAX_GALLERY_IMAGES);
+        }
+        updateNewPhotoLimit();
+    };
+
+    const openCarModal = async (cardEl, intent = 'manage') => {
         if (!cardEl || !editModal || !editForm) {
             return;
         }
-        event.preventDefault();
         const detailUrl = cardEl.getAttribute('data-detail-url');
         if (!detailUrl) {
             return;
         }
         currentCardElement = cardEl;
+        modalOpenIntent = intent;
         resetFeedback();
         if (editPhotoManager) {
             editPhotoManager.reset(MAX_GALLERY_IMAGES);
         }
         existingImages = [];
         imagesMarkedForDeletion.clear();
+        renderExistingImages();
+        updateNewPhotoLimit();
         try {
             const response = await fetch(detailUrl, {
                 headers: { 'Accept': 'application/json' },
@@ -423,6 +571,20 @@ document.addEventListener('DOMContentLoaded', () => {
         } catch (error) {
             console.error(error);
             alert('Unable to load vehicle details. Please try again.');
+        }
+    };
+
+    document.addEventListener('click', (event) => {
+        const manageTrigger = event.target.closest('.car-edit-trigger');
+        if (manageTrigger) {
+            const cardEl = manageTrigger.closest('[data-car-card]');
+            openCarModal(cardEl, 'manage');
+            return;
+        }
+        const locationTrigger = event.target.closest('.car-location-trigger');
+        if (locationTrigger) {
+            const cardEl = locationTrigger.closest('[data-car-card]');
+            openCarModal(cardEl, 'location');
         }
     });
 
@@ -457,8 +619,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 renderExistingImages();
                 if (editPhotoManager) {
                     editPhotoManager.reset(MAX_GALLERY_IMAGES);
-                    updateNewPhotoLimit();
                 }
+                updateNewPhotoLimit();
                 refreshCarCard(currentCardElement, updatedCar);
                 showFeedback('Listing updated.', 'success');
                 setTimeout(() => {
@@ -472,27 +634,13 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
-    const mapElement = document.getElementById('owner-map');
-    if (mapElement && typeof L !== 'undefined') {
-        const cityEntries = window.OWNER_CITY_ENTRIES || [];
+    const ownerMapElement = document.getElementById('owner-map');
+    if (ownerMapElement && typeof L !== 'undefined') {
         const cityInput = document.getElementById('city');
         const latitudeField = document.getElementById('latitude');
         const longitudeField = document.getElementById('longitude');
-        const buildLabel = (entry) => {
-            const name = (entry.name || '').trim();
-            const state = (entry.state || '').trim();
-            return state ? `${name}, ${state}` : name;
-        };
-        const findCity = (label) => {
-            if (!label) {
-                return null;
-            }
-            const normalised = label.trim().toLowerCase();
-            return cityEntries.find((entry) => buildLabel(entry).toLowerCase() === normalised) || null;
-        };
-        const DEFAULT_VIEW = { lat: 20.5937, lng: 78.9629, zoom: 5 };
-        const map = L.map(mapElement, { zoomControl: true });
-        map.setView([DEFAULT_VIEW.lat, DEFAULT_VIEW.lng], DEFAULT_VIEW.zoom);
+        const map = L.map(ownerMapElement, { zoomControl: true });
+        map.setView([DEFAULT_MAP_VIEW.lat, DEFAULT_MAP_VIEW.lng], DEFAULT_MAP_VIEW.zoom);
         L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
             maxZoom: 18,
             attribution: '&copy; <a href="https://www.openstreetmap.org">OpenStreetMap</a> contributors',
@@ -514,12 +662,20 @@ document.addEventListener('DOMContentLoaded', () => {
                 marker = L.marker([lat, lng], { draggable: true }).addTo(map);
                 marker.on('dragend', (event) => {
                     const pos = event.target.getLatLng();
-                    if (latitudeField) latitudeField.value = pos.lat.toFixed(6);
-                    if (longitudeField) longitudeField.value = pos.lng.toFixed(6);
+                    if (latitudeField) {
+                        latitudeField.value = pos.lat.toFixed(6);
+                    }
+                    if (longitudeField) {
+                        longitudeField.value = pos.lng.toFixed(6);
+                    }
                 });
             }
-            if (latitudeField) latitudeField.value = lat.toFixed(6);
-            if (longitudeField) longitudeField.value = lng.toFixed(6);
+            if (latitudeField) {
+                latitudeField.value = lat.toFixed(6);
+            }
+            if (longitudeField) {
+                longitudeField.value = lng.toFixed(6);
+            }
         };
         const focusOn = (lat, lng, zoom = 13) => {
             if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
@@ -528,15 +684,15 @@ document.addEventListener('DOMContentLoaded', () => {
             map.setView([lat, lng], zoom);
             setMarker(lat, lng);
         };
-        const handleCitySelection = () => {
-            const entry = findCity(cityInput ? cityInput.value : '');
+        const handleAddCitySelection = () => {
+            const entry = findCityEntry(cityInput ? cityInput.value : '');
             if (entry && Number.isFinite(entry.latitude) && Number.isFinite(entry.longitude)) {
                 focusOn(entry.latitude, entry.longitude, 11);
             }
         };
         if (cityInput) {
-            cityInput.addEventListener('change', handleCitySelection);
-            cityInput.addEventListener('blur', handleCitySelection);
+            cityInput.addEventListener('change', handleAddCitySelection);
+            cityInput.addEventListener('blur', handleAddCitySelection);
         }
         map.on('click', (event) => {
             focusOn(event.latlng.lat, event.latlng.lng);
@@ -546,7 +702,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (Number.isFinite(latExisting) && Number.isFinite(lngExisting)) {
             focusOn(latExisting, lngExisting);
         } else {
-            handleCitySelection();
+            handleAddCitySelection();
         }
     }
 });
