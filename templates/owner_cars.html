@@ -18,6 +18,31 @@
             height: 240px;
             min-height: 240px;
         }
+        .map-car-icon {
+            background: transparent;
+            border: none;
+        }
+        .map-car-icon-pin {
+            display: inline-block;
+            width: 28px;
+            height: 28px;
+            border-radius: 50%;
+            border: 3px solid #ffffff;
+            background: #0d9f5c;
+            box-shadow: 0 6px 12px rgba(15, 118, 110, 0.35);
+            position: relative;
+        }
+        .map-car-icon-pin::after {
+            content: "";
+            position: absolute;
+            bottom: -9px;
+            left: 50%;
+            margin-left: -7px;
+            width: 0;
+            height: 0;
+            border: 7px solid transparent;
+            border-top-color: currentColor;
+        }
     </style>
 {% endblock %}
 {% block content %}

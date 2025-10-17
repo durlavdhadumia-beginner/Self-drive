@@ -1,6 +1,13 @@
 document.addEventListener('DOMContentLoaded', () => {
     const MAX_GALLERY_IMAGES = 8;
     const DEFAULT_MAP_VIEW = { lat: 20.5937, lng: 78.9629, zoom: 5 };
+    const buildLocationIcon = () => L.divIcon({
+        className: 'map-car-icon',
+        html: '<span class="map-car-icon-pin"></span>',
+        iconSize: [34, 44],
+        iconAnchor: [17, 40],
+        popupAnchor: [0, -24],
+    });
     const CITY_ENTRIES = Array.isArray(window.OWNER_CITY_ENTRIES) ? window.OWNER_CITY_ENTRIES : [];
 
     const buildCityLabel = (entry) => {
@@ -170,6 +177,8 @@ document.addEventListener('DOMContentLoaded', () => {
     const editLocationSummary = document.getElementById('edit-location-summary');
     const editLocationMapEl = document.getElementById('edit-location-map');
     const editModal = editModalEl ? new bootstrap.Modal(editModalEl) : null;
+    const modalMarkerIcon = buildLocationIcon();
+    const formMarkerIcon = buildLocationIcon();
 
     let editMap = null;
     let editMarker = null;
@@ -283,7 +292,10 @@ document.addEventListener('DOMContentLoaded', () => {
             maxZoom: 18,
             attribution: '&copy; <a href="https://www.openstreetmap.org">OpenStreetMap</a> contributors',
         }).addTo(editMap);
-        editMarker = L.marker([DEFAULT_MAP_VIEW.lat, DEFAULT_MAP_VIEW.lng], { draggable: true }).addTo(editMap);
+        editMarker = L.marker([DEFAULT_MAP_VIEW.lat, DEFAULT_MAP_VIEW.lng], {
+            draggable: true,
+            icon: modalMarkerIcon,
+        }).addTo(editMap);
         editMarker.on('dragend', (event) => {
             const pos = event.target.getLatLng();
             setEditLocation(pos.lat, pos.lng, { pan: false });
@@ -319,7 +331,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (editLatInput && editLngInput && editLatInput.value && editLngInput.value) {
             pieces.push(`Lat ${toFixedIfFinite(editLatInput.value, 4)}, Lng ${toFixedIfFinite(editLngInput.value, 4)}`);
         }
-        editLocationSummary.textContent = pieces.length ? pieces.join(' • ') : 'Location not set';
+        editLocationSummary.textContent = pieces.length ? pieces.join('  ') : 'Location not set';
     };
 
     const setEditLocation = (lat, lng, { pan = true } = {}) => {
@@ -335,6 +347,7 @@ document.addEventListener('DOMContentLoaded', () => {
         ensureEditMap();
         if (editMarker) {
             editMarker.setLatLng([lat, lng]);
+            editMarker.setIcon(modalMarkerIcon);
         }
         if (pan && editMap) {
             const zoom = editMap.getZoom();
@@ -416,7 +429,7 @@ document.addEventListener('DOMContentLoaded', () => {
             if (Number.isFinite(car.latitude) && Number.isFinite(car.longitude)) {
                 parts.push(`Lat ${Number(car.latitude).toFixed(4)}, Lng ${Number(car.longitude).toFixed(4)}`);
             }
-            locationLabel.textContent = parts.length ? `Location: ${parts.join(' • ')}` : 'Location: Not set';
+            locationLabel.textContent = parts.length ? `Location: ${parts.join('  ')}` : 'Location: Not set';
         }
         const gallery = cardEl.querySelector('[data-role="car-gallery"]');
         if (gallery) {
@@ -658,8 +671,9 @@ document.addEventListener('DOMContentLoaded', () => {
             }
             if (marker) {
                 marker.setLatLng([lat, lng]);
+                marker.setIcon(formMarkerIcon);
             } else {
-                marker = L.marker([lat, lng], { draggable: true }).addTo(map);
+                marker = L.marker([lat, lng], { draggable: true, icon: formMarkerIcon }).addTo(map);
                 marker.on('dragend', (event) => {
                     const pos = event.target.getLatLng();
                     if (latitudeField) {
