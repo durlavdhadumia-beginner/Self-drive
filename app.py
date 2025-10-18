@@ -2781,6 +2781,19 @@ def owner_cars() -> str:
         """,
         (g.user["id"],),
     ).fetchall()
+    label_lookup: Dict[str, Tuple[float, float]] = {}
+    for entry in city_entries:
+        try:
+            lat_val = entry.get("latitude")
+            lng_val = entry.get("longitude")
+            if lat_val is None or lng_val is None:
+                continue
+            label_lookup[_format_city_label(entry["name"], entry["state"]).strip().lower()] = (
+                float(lat_val),
+                float(lng_val),
+            )
+        except (ValueError, TypeError):
+            continue
     rentals_data: List[Dict[str, object]] = []
     for row in rental_rows:
         rental = dict(row)
@@ -2802,6 +2815,12 @@ def owner_cars() -> str:
         for destination in rental["trip_destinations_list"]:
             entry: Dict[str, object] = {"name": destination}
             coords = lookup_city_coordinates(destination)
+            if not coords:
+                lookup_key = destination.strip().lower()
+                coords = label_lookup.get(lookup_key)
+            if not coords and "," in destination:
+                first_part = destination.split(",", 1)[0].strip().lower()
+                coords = label_lookup.get(first_part)
             if coords:
                 entry["latitude"], entry["longitude"] = coords
             destinations_with_coords.append(entry)
@@ -3839,3 +3858,29 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
+def ordinal_number(value: int) -> str:
+    suffix = "th"
+    if value % 100 not in (11, 12, 13):
+        suffix = {1: "st", 2: "nd", 3: "rd"}.get(value % 10, "th")
+    return f"{value}{suffix}"
+
+
+@app.template_filter("trip_datetime")
+def format_trip_datetime(value: str | datetime | None) -> str:
+    if value is None:
+        return "-"
+    if isinstance(value, datetime):
+        date_value = value
+    else:
+        parsed = parse_iso(value)
+        if not parsed:
+            return value
+        date_value = parsed
+    hour = date_value.strftime("%I").lstrip("0") or "0"
+    minute = date_value.strftime("%M")
+    period = date_value.strftime("%p")
+    time_part = f"{hour}{period}" if minute == "00" else f"{hour}:{minute}{period}"
+    day_part = ordinal_number(date_value.day)
+    month_part = date_value.strftime("%b")
+    year_part = date_value.strftime("%Y")
+    return f"{time_part}, {day_part} {month_part} {year_part}"

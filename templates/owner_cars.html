@@ -175,7 +175,8 @@
                                     {% set delivery_fee = rental['delivery_fee'] or 0 %}
                                     {% set delivery_label = rental['delivery_address'] or 'Pinned delivery location' %}
                                     <div class="fw-semibold">{{ rental['car_name'] }} - {{ rental['renter_username'] }}</div>
-                                    <div class="text-muted small mb-2">Trip window: {{ rental['start_time'] }} to {{ rental['end_time'] or 'TBD' }}</div>
+                                    <div class="text-muted small">Trip start: {{ rental['start_time']|trip_datetime }}</div>
+                                    <div class="text-muted small mb-2">Trip end: {{ rental['end_time']|trip_datetime }}</div>
                                     <div class="text-muted small">Rental: Rs {{ (base_amount or 0)|round(2) }}</div>
                                     <div class="text-muted small">
                                         {% if rental['delivery_type'] == 'delivery' %}
@@ -221,6 +222,8 @@
                             {% for rental in counter_requests %}
                                 <div class="border rounded-4 p-3 mb-3 bg-warning-subtle">
                                     <div class="fw-semibold">{{ rental['car_name'] }} - {{ rental['renter_username'] }}</div>
+                                    <div class="text-muted small">Trip start: {{ rental['start_time']|trip_datetime }}</div>
+                                    <div class="text-muted small">Trip end: {{ rental['end_time']|trip_datetime }}</div>
                                     <div class="text-muted small">Waiting for renter to respond to your counter offer of Rs {{ rental['counter_amount']|round|int }}.</div>
                                     {% if rental['trip_destinations_list'] %}
                                         <div class="text-muted small mt-1">Destinations: {{ rental['trip_destinations_list']|join(', ') }}</div>
@@ -251,11 +254,14 @@
                                     {% set delivery_fee = rental['delivery_fee'] or 0 %}
                                     {% set delivery_label = rental['delivery_address'] or 'Pinned delivery location' %}
                                     <div class="fw-semibold">{{ rental['car_name'] }} - {{ rental['renter_username'] }}</div>
-                                    <div class="text-muted small">Rental Rs {{ (base_amount or 0)|round(2) }}
+                                    <div class="text-muted small">Trip start: {{ rental['start_time']|trip_datetime }}</div>
+                                    <div class="text-muted small mb-1">Trip end: {{ rental['end_time']|trip_datetime }}</div>
+                                    <div class="text-muted small">Rental: Rs {{ (base_amount or 0)|round(2) }}</div>
+                                    <div class="text-muted small">
                                         {% if rental['delivery_type'] == 'delivery' %}
-                                            &bull; Delivery Rs {{ delivery_fee|round(2) }}
+                                            Delivery: Rs {{ delivery_fee|round(2) }}
                                         {% else %}
-                                            &bull; Pickup only
+                                            Delivery: Pickup only
                                         {% endif %}
                                     </div>
                                     <div class="fw-semibold text-success">Total: Rs {{ rental['total_amount']|round(2) }}</div>
