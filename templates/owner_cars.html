@@ -18,30 +18,44 @@
             height: 240px;
             min-height: 240px;
         }
-        .map-car-icon {
-            background: transparent;
-            border: none;
-        }
-        .map-car-icon-pin {
-            display: inline-block;
+        .map-pin {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
             width: 28px;
             height: 28px;
             border-radius: 50%;
-            border: 3px solid #ffffff;
-            background: #0d9f5c;
-            box-shadow: 0 6px 12px rgba(15, 118, 110, 0.35);
+            border: 2px solid #fff;
+            font-weight: 600;
+            color: #fff;
+            box-shadow: 0 6px 12px rgba(15, 118, 110, 0.25);
             position: relative;
         }
-        .map-car-icon-pin::after {
+        .map-pin::after {
             content: "";
             position: absolute;
-            bottom: -9px;
+            bottom: -8px;
             left: 50%;
-            margin-left: -7px;
+            margin-left: -6px;
             width: 0;
             height: 0;
-            border: 7px solid transparent;
+            border: 6px solid transparent;
             border-top-color: currentColor;
+        }
+        .map-pin-labeled {
+            font-size: 0.75rem;
+        }
+        .map-pin-car {
+            background: #2563eb;
+            color: #fff;
+        }
+        .map-pin-delivery {
+            background: #0d9488;
+            color: #fff;
+        }
+        .map-pin-destination {
+            background: #9333ea;
+            color: #fff;
         }
     </style>
 {% endblock %}
@@ -162,7 +176,15 @@
                                     {% set delivery_label = rental['delivery_address'] or 'Pinned delivery location' %}
                                     <div class="fw-semibold">{{ rental['car_name'] }} - {{ rental['renter_username'] }}</div>
                                     <div class="text-muted small mb-2">Trip window: {{ rental['start_time'] }} to {{ rental['end_time'] or 'TBD' }}</div>
-                                    <div class="text-muted small">Rental Rs {{ (base_amount or 0)|round(2) }}{% if rental['delivery_type'] == 'delivery' %} &bull; Delivery Rs {{ delivery_fee|round(2) }}{% else %} &bull; Pickup only{% endif %}</div>
+                                    <div class="text-muted small">Rental: Rs {{ (base_amount or 0)|round(2) }}</div>
+                                    <div class="text-muted small">
+                                        {% if rental['delivery_type'] == 'delivery' %}
+                                            Delivery: Rs {{ delivery_fee|round(2) }}
+                                        {% else %}
+                                            Delivery: Pickup only
+                                        {% endif %}
+                                    </div>
+                                    <div class="fw-semibold text-success">Total: Rs {{ rental['total_amount']|round(2) }}</div>
                                     {% if rental['delivery_type'] == 'delivery' %}
                                         <div class="text-muted small">Delivery to {{ delivery_label }}{% if rental['delivery_distance_km'] %} &bull; ~{{ rental['delivery_distance_km']|round(1) }} km{% endif %}</div>
                                     {% endif %}
@@ -177,7 +199,6 @@
                                              data-destinations="{{ rental['trip_destinations_map']|tojson|safe }}"
                                              style="height: 220px;"></div>
                                     {% endif %}
-                                    <div class="text-muted small mb-3">Offer total: Rs {{ rental['total_amount']|round(2) }}</div>
                                     <div class="d-flex gap-2 flex-wrap">
                                         <form method="post" action="{{ url_for('owner_respond_rental', rental_id=rental['id']) }}">
                                             <input type="hidden" name="action" value="accept">
@@ -237,6 +258,7 @@
                                             &bull; Pickup only
                                         {% endif %}
                                     </div>
+                                    <div class="fw-semibold text-success">Total: Rs {{ rental['total_amount']|round(2) }}</div>
                                     {% if rental['delivery_type'] == 'delivery' %}
                                         <div class="text-muted small">Delivery to {{ delivery_label }}
                                             {% if rental['delivery_distance_km'] %}

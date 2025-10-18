@@ -1,13 +1,16 @@
 document.addEventListener('DOMContentLoaded', () => {
     const MAX_GALLERY_IMAGES = 8;
     const DEFAULT_MAP_VIEW = { lat: 20.5937, lng: 78.9629, zoom: 5 };
-    const buildLocationIcon = () => L.divIcon({
-        className: 'map-car-icon',
-        html: '<span class="map-car-icon-pin"></span>',
-        iconSize: [34, 44],
-        iconAnchor: [17, 40],
-        popupAnchor: [0, -24],
+    const buildLocationIcon = (className = 'map-pin-car', label = '') => L.divIcon({
+        className,
+        html: `<span class="map-pin ${label ? 'map-pin-labeled' : ''}">${label}</span>`,
+        iconSize: [30, 30],
+        iconAnchor: [15, 28],
+        popupAnchor: [0, -20],
     });
+    const deliveryIcon = buildLocationIcon('map-pin-delivery', 'D');
+    const carIcon = buildLocationIcon('map-pin-car', 'C');
+    const destinationIcon = (index) => buildLocationIcon('map-pin-destination', String(index + 1));
     const CITY_ENTRIES = Array.isArray(window.OWNER_CITY_ENTRIES) ? window.OWNER_CITY_ENTRIES : [];
 
     const buildCityLabel = (entry) => {
@@ -778,11 +781,11 @@ document.addEventListener('DOMContentLoaded', () => {
                 bounds.push([lat, lng]);
                 return marker;
             };
-            addMarker(deliveryLat, deliveryLng, { title: 'Delivery location' });
+            addMarker(deliveryLat, deliveryLng, { title: 'Delivery location', icon: deliveryIcon });
             const carLat = Number(container.getAttribute('data-car-lat'));
             const carLng = Number(container.getAttribute('data-car-lng'));
             if (Number.isFinite(carLat) && Number.isFinite(carLng)) {
-                addMarker(carLat, carLng, { title: 'Vehicle location' });
+                addMarker(carLat, carLng, { title: 'Vehicle location', icon: carIcon });
             }
             let destinations = [];
             try {
@@ -790,11 +793,11 @@ document.addEventListener('DOMContentLoaded', () => {
             } catch (error) {
                 destinations = [];
             }
-            destinations.forEach((destination) => {
+            destinations.forEach((destination, index) => {
                 const lat = Number(destination.latitude);
                 const lng = Number(destination.longitude);
                 if (Number.isFinite(lat) && Number.isFinite(lng)) {
-                    addMarker(lat, lng, { title: destination.name || 'Destination' });
+                    addMarker(lat, lng, { title: destination.name || 'Destination', icon: destinationIcon(index) });
                 }
             });
             if (bounds.length) {
