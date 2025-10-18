@@ -148,6 +148,23 @@
                                 <label for="radius" class="form-label">Search radius (km)</label>
                                 <input type="number" class="form-control" id="radius" name="radius" value="10" min="1" max="200">
                             </div>
+                            <div class="col-12">
+                                <label class="form-label" for="hero-destination-0">Trip destinations</label>
+                                <div class="d-flex flex-column gap-2"
+                                     data-destination-container
+                                     data-input-name="destinations"
+                                     data-add-button="#add-hero-destination"
+                                     data-datalist="destination-options"
+                                     data-required="true"
+                                     data-initial="{{ requested_destinations|tojson|safe }}">
+                                </div>
+                                <div class="d-flex justify-content-between align-items-center mt-2">
+                                    <div class="form-text mb-0">Add each planned stop. At least one destination is required.</div>
+                                    <button type="button" class="btn btn-outline-success btn-sm" id="add-hero-destination">
+                                        <i class="bi bi-plus-circle"></i> Add destination
+                                    </button>
+                                </div>
+                            </div>
                             {% set popular_types = popular_vehicle_types or [] %}
                             <div class="row g-3 align-items-end">
                                 <div class="col-md-6">
@@ -220,6 +237,12 @@
                                 <button type="button" id="detect-location" class="btn btn-outline-success flex-grow-1"><i class="bi bi-geo-alt"></i> Use my location</button>
                             </div>
                         </form>
+                        <datalist id="destination-options">
+                            {% for entry in cities %}
+                                {% set label = entry.name ~ (', ' ~ entry.state if entry.state) %}
+                                <option value="{{ label }}"></option>
+                            {% endfor %}
+                        </datalist>
                     </div>
                 </div>
             </div>
@@ -304,6 +327,7 @@
 {% endblock %}
 {% block scripts %}
 {{ super() }}
+<script src="{{ url_for('static', filename='js/destination_inputs.js') }}"></script>
 <style>
     .city-autocomplete .city-suggestions {
         position: absolute;

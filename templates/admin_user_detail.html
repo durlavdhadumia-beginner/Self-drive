@@ -157,6 +157,10 @@
                                     {% else %}
                                     <div class="text-muted small mt-2">No gallery images uploaded.</div>
                                     {% endif %}
+                                    <div class="d-flex flex-wrap gap-2 mt-3">
+                                        <button type="button" class="btn btn-sm btn-outline-success" data-admin-car="{{ car['id'] }}">View details</button>
+                                        <button type="button" class="btn btn-sm btn-outline-secondary" data-admin-edit="{{ car['id'] }}">Edit listing</button>
+                                    </div>
                                 </div>
                             {% endfor %}
                         </div>
@@ -194,4 +198,454 @@
         </div>
     </div>
 </section>
+
+<div class="modal fade" id="adminCarModal" tabindex="-1" aria-labelledby="adminCarModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-scrollable">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="adminCarModalLabel">Vehicle overview</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <div class="mb-3">
+                    <div class="fw-semibold fs-5" data-admin-detail="name"></div>
+                    <div class="text-muted small" data-admin-detail="subtitle"></div>
+                </div>
+                <div class="row g-3 mb-3">
+                    <div class="col-md-6">
+                        <div class="text-muted text-uppercase small fw-semibold">Location</div>
+                        <div data-admin-detail="city">-</div>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="text-muted text-uppercase small fw-semibold">Rates</div>
+                        <div data-admin-detail="rates">-</div>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="text-muted text-uppercase small fw-semibold">Vehicle type</div>
+                        <div data-admin-detail="vehicle">-</div>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="text-muted text-uppercase small fw-semibold">Fuel &amp; transmission</div>
+                        <div data-admin-detail="fuel">-</div>
+                    </div>
+                </div>
+                <div class="mb-3">
+                    <div class="text-muted text-uppercase small fw-semibold mb-2">Delivery options</div>
+                    <ul class="list-group" data-admin-detail="delivery">
+                        <li class="list-group-item text-muted small">No delivery charges configured.</li>
+                    </ul>
+                </div>
+                <div class="mb-3">
+                    <div class="text-muted text-uppercase small fw-semibold mb-2">Highlights</div>
+                    <p class="text-muted small mb-0" data-admin-detail="description">No description provided.</p>
+                </div>
+                <div>
+                    <div class="text-muted text-uppercase small fw-semibold mb-2">Gallery</div>
+                    <div class="d-flex flex-wrap gap-2" data-admin-detail="gallery"></div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-outline-success" data-admin-detail="open-edit">Edit listing</button>
+                <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Close</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="adminEditCarModal" tabindex="-1" aria-labelledby="adminEditCarModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-scrollable">
+        <div class="modal-content">
+            <form id="admin-edit-car-form" method="post" enctype="multipart/form-data">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="adminEditCarModalLabel">Edit vehicle</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="alert alert-success d-none" role="alert" data-admin-edit-feedback></div>
+                    <input type="hidden" name="car_id" data-admin-field="id">
+                    <div class="row g-3">
+                        <div class="col-md-6">
+                            <label class="form-label small" for="admin-edit-name">Display name</label>
+                            <input type="text" class="form-control" id="admin-edit-name" name="name" data-admin-field="name" required>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label small" for="admin-edit-licence">Licence plate</label>
+                            <input type="text" class="form-control" id="admin-edit-licence" name="licence_plate" data-admin-field="licence_plate" required>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label small" for="admin-edit-brand">Brand</label>
+                            <input type="text" class="form-control" id="admin-edit-brand" name="brand" data-admin-field="brand" required>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label small" for="admin-edit-model">Model</label>
+                            <input type="text" class="form-control" id="admin-edit-model" name="model" data-admin-field="model" required>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label small" for="admin-edit-rate-hour">Rate per hour (Rs)</label>
+                            <input type="number" class="form-control" id="admin-edit-rate-hour" name="rate_per_hour" min="0" step="50" data-admin-field="rate_per_hour">
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label small" for="admin-edit-rate-day">Daily rate (Rs)</label>
+                            <input type="number" class="form-control" id="admin-edit-rate-day" name="daily_rate" min="0" step="50" data-admin-field="daily_rate">
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label small" for="admin-edit-city">City</label>
+                            <input type="text" class="form-control" id="admin-edit-city" name="city" list="admin-city-options" data-admin-field="city">
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label small" for="admin-edit-vehicle-type">Vehicle type</label>
+                            <input type="text" class="form-control" id="admin-edit-vehicle-type" name="vehicle_type" data-admin-field="vehicle_type">
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label small" for="admin-edit-size">Size category</label>
+                            <input type="text" class="form-control" id="admin-edit-size" name="size_category" data-admin-field="size_category">
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label small" for="admin-edit-fuel">Fuel type</label>
+                            <input type="text" class="form-control" id="admin-edit-fuel" name="fuel_type" data-admin-field="fuel_type">
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label small" for="admin-edit-transmission">Transmission</label>
+                            <input type="text" class="form-control" id="admin-edit-transmission" name="transmission" data-admin-field="transmission">
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label small" for="admin-edit-seats">Seats</label>
+                            <input type="number" class="form-control" id="admin-edit-seats" name="seats" min="2" max="12" data-admin-field="seats">
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label small" for="admin-edit-gps">GPS</label>
+                            <div class="form-check mt-2">
+                                <input class="form-check-input" type="checkbox" id="admin-edit-gps" name="has_gps" data-admin-field="has_gps">
+                                <label class="form-check-label" for="admin-edit-gps">Vehicle has GPS</label>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label small" for="admin-edit-image-url">Primary image URL</label>
+                            <input type="url" class="form-control" id="admin-edit-image-url" name="image_url" data-admin-field="image_url">
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label small" for="admin-edit-latitude">Latitude</label>
+                            <input type="number" class="form-control" id="admin-edit-latitude" name="latitude" step="0.000001" data-admin-field="latitude">
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label small" for="admin-edit-longitude">Longitude</label>
+                            <input type="number" class="form-control" id="admin-edit-longitude" name="longitude" step="0.000001" data-admin-field="longitude">
+                        </div>
+                        <div class="col-12">
+                            <label class="form-label small" for="admin-edit-description">Highlights</label>
+                            <textarea class="form-control" id="admin-edit-description" name="description" rows="3" data-admin-field="description"></textarea>
+                        </div>
+                        <div class="col-12">
+                            <label class="form-label small">Delivery options</label>
+                            <div class="row g-2" id="admin-edit-delivery-options">
+                                {% for distance in delivery_choices %}
+                                    <div class="col-md-6" data-admin-delivery-row="{{ distance }}">
+                                        <div class="input-group input-group-sm">
+                                            <div class="input-group-text">
+                                                <input class="form-check-input mt-0" type="checkbox" value="{{ distance }}" name="delivery_options" data-admin-delivery-checkbox>
+                                                <span class="ms-2 small">Up to {{ distance }} km</span>
+                                            </div>
+                                            <input type="number" class="form-control" name="delivery_price_{{ distance }}" data-admin-delivery-price placeholder="Charge (Rs)" min="0" step="50" disabled>
+                                        </div>
+                                    </div>
+                                {% endfor %}
+                            </div>
+                            <div class="form-text">Leave unchecked if this distance is not offered for delivery.</div>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-success" data-admin-edit-submit>Save changes</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<datalist id="admin-city-options">
+    {% for entry in city_entries %}
+        {% set label = entry.name ~ (', ' ~ entry.state if entry.state) %}
+        <option value="{{ label }}"></option>
+    {% endfor %}
+</datalist>
+{% endblock %}
+
+{% block scripts %}
+    {{ super() }}
+    <script>
+        (() => {
+            const detailModalEl = document.getElementById('adminCarModal');
+            const editModalEl = document.getElementById('adminEditCarModal');
+            const detailModal = detailModalEl && window.bootstrap ? new window.bootstrap.Modal(detailModalEl) : null;
+            const editModal = editModalEl && window.bootstrap ? new window.bootstrap.Modal(editModalEl) : null;
+            const detailSummary = {
+                name: detailModalEl ? detailModalEl.querySelector('[data-admin-detail=\"name\"]') : null,
+                subtitle: detailModalEl ? detailModalEl.querySelector('[data-admin-detail=\"subtitle\"]') : null,
+                city: detailModalEl ? detailModalEl.querySelector('[data-admin-detail=\"city\"]') : null,
+                rates: detailModalEl ? detailModalEl.querySelector('[data-admin-detail=\"rates\"]') : null,
+                vehicle: detailModalEl ? detailModalEl.querySelector('[data-admin-detail=\"vehicle\"]') : null,
+                fuel: detailModalEl ? detailModalEl.querySelector('[data-admin-detail=\"fuel\"]') : null,
+                delivery: detailModalEl ? detailModalEl.querySelector('[data-admin-detail=\"delivery\"]') : null,
+                description: detailModalEl ? detailModalEl.querySelector('[data-admin-detail=\"description\"]') : null,
+                gallery: detailModalEl ? detailModalEl.querySelector('[data-admin-detail=\"gallery\"]') : null,
+                editButton: detailModalEl ? detailModalEl.querySelector('[data-admin-detail=\"open-edit\"]') : null,
+            };
+            const editForm = document.getElementById('admin-edit-car-form');
+            const editFeedback = editModalEl ? editModalEl.querySelector('[data-admin-edit-feedback]') : null;
+            const submitButton = editModalEl ? editModalEl.querySelector('[data-admin-edit-submit]') : null;
+            let activeCarId = null;
+
+            const showToast = (message, type = 'success') => {
+                if (!editFeedback) {
+                    window.alert(message);
+                    return;
+                }
+                editFeedback.classList.remove('d-none', 'alert-success', 'alert-danger');
+                editFeedback.classList.add(type === 'success' ? 'alert-success' : 'alert-danger');
+                editFeedback.textContent = message;
+            };
+
+            const formatCurrency = (value) => {
+                const numeric = Number(value);
+                if (!Number.isFinite(numeric)) {
+                    return '0';
+                }
+                return Math.round(numeric).toLocaleString('en-IN');
+            };
+
+            const populateDeliveryRows = (options = {}) => {
+                if (!editModalEl) {
+                    return;
+                }
+                const rows = editModalEl.querySelectorAll('[data-admin-delivery-row]');
+                rows.forEach((row) => {
+                    const distance = Number(row.getAttribute('data-admin-delivery-row') || '0');
+                    const checkbox = row.querySelector('[data-admin-delivery-checkbox]');
+                    const priceInput = row.querySelector('[data-admin-delivery-price]');
+                    if (!checkbox || !priceInput) {
+                        return;
+                    }
+                    const fee = options[String(distance)] ?? options[distance];
+                    if (fee !== undefined && fee !== null) {
+                        checkbox.checked = true;
+                        priceInput.disabled = false;
+                        priceInput.value = Number(fee);
+                    } else {
+                        checkbox.checked = false;
+                        priceInput.disabled = true;
+                        priceInput.value = '';
+                    }
+                });
+            };
+
+            const wireDeliveryRows = () => {
+                if (!editModalEl) {
+                    return;
+                }
+                editModalEl.querySelectorAll('[data-admin-delivery-checkbox]').forEach((checkbox) => {
+                    checkbox.addEventListener('change', () => {
+                        const row = checkbox.closest('[data-admin-delivery-row]');
+                        if (!row) {
+                            return;
+                        }
+                        const priceInput = row.querySelector('[data-admin-delivery-price]');
+                        if (!priceInput) {
+                            return;
+                        }
+                        priceInput.disabled = !checkbox.checked;
+                        if (!checkbox.checked) {
+                            priceInput.value = '';
+                        } else if (!priceInput.value) {
+                            priceInput.value = 0;
+                        }
+                    });
+                });
+            };
+            wireDeliveryRows();
+
+            const populateDetailModal = (car) => {
+                if (!detailSummary.name) {
+                    return;
+                }
+                detailSummary.name.textContent = car.display_name || car.name || 'Vehicle';
+                detailSummary.subtitle.textContent = `${car.brand || ''} ${car.model || ''}`.trim() || 'Model details unavailable';
+                detailSummary.city.textContent = car.city ? car.city : 'City not set';
+                detailSummary.rates.textContent = `Rs ${formatCurrency(car.rate_per_hour)} / hr • Rs ${formatCurrency(car.daily_rate)} per day`;
+                detailSummary.vehicle.textContent = `${car.vehicle_type || 'Vehicle'} • ${car.size_category || 'Size not set'}`;
+                detailSummary.fuel.textContent = `${car.fuel_type || 'Fuel N/A'} • ${car.transmission || 'Transmission N/A'}`;
+                detailSummary.description.textContent = car.description || 'No highlights provided for this listing.';
+
+                if (detailSummary.delivery) {
+                    detailSummary.delivery.innerHTML = '';
+                    const entries = Object.entries(car.delivery_options || {}).sort((a, b) => Number(a[0]) - Number(b[0]));
+                    if (!entries.length) {
+                        detailSummary.delivery.innerHTML = '<li class="list-group-item text-muted small">No delivery charges configured.</li>';
+                    } else {
+                        entries.forEach(([distance, price]) => {
+                            const item = document.createElement('li');
+                            item.className = 'list-group-item d-flex justify-content-between align-items-center small';
+                            item.innerHTML = `<span>Up to ${distance} km</span><span class="fw-semibold">Rs ${formatCurrency(price)}</span>`;
+                            detailSummary.delivery.appendChild(item);
+                        });
+                    }
+                }
+
+                if (detailSummary.gallery) {
+                    detailSummary.gallery.innerHTML = '';
+                    if (Array.isArray(car.images) && car.images.length) {
+                        car.images.forEach((image) => {
+                            if (!image || !image.url) {
+                                return;
+                            }
+                            const link = document.createElement('a');
+                            link.href = image.url;
+                            link.target = '_blank';
+                            link.rel = 'noopener';
+                            link.className = 'd-inline-block';
+                            link.innerHTML = `<img src="${image.url}" alt="Vehicle photo" class="rounded" style="width:96px;height:64px;object-fit:cover;">`;
+                            detailSummary.gallery.appendChild(link);
+                        });
+                    } else if (car.image_url) {
+                        const link = document.createElement('a');
+                        link.href = car.image_url;
+                        link.target = '_blank';
+                        link.rel = 'noopener';
+                        link.className = 'd-inline-block';
+                        link.innerHTML = `<img src="${car.image_url}" alt="Vehicle photo" class="rounded" style="width:96px;height:64px;object-fit:cover;">`;
+                        detailSummary.gallery.appendChild(link);
+                    } else {
+                        detailSummary.gallery.innerHTML = '<span class="text-muted small">No images uploaded.</span>';
+                    }
+                }
+
+                if (detailSummary.editButton) {
+                    detailSummary.editButton.dataset.adminEdit = String(car.id);
+                    detailSummary.editButton.disabled = false;
+                }
+            };
+
+            const populateEditModal = (car) => {
+                if (!editForm) {
+                    return;
+                }
+                activeCarId = car.id;
+                editForm.action = `/owner/cars/${car.id}/update`;
+                editForm.querySelectorAll('[data-admin-field]').forEach((field) => {
+                    const key = field.getAttribute('data-admin-field');
+                    if (!key) {
+                        return;
+                    }
+                    if (field.type === 'checkbox') {
+                        field.checked = Boolean(car[key]);
+                    } else {
+                        field.value = car[key] !== undefined && car[key] !== null ? car[key] : '';
+                    }
+                });
+                populateDeliveryRows(car.delivery_options || {});
+                if (editFeedback) {
+                    editFeedback.classList.add('d-none');
+                }
+            };
+
+            const fetchCar = (carId, mode) => {
+                if (!carId) {
+                    return;
+                }
+                fetch(`/owner/cars/${carId}/data`, { headers: { 'X-Requested-With': 'XMLHttpRequest' } })
+                    .then((response) => {
+                        if (!response.ok) {
+                            throw new Error('Unable to load vehicle data.');
+                        }
+                        return response.json();
+                    })
+                    .then((payload) => {
+                        const car = payload && payload.car ? payload.car : null;
+                        if (!car) {
+                            throw new Error('Vehicle data was missing in the response.');
+                        }
+                        if (mode === 'view') {
+                            populateDetailModal(car);
+                            if (detailModal) {
+                                detailModal.show();
+                            }
+                        } else if (mode === 'edit') {
+                            populateEditModal(car);
+                            if (editModal) {
+                                editModal.show();
+                            }
+                        }
+                    })
+                    .catch((error) => {
+                        window.alert(error.message || 'Something went wrong while loading vehicle details.');
+                    });
+            };
+
+            document.querySelectorAll('[data-admin-car]').forEach((button) => {
+                button.addEventListener('click', () => {
+                    const carId = button.getAttribute('data-admin-car');
+                    fetchCar(carId, 'view');
+                });
+            });
+
+            document.querySelectorAll('[data-admin-edit]').forEach((button) => {
+                button.addEventListener('click', () => {
+                    const carId = button.getAttribute('data-admin-edit');
+                    fetchCar(carId, 'edit');
+                });
+            });
+
+            if (detailSummary.editButton) {
+                detailSummary.editButton.addEventListener('click', () => {
+                    const carId = detailSummary.editButton.getAttribute('data-admin-edit') || activeCarId;
+                    if (detailModal) {
+                        detailModal.hide();
+                    }
+                    fetchCar(carId, 'edit');
+                });
+            }
+
+            if (editForm) {
+                editForm.addEventListener('submit', (event) => {
+                    event.preventDefault();
+                    if (!activeCarId) {
+                        showToast('Vehicle context missing.', 'danger');
+                        return;
+                    }
+                    const formData = new FormData(editForm);
+                    if (submitButton) {
+                        submitButton.disabled = true;
+                        submitButton.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Saving...';
+                    }
+                    fetch(editForm.action, {
+                        method: 'POST',
+                        body: formData,
+                        headers: { 'X-Requested-With': 'XMLHttpRequest' },
+                    })
+                        .then((response) => {
+                            if (!response.ok) {
+                                throw new Error('Unable to save vehicle changes.');
+                            }
+                            return response.json();
+                        })
+                        .then((payload) => {
+                            if (!payload || !payload.success) {
+                                throw new Error(payload && payload.error ? payload.error : 'Update failed.');
+                            }
+                            showToast('Vehicle updated successfully.');
+                            setTimeout(() => window.location.reload(), 1200);
+                        })
+                        .catch((error) => {
+                            showToast(error.message || 'Update failed. Please try again.', 'danger');
+                        })
+                        .finally(() => {
+                            if (submitButton) {
+                                submitButton.disabled = false;
+                                submitButton.textContent = 'Save changes';
+                            }
+                        });
+                });
+            }
+        })();
+    </script>
 {% endblock %}

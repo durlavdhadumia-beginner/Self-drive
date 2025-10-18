@@ -179,6 +179,8 @@ document.addEventListener('DOMContentLoaded', () => {
     const editModal = editModalEl ? new bootstrap.Modal(editModalEl) : null;
     const modalMarkerIcon = buildLocationIcon();
     const formMarkerIcon = buildLocationIcon();
+    const deliveryContainer = document.getElementById('edit-delivery-options');
+    const deliveryRows = deliveryContainer ? Array.from(deliveryContainer.querySelectorAll('[data-delivery-distance]')) : [];
 
     let editMap = null;
     let editMarker = null;
@@ -202,6 +204,90 @@ document.addEventListener('DOMContentLoaded', () => {
         feedbackEl.textContent = message;
         feedbackEl.className = `alert alert-${type}`;
     };
+
+    const resetDeliveryRows = () => {
+        if (!deliveryRows.length) {
+            return;
+        }
+        deliveryRows.forEach((row, index) => {
+            const checkbox = row.querySelector('[data-delivery-checkbox]');
+            const priceInput = row.querySelector('[data-delivery-price]');
+            if (checkbox) {
+                checkbox.checked = false;
+            }
+            if (priceInput) {
+                priceInput.disabled = true;
+                priceInput.value = '';
+            }
+        });
+    };
+
+    const applyDeliveryOptions = (options = {}) => {
+        if (!deliveryRows.length) {
+            return;
+        }
+        deliveryRows.forEach((row) => {
+            const distance = Number(row.dataset.deliveryDistance || '0');
+            const checkbox = row.querySelector('[data-delivery-checkbox]');
+            const priceInput = row.querySelector('[data-delivery-price]');
+            if (!checkbox || !priceInput) {
+                return;
+            }
+            const price = options[distance] ?? options[String(distance)];
+            if (price !== undefined) {
+                checkbox.checked = true;
+                priceInput.disabled = false;
+                priceInput.value = price;
+            } else {
+                checkbox.checked = false;
+                priceInput.disabled = true;
+                priceInput.value = '';
+            }
+        });
+    };
+
+    if (deliveryRows.length) {
+        deliveryRows.forEach((row) => {
+            const checkbox = row.querySelector('[data-delivery-checkbox]');
+            const priceInput = row.querySelector('[data-delivery-price]');
+            if (!checkbox || !priceInput) {
+                return;
+            }
+            checkbox.addEventListener('change', () => {
+                if (checkbox.checked) {
+                    priceInput.disabled = false;
+                    if (!priceInput.value) {
+                        priceInput.focus();
+                    }
+                } else {
+                    priceInput.disabled = true;
+                    priceInput.value = '';
+                }
+            });
+        });
+    }
+
+    const addDeliveryContainer = document.getElementById('add-delivery-options');
+    if (addDeliveryContainer) {
+        addDeliveryContainer.querySelectorAll('[data-distance]').forEach((row) => {
+            const checkbox = row.querySelector('[data-add-delivery-checkbox]');
+            const priceInput = row.querySelector('[data-add-delivery-price]');
+            if (!checkbox || !priceInput) {
+                return;
+            }
+            checkbox.addEventListener('change', () => {
+                if (checkbox.checked) {
+                    priceInput.disabled = false;
+                    if (!priceInput.value) {
+                        priceInput.focus();
+                    }
+                } else {
+                    priceInput.disabled = true;
+                    priceInput.value = '';
+                }
+            });
+        });
+    }
 
     const updatePhotoLimitMessage = (allowed) => {
         if (!photoHelper) {
@@ -467,6 +553,19 @@ document.addEventListener('DOMContentLoaded', () => {
             toggleBtn.classList.toggle('btn-outline-secondary', available);
             toggleBtn.classList.toggle('btn-outline-success', !available);
         }
+        const deliverySummaryEl = cardEl.querySelector('[data-role="car-delivery-summary"]');
+        if (deliverySummaryEl) {
+            const entries = Object.entries(car.delivery_options || {})
+                .map(([distance, price]) => [Number(distance), Number(price)])
+                .filter(([distance]) => Number.isFinite(distance))
+                .sort((a, b) => a[0] - b[0]);
+            if (!entries.length) {
+                deliverySummaryEl.textContent = 'Delivery: Not offered';
+            } else {
+                const parts = entries.map(([distance, price]) => `Up to ${distance} km (₹ ${Math.round(price)})`);
+                deliverySummaryEl.textContent = `Delivery: ${parts.join(', ')}`;
+            }
+        }
     };
 
     const populateEditForm = (car) => {
@@ -526,6 +625,9 @@ document.addEventListener('DOMContentLoaded', () => {
             editDescriptionInput.value = car.description || '';
         }
 
+        resetDeliveryRows();
+        applyDeliveryOptions(car.delivery_options || {});
+
         ensureEditMap();
         const lat = Number(car.latitude);
         const lng = Number(car.longitude);
@@ -568,6 +670,7 @@ document.addEventListener('DOMContentLoaded', () => {
         imagesMarkedForDeletion.clear();
         renderExistingImages();
         updateNewPhotoLimit();
+        resetDeliveryRows();
         try {
             const response = await fetch(detailUrl, {
                 headers: { 'Accept': 'application/json' },

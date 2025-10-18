@@ -86,8 +86,41 @@
                                     <span><i class="bi bi-calendar-check"></i> End: {{ rental['end_time'] or 'TBD' }}</span>
                                     <span><i class="bi bi-person"></i> Host: {{ rental['owner_username'] }}</span>
                                 </div>
+                                <div class="d-flex flex-wrap gap-2 mb-3">
+                                    {% if rental['owner_response'] == 'pending' %}
+                                        <span class="badge bg-info text-dark">Booking request sent</span>
+                                    {% elif rental['owner_response'] == 'accepted' %}
+                                        <span class="badge bg-success-subtle text-success">Accepted by host</span>
+                                    {% elif rental['owner_response'] == 'rejected' %}
+                                        <span class="badge bg-danger-subtle text-danger">Declined by host</span>
+                                    {% endif %}
+                                    {% if rental['payment_status'] == 'awaiting_payment' %}
+                                        <span class="badge bg-warning text-dark">Payment pending</span>
+                                    {% elif rental['payment_status'] == 'paid' %}
+                                        <span class="badge bg-success">Payment confirmed</span>
+                                    {% endif %}
+                                </div>
                                 <div class="bg-light rounded-4 px-3 py-2 mb-3">
-                                    <div class="fw-semibold">Rs {{ (rental['total_amount'] or 0)|round(2) }}</div>
+                                    {% set base_amount = rental['rental_amount'] if rental['rental_amount'] else (rental['total_amount'] or 0) - (rental['delivery_fee'] or 0) %}
+                                    {% set delivery_fee = rental['delivery_fee'] or 0 %}
+                                    {% set delivery_label = rental['delivery_address'] or 'Pinned delivery location' %}
+                                    <div class="fw-semibold">Trip total Rs {{ (rental['total_amount'] or 0)|round(2) }}</div>
+                                    <div class="text-muted small">
+                                        Rental Rs {{ (base_amount or 0)|round(2) }}
+                                        {% if rental['delivery_type'] == 'delivery' %}
+                                            &bull; Delivery Rs {{ delivery_fee|round(2) }}
+                                        {% else %}
+                                            &bull; Pickup at host location
+                                        {% endif %}
+                                    </div>
+                                    {% if rental['delivery_type'] == 'delivery' %}
+                                        <div class="text-muted small">
+                                            Delivery {{ delivery_label }}
+                                            {% if rental['delivery_distance_km'] %}
+                                                &bull; ~{{ rental['delivery_distance_km']|round(1) }} km
+                                            {% endif %}
+                                        </div>
+                                    {% endif %}
                                     <div class="text-muted small">
                                         {% if rental['discount_amount'] %}
                                             Includes Rs {{ rental['discount_amount']|round(2) }} off with code {{ rental['promo_code'] or 'N/A' }}
@@ -96,12 +129,18 @@
                                         {% endif %}
                                     </div>
                                     <div class="text-muted small mt-2">
-                                        Owner response: <strong>{{ rental['owner_response']|capitalize }}</strong>  Payment status: <strong>{{ rental['payment_status']|replace('_', ' ')|capitalize }}</strong>
+                                        Booking status: <strong>{{ rental['owner_response']|replace('_', ' ')|title }}</strong> &bull; Payment status: <strong>{{ rental['payment_status']|replace('_', ' ')|title }}</strong>
                                     </div>
                                     {% if rental['owner_response'] == 'counter' %}
                                         <div class="text-muted small">Host suggested Rs {{ rental['counter_amount']|round|int }}. Respond below.</div>
                                     {% endif %}
+                                    {% if rental['payment_status'] == 'paid' %}
+                                        <div class="text-muted small">Host payout progress: 10% released, 90% reserved until the trip completes.</div>
+                                    {% elif rental['owner_response'] == 'accepted' and rental['payment_status'] == 'awaiting_payment' %}
+                                        <div class="text-muted small">Complete payment now. The host receives 10% instantly and the remaining 90% after the trip.</div>
+                                    {% endif %}
                                 </div>
+
 
                                 <div class="mt-auto">
                                     <div class="d-flex flex-column gap-2">
@@ -117,11 +156,10 @@
                                         {% endif %}
 
                                         {% if rental['owner_response'] == 'accepted' and rental['payment_status'] == 'awaiting_payment' %}
-                                            <form method="post" action="{{ url_for('renter_confirm_payment', rental_id=rental['id']) }}" class="d-flex flex-column flex-sm-row gap-2">
-                                                <input type="hidden" name="payment_channel" value="bank-transfer">
-                                                <button type="submit" class="btn btn-sm btn-success">I have completed the payment</button>
-                                                <span class="text-muted small">Due by {{ rental['payment_due_at'] or 'n/a' }} &bull; Please contact support for payment options.</span>
-                                            </form>
+                                            <div class="d-flex flex-column flex-sm-row align-items-sm-center gap-2">
+                                                <a class="btn btn-sm btn-success" href="{{ url_for('renter_payment_page', rental_id=rental['id']) }}">Pay now</a>
+                                                <span class="text-muted small">Due by {{ rental['payment_due_at'] or 'n/a' }}</span>
+                                            </div>
                                         {% endif %}
 
                                         {% if rental['status'] in ('booked', 'active') %}

@@ -1,0 +1,91 @@
+{% extends "base.html" %}
+{% block title %}Complete Payment | DriveNow{% endblock %}
+{% block content %}
+<section class="py-5">
+    <div class="container">
+        <div class="row justify-content-center">
+            <div class="col-lg-8 col-xl-7">
+                <div class="card card-zoom mb-4">
+                    <div class="card-body">
+                        <h1 class="h4 fw-bold mb-3">Review &amp; confirm payment</h1>
+                        <p class="text-muted mb-4">
+                            Please double-check the trip details before marking the payment as complete.
+                            The total shown below already includes our {{ payment_summary.commission_rate }}% service fee.
+                            Once you confirm, the host receives {{ payment_summary.initial_rate }}% immediately and the remaining {{ payment_summary.final_rate }}% after the trip.
+                        </p>
+
+                        <div class="d-flex flex-column flex-md-row justify-content-between gap-3 mb-4">
+                            <div>
+                                <div class="fw-semibold">{{ rental.car_label }}</div>
+                                <div class="text-muted small">{{ rental.owner_display_name }}</div>
+                                <div class="text-muted small">Trip window: {{ rental.start_time }} to {{ rental.end_time or 'TBD' }}</div>
+                            </div>
+                            <div class="text-muted small text-md-end">
+                                Booking ID: {{ rental.id }}<br>
+                                Car licence: {{ rental.licence_plate or 'N/A' }}
+                            </div>
+                        </div>
+
+                        <div class="border rounded-4 p-3 mb-4 bg-light">
+                            <div class="d-flex justify-content-between align-items-center mb-2">
+                                <span class="text-muted">Rental charges</span>
+                                <span class="fw-semibold">Rs {{ payment_summary.rental_amount|round(2) }}</span>
+                            </div>
+                            <div class="d-flex justify-content-between align-items-center mb-2">
+                                <span class="text-muted">
+                                    {% if rental.delivery_type == 'delivery' %}
+                                        Delivery charges{% if rental.delivery_address %} &mdash; {{ rental.delivery_address }}{% endif %}
+                                        {% if rental.delivery_distance_km %}(~{{ rental.delivery_distance_km|round(1) }} km){% endif %}
+                                    {% else %}
+                                        Pickup at host location
+                                    {% endif %}
+                                </span>
+                                <span class="fw-semibold">
+                                    {% if rental.delivery_type == 'delivery' %}
+                                        Rs {{ payment_summary.delivery_fee|round(2) }}
+                                    {% else %}
+                                        Rs 0.00
+                                    {% endif %}
+                                </span>
+                            </div>
+                            <hr class="my-3">
+                            <div class="d-flex justify-content-between align-items-center">
+                                <span class="fw-semibold">Amount payable</span>
+                                <span class="fw-bold fs-5 text-success">Rs {{ payment_summary.total_amount|round(2) }}</span>
+                            </div>
+                        </div>
+
+                        <div class="alert alert-info mb-4">
+                            <div class="fw-semibold mb-1">Payout timeline</div>
+                            <ul class="mb-0 text-muted small ps-3">
+                                <li>{{ payment_summary.initial_rate }}% of the total reaches the host instantly once you confirm payment.</li>
+                                <li>The remaining {{ payment_summary.final_rate }}% is released after the trip concludes successfully.</li>
+                                <li>Our {{ payment_summary.commission_rate }}% service fee is retained by DriveNow.</li>
+                            </ul>
+                        </div>
+
+                        <form method="post" action="{{ url_for('renter_confirm_payment', rental_id=rental.id) }}" class="row g-3">
+                            <div class="col-12 col-md-6">
+                                <label class="form-label small" for="payment_channel">Payment channel</label>
+                                <select class="form-select" id="payment_channel" name="payment_channel" required>
+                                    <option value="upi/netbanking" selected>UPI / Net banking</option>
+                                    <option value="card">Debit / Credit card</option>
+                                    <option value="cash">Cash on delivery</option>
+                                </select>
+                            </div>
+                            <div class="col-12 col-md-6 d-flex align-items-end">
+                                <button type="submit" class="btn btn-success w-100">Mark payment completed</button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+
+                <div class="d-flex justify-content-between">
+                    <a href="{{ url_for('rentals') }}" class="btn btn-outline-secondary">Back to my trips</a>
+                    <a href="{{ url_for('search') }}" class="btn btn-outline-success">Find more vehicles</a>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+{% endblock %}

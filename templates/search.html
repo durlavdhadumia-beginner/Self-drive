@@ -85,6 +85,13 @@
             background: #facc15;
             color: #facc15;
         }
+        .delivery-map {
+            height: 220px;
+            min-height: 220px;
+            border-radius: 1rem;
+            overflow: hidden;
+            background: linear-gradient(135deg, rgba(236, 253, 245, 0.65), rgba(209, 250, 229, 0.4));
+        }
         .modal-gallery-img {
             height: 420px;
             object-fit: cover;
@@ -141,6 +148,9 @@
                 <div class="fw-semibold">City: {{ city_display or detected_city or '-' }}</div>
                 <div class="text-muted">Start: {{ start_time or '-' }}</div>
                 <div class="text-muted">End: {{ end_time or '-' }}</div>
+                {% if destinations %}
+                    <div class="text-muted">Destinations: {{ destinations|join(', ') }}</div>
+                {% endif %}
             </div>
         </div>
 
@@ -179,6 +189,12 @@
                                                 <option value="{{ label }}">
                                             {% endfor %}
                                         </datalist>
+                                        <datalist id="destination-options">
+                                            {% for entry in city_entries %}
+                                                {% set label = entry.name ~ (', ' ~ entry.state if entry.state) %}
+                                                <option value="{{ label }}">
+                                            {% endfor %}
+                                        </datalist>
                                     {% endif %}
                                 </div>
                                 <div class="col-lg-3 col-md-6">
@@ -192,6 +208,23 @@
                                 <div class="col-lg-3 col-md-6">
                                     <label class="form-label" for="radius">Radius (km)</label>
                                     <input type="number" class="form-control" name="radius" id="radius" min="1" max="200" step="1" value="{{ radius or 10 }}">
+                                </div>
+                                <div class="col-12 mt-3">
+                                    <label class="form-label" for="destinations-0">Trip destinations</label>
+                                    <div class="d-flex flex-column gap-2"
+                                         data-destination-container
+                                         data-input-name="destinations"
+                                         data-add-button="#add-search-destination"
+                                         data-datalist="destination-options"
+                                         data-required="true"
+                                         data-initial="{{ destinations|tojson|safe }}">
+                                    </div>
+                                    <div class="d-flex justify-content-between align-items-center mt-2">
+                                        <div class="form-text mb-0">Add your planned stops. At least one destination is required.</div>
+                                        <button type="button" class="btn btn-outline-success btn-sm" id="add-search-destination">
+                                            <i class="bi bi-plus-circle"></i> Add destination
+                                        </button>
+                                    </div>
                                 </div>
                             </div>
                             <div class="row g-3 align-items-end mt-0">
@@ -343,16 +376,57 @@
                                 {% endif %}
                                 <div class="mt-auto">
                                     {% if car.status == 'Available' %}
-                                        <form method="post" action="{{ url_for('rent_car', car_id=car.id) }}" class="row g-2" id="rent-form-{{ car.id }}">
+                                        <form method="post"
+                                              action="{{ url_for('rent_car', car_id=car.id) }}"
+                                              class="row g-2"
+                                              id="rent-form-{{ car.id }}"
+                                              data-car-id="{{ car.id }}"
+                                              data-car-lat="{{ car.latitude|default('') }}"
+                                              data-car-lng="{{ car.longitude|default('') }}"
+                                              data-base-total="{{ pricing_info.total if pricing_info else '' }}">
                                             <input type="hidden" name="start_time" value="{{ start_time or '' }}">
                                             <input type="hidden" name="end_time" value="{{ end_time or '' }}">
                                             <input type="hidden" name="price_unit" value="{{ filters.price_unit }}">
+                                            <input type="hidden" name="delivery_type" value="pickup" data-role="delivery-type">
+                                            <input type="hidden" name="delivery_latitude" value="" data-role="delivery-lat">
+                                            <input type="hidden" name="delivery_longitude" value="" data-role="delivery-lng">
+                                            <input type="hidden" name="delivery_address" value="" data-role="delivery-address">
+                                            <input type="hidden" name="delivery_fee" value="0" data-role="delivery-fee-input">
+                                            <input type="hidden" name="delivery_distance" value="" data-role="delivery-distance">
+                                            <div class="col-12">
+                                                <label class="form-label small text-muted d-block">How would you like to receive the vehicle?</label>
+                                                <div class="form-check">
+                                                    <input class="form-check-input" type="radio" name="fulfillment" id="pickup-{{ car.id }}" value="pickup" data-mode="pickup" required checked>
+                                                    <label class="form-check-label" for="pickup-{{ car.id }}">I'll pick it up myself</label>
+                                                </div>
+                                                {% if car.delivery_options %}
+                                                <div class="form-check">
+                                                    <input class="form-check-input" type="radio" name="fulfillment" id="delivery-{{ car.id }}" value="delivery" data-mode="delivery">
+                                                    <label class="form-check-label" for="delivery-{{ car.id }}">Request delivery</label>
+                                                </div>
+                                                <div class="border rounded-4 p-3 mt-3 d-none" data-role="delivery-section">
+                                                    <div class="small text-muted mb-2">Set your delivery point. We estimate the fee automatically from the host's rates.</div>
+                                                    <div class="mb-2">
+                                                        <label class="form-label small" for="delivery-address-{{ car.id }}">Delivery address (optional)</label>
+                                                        <input type="text" class="form-control form-control-sm" id="delivery-address-{{ car.id }}" placeholder="Apartment, landmark, etc." data-role="delivery-address-input">
+                                                    </div>
+                                                    <div class="delivery-map mb-2" id="delivery-map-{{ car.id }}"></div>
+                                                    <div class="d-flex gap-2 mb-2">
+                                                        <button type="button" class="btn btn-outline-success btn-sm" data-role="locate-me"><i class="bi bi-geo"></i> Use my location</button>
+                                                        <button type="button" class="btn btn-outline-secondary btn-sm" data-role="reset-delivery"><i class="bi bi-x-lg"></i> Clear</button>
+                                                    </div>
+                                                    <div class="small" data-role="delivery-summary">Select a delivery location to view charges.</div>
+                                                </div>
+                                                {% else %}
+                                                <div class="small text-muted mt-1">Delivery is not available for this vehicle.</div>
+                                                {% endif %}
+                                            </div>
                                             <div class="col-12">
                                                 <label class="form-label small text-muted" for="promo-{{ car.id }}">Promo code (optional)</label>
                                                 <input type="text" class="form-control" id="promo-{{ car.id }}" name="promo_code" placeholder="e.g. ZOOM10">
                                             </div>
                                             <div class="col-12 d-grid">
-                                                <button type="submit" class="btn btn-success">Reserve instantly</button>
+                                                <button type="submit" class="btn btn-success">Book now</button>
                                             </div>
                                         </form>
                                     {% else %}
@@ -407,6 +481,7 @@
 {% endblock %}
 {% block scripts %}
     {{ super() }}
+    <script src="{{ url_for('static', filename='js/destination_inputs.js') }}"></script>
     <script>
         const cityInput = document.getElementById('city-field');
         const suggestionPanel = document.getElementById('city-suggestions');
@@ -1106,6 +1181,330 @@
             }
         }
         syncEndConstraints();
+
+        const toRadians = (value) => (Number(value) * Math.PI) / 180;
+        const haversineKm = (lat1, lng1, lat2, lng2) => {
+            if (![lat1, lng1, lat2, lng2].every(Number.isFinite)) {
+                return NaN;
+            }
+            const dLat = toRadians(lat2 - lat1);
+            const dLng = toRadians(lng2 - lng1);
+            const a = Math.sin(dLat / 2) ** 2 +
+                Math.cos(toRadians(lat1)) * Math.cos(toRadians(lat2)) * Math.sin(dLng / 2) ** 2;
+            const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+            return 6371 * c;
+        };
+
+        const registerRentForms = () => {
+            document.querySelectorAll('form[id^="rent-form-"]').forEach((form) => {
+                if (!form || form.dataset.enhanced === '1') {
+                    return;
+                }
+                const carId = form.getAttribute('data-car-id');
+                const baseRaw = form.getAttribute('data-base-total');
+                const parsedBase = baseRaw && baseRaw.trim() !== '' ? Number(baseRaw) : NaN;
+                const baseTotal = Number.isFinite(parsedBase) ? parsedBase : null;
+                const carData = carLookup.get(String(carId));
+                const hostLat = carData && carData.latitude !== undefined
+                    ? Number(carData.latitude)
+                    : Number(form.getAttribute('data-car-lat'));
+                const hostLng = carData && carData.longitude !== undefined
+                    ? Number(carData.longitude)
+                    : Number(form.getAttribute('data-car-lng'));
+                const hasHostLocation = Number.isFinite(hostLat) && Number.isFinite(hostLng);
+                const deliveryOptions = (carData && carData.delivery_options) ? carData.delivery_options : {};
+                const deliveryEntries = Object.entries(deliveryOptions)
+                    .map(([distance, price]) => ({
+                        distance: Number(distance),
+                        price: Number(price),
+                    }))
+                    .filter((entry) => Number.isFinite(entry.distance) && Number.isFinite(entry.price) && entry.distance > 0)
+                    .sort((a, b) => a.distance - b.distance);
+
+                const hiddenType = form.querySelector('[data-role="delivery-type"]');
+                const hiddenLat = form.querySelector('[data-role="delivery-lat"]');
+                const hiddenLng = form.querySelector('[data-role="delivery-lng"]');
+                const hiddenAddress = form.querySelector('[data-role="delivery-address"]');
+                const hiddenFee = form.querySelector('[data-role="delivery-fee-input"]');
+                const hiddenDistance = form.querySelector('[data-role="delivery-distance"]');
+                const addressInput = form.querySelector('[data-role="delivery-address-input"]');
+                const summaryEl = form.querySelector('[data-role="delivery-summary"]');
+                const deliverySection = form.querySelector('[data-role="delivery-section"]');
+                const locateBtn = form.querySelector('[data-role="locate-me"]');
+                const resetBtn = form.querySelector('[data-role="reset-delivery"]');
+                const mapContainer = form.querySelector('[id^="delivery-map-"]');
+                const modeInputs = form.querySelectorAll('input[name="fulfillment"][data-mode]');
+                const defaultSummary = summaryEl ? summaryEl.textContent : '';
+                const pickupSummary = baseTotal !== null
+                    ? `Pickup selected. Estimated trip total Rs ${formatRupees(baseTotal)}.`
+                    : 'Pickup selected. Trip total will be confirmed once the schedule is set.';
+
+                const state = {
+                    mode: 'pickup',
+                    deliveryValid: false,
+                    fee: 0,
+                    distanceKm: 0,
+                };
+
+                let deliveryMap = null;
+                let deliveryMarker = null;
+                let hostMarker = null;
+                const ensureMap = () => {
+                    if (!deliverySection || !mapContainer) {
+                        return;
+                    }
+                    if (deliveryMap) {
+                        return;
+                    }
+                    deliveryMap = L.map(mapContainer, { attributionControl: false, zoomControl: false });
+                    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                        maxZoom: 18,
+                        attribution: '&copy; OpenStreetMap contributors',
+                    }).addTo(deliveryMap);
+                    if (hasHostLocation) {
+                        hostMarker = L.circleMarker([hostLat, hostLng], {
+                            radius: 6,
+                            color: '#16a34a',
+                            fillColor: '#bbf7d0',
+                            fillOpacity: 0.9,
+                        }).addTo(deliveryMap);
+                        hostMarker.bindTooltip('Host vehicle location', { permanent: false });
+                        deliveryMap.setView([hostLat, hostLng], 12);
+                    } else {
+                        deliveryMap.setView([20.5937, 78.9629], 5);
+                    }
+                    deliveryMap.on('click', (event) => {
+                        const { lat, lng } = event.latlng;
+                        setDeliveryLocation(lat, lng);
+                    });
+                    setTimeout(() => {
+                        if (deliveryMap) {
+                            deliveryMap.invalidateSize();
+                        }
+                    }, 100);
+                };
+
+                const updateSummary = () => {
+                    if (!summaryEl) {
+                        return;
+                    }
+                    if (state.mode !== 'delivery') {
+                        summaryEl.textContent = pickupSummary;
+                        return;
+                    }
+                    if (!deliveryEntries.length) {
+                        summaryEl.textContent = 'This host has not shared delivery charges. Please coordinate directly before requesting delivery.';
+                        return;
+                    }
+                    if (!state.deliveryValid) {
+                        summaryEl.textContent = 'Select a delivery location within the host delivery range to view charges.';
+                        return;
+                    }
+                    const feeDisplay = formatRupees(state.fee);
+                    const feeLabel = feeDisplay !== null && feeDisplay !== undefined
+                        ? feeDisplay
+                        : state.fee.toFixed(0);
+                    const distanceLabel = state.distanceKm >= 1
+                        ? `${state.distanceKm.toFixed(1)} km`
+                        : `${state.distanceKm.toFixed(2)} km`;
+                    if (baseTotal !== null) {
+                        const combined = baseTotal + state.fee;
+                        const combinedDisplay = formatRupees(combined) ?? combined.toFixed(0);
+                        const baseDisplay = formatRupees(baseTotal) ?? baseTotal.toFixed(0);
+                        summaryEl.textContent = `Delivery fee Rs ${feeLabel} (~${distanceLabel}). Estimated trip total Rs ${combinedDisplay} (rental Rs ${baseDisplay} + delivery Rs ${feeLabel}).`;
+                    } else {
+                        summaryEl.textContent = `Delivery fee Rs ${feeLabel} (~${distanceLabel}). Final billing will be confirmed once trip timings are set.`;
+                    }
+                };
+
+                const clearDelivery = () => {
+                    if (deliveryMarker) {
+                        deliveryMarker.remove();
+                        deliveryMarker = null;
+                    }
+                    hiddenLat.value = '';
+                    hiddenLng.value = '';
+                    hiddenFee.value = '0';
+                    hiddenDistance.value = '';
+                    state.deliveryValid = false;
+                    state.fee = 0;
+                    state.distanceKm = 0;
+                    updateSummary();
+                };
+
+                const setDeliveryLocation = (lat, lng) => {
+                    const numericLat = Number(lat);
+                    const numericLng = Number(lng);
+                    if (!Number.isFinite(numericLat) || !Number.isFinite(numericLng)) {
+                        return;
+                    }
+                    ensureMap();
+                    if (!deliveryMap) {
+                        return;
+                    }
+                    const latLng = [numericLat, numericLng];
+                    if (deliveryMarker) {
+                        deliveryMarker.setLatLng(latLng);
+                    } else {
+                        deliveryMarker = L.marker(latLng, { draggable: true }).addTo(deliveryMap);
+                        deliveryMarker.on('dragend', (event) => {
+                            const pos = event.target.getLatLng();
+                            setDeliveryLocation(pos.lat, pos.lng);
+                        });
+                    }
+                    deliveryMap.panTo(latLng);
+                    hiddenLat.value = numericLat.toFixed(6);
+                    hiddenLng.value = numericLng.toFixed(6);
+
+                    state.deliveryValid = false;
+                    state.fee = 0;
+                    state.distanceKm = 0;
+
+                    if (hasHostLocation) {
+                        const distanceKm = haversineKm(hostLat, hostLng, numericLat, numericLng);
+                        if (Number.isFinite(distanceKm)) {
+                            state.distanceKm = distanceKm;
+                            let applicable = null;
+                            for (const option of deliveryEntries) {
+                                if (distanceKm <= option.distance + 0.01) {
+                                    applicable = option;
+                                    break;
+                                }
+                            }
+                            if (applicable) {
+                                state.deliveryValid = true;
+                                state.fee = Math.max(0, applicable.price);
+                            }
+                        }
+                    } else {
+                        state.deliveryValid = deliveryEntries.length === 0;
+                        state.fee = 0;
+                        state.distanceKm = 0;
+                    }
+
+                    if (state.deliveryValid) {
+                        hiddenFee.value = state.fee.toFixed(2);
+                        hiddenDistance.value = state.distanceKm.toFixed(2);
+                    } else {
+                        hiddenFee.value = '';
+                        hiddenDistance.value = state.distanceKm > 0 ? state.distanceKm.toFixed(2) : '';
+                    }
+                    updateSummary();
+                };
+
+                const handleModeChange = (event) => {
+                    const mode = event.target.dataset.mode === 'delivery' ? 'delivery' : 'pickup';
+                    state.mode = mode;
+                    if (hiddenType) {
+                        hiddenType.value = mode;
+                    }
+                    if (mode === 'delivery') {
+                        if (deliverySection) {
+                            deliverySection.classList.remove('d-none');
+                        }
+                        ensureMap();
+                        setTimeout(() => {
+                            if (deliveryMap) {
+                                deliveryMap.invalidateSize();
+                            }
+                        }, 120);
+                        updateSummary();
+                    } else {
+                        if (deliverySection) {
+                            deliverySection.classList.add('d-none');
+                        }
+                        clearDelivery();
+                    }
+                };
+
+                modeInputs.forEach((input) => {
+                    input.addEventListener('change', handleModeChange);
+                });
+
+                if (addressInput && hiddenAddress) {
+                    addressInput.addEventListener('input', () => {
+                        hiddenAddress.value = addressInput.value.trim();
+                    });
+                }
+
+                if (locateBtn) {
+                    if ('geolocation' in navigator) {
+                        locateBtn.addEventListener('click', () => {
+                            locateBtn.disabled = true;
+                            const originalLabel = locateBtn.innerHTML;
+                            locateBtn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Locating...';
+                            navigator.geolocation.getCurrentPosition((position) => {
+                                const { latitude, longitude } = position.coords;
+                                setDeliveryLocation(latitude, longitude);
+                                locateBtn.innerHTML = '<i class="bi bi-geo"></i> Location set';
+                                locateBtn.classList.remove('btn-outline-success');
+                                locateBtn.classList.add('btn-success');
+                                locateBtn.disabled = false;
+                            }, () => {
+                                alert('Unable to detect your current location. Please allow access or drop a pin on the map.');
+                                locateBtn.innerHTML = originalLabel;
+                                locateBtn.disabled = false;
+                            });
+                        });
+                    } else {
+                        locateBtn.style.display = 'none';
+                    }
+                }
+
+                if (resetBtn) {
+                    resetBtn.addEventListener('click', () => {
+                        if (addressInput) {
+                            addressInput.value = '';
+                        }
+                        if (hiddenAddress) {
+                            hiddenAddress.value = '';
+                        }
+                        clearDelivery();
+                        if (deliverySection) {
+                            deliverySection.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                        }
+                    });
+                }
+
+                form.addEventListener('submit', (event) => {
+                    if (hiddenAddress && addressInput) {
+                        hiddenAddress.value = addressInput.value.trim();
+                    }
+                    if (state.mode === 'delivery') {
+                        if (!deliveryEntries.length) {
+                            event.preventDefault();
+                            alert('Delivery is not available for this vehicle.');
+                            return;
+                        }
+                        if (!state.deliveryValid) {
+                            event.preventDefault();
+                            alert('Please choose a delivery location within the host delivery range before booking.');
+                            return;
+                        }
+                        if (!hiddenLat.value || !hiddenLng.value) {
+                            event.preventDefault();
+                            alert('Drop a delivery pin on the map or share your location before booking.');
+                            return;
+                        }
+                    } else {
+                        hiddenFee.value = '0';
+                        hiddenDistance.value = '';
+                        hiddenLat.value = '';
+                        hiddenLng.value = '';
+                    }
+                });
+
+                state.mode = 'pickup';
+                if (hiddenType) {
+                    hiddenType.value = 'pickup';
+                }
+                if (summaryEl) {
+                    summaryEl.textContent = pickupSummary || defaultSummary;
+                }
+                form.dataset.enhanced = '1';
+            });
+        };
+        registerRentForms();
     </script>
 {% endblock %}
 

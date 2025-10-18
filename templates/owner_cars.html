@@ -114,9 +114,19 @@
                                     <div class="col-sm-6" data-role="car-rate-day">Daily rate: Rs {{ '%.0f'|format(car['daily_rate']) }}</div>
                                     <div class="col-sm-6" data-role="car-fuel">Fuel type: {{ car['fuel_type'] or 'NA' }}</div>
                                     <div class="col-sm-6" data-role="car-transmission">Transmission: {{ car['transmission'] or 'NA' }}</div>
-                                    <div class="col-12 mt-2" data-role="car-location-label">
-                                        Location: {{ car['city'] or 'Location not set' }}
-                                    </div>
+                                <div class="col-12 mt-2" data-role="car-location-label">
+                                    Location: {{ car['city'] or 'Location not set' }}
+                                </div>
+                                {% set delivery_map = car['delivery_options'] or {} %}
+                                <div class="col-12 small text-muted" data-role="car-delivery-summary">
+                                    {% if delivery_map %}
+                                        Delivery: {% for distance, price in delivery_map|dictsort %}
+                                            Up to {{ distance }} km (₹ {{ price|round|int }}){% if not loop.last %}, {% endif %}
+                                        {% endfor %}
+                                    {% else %}
+                                        Delivery: Not offered
+                                    {% endif %}
+                                </div>
                                 </div>
                                 <div class="d-flex flex-wrap gap-3 align-items-center">
                                     <button type="button" class="btn btn-outline-primary btn-sm car-edit-trigger" data-car-id="{{ car['id'] }}">
@@ -150,9 +160,16 @@
                         {% if pending_requests or counter_requests %}
                             {% for rental in pending_requests %}
                                 <div class="border rounded-4 p-3 mb-3">
+                                    {% set base_amount = rental['rental_amount'] if rental['rental_amount'] else (rental['total_amount'] or 0) - (rental['delivery_fee'] or 0) %}
+                                    {% set delivery_fee = rental['delivery_fee'] or 0 %}
+                                    {% set delivery_label = rental['delivery_address'] or 'Pinned delivery location' %}
                                     <div class="fw-semibold">{{ rental['car_name'] }} - {{ rental['renter_username'] }}</div>
-                                    <div class="text-muted small mb-2">Start {{ rental['start_time'] }} ? {{ rental['end_time'] or 'TBD' }}</div>
-                                    <div class="text-muted small mb-3">Offer total: Rs {{ rental['total_amount']|round|int }}</div>
+                                    <div class="text-muted small mb-2">Trip window: {{ rental['start_time'] }} to {{ rental['end_time'] or 'TBD' }}</div>
+                                    <div class="text-muted small">Rental Rs {{ (base_amount or 0)|round(2) }}{% if rental['delivery_type'] == 'delivery' %} &bull; Delivery Rs {{ delivery_fee|round(2) }}{% else %} &bull; Pickup only{% endif %}</div>
+                                    {% if rental['delivery_type'] == 'delivery' %}
+                                        <div class="text-muted small">Delivery to {{ delivery_label }}{% if rental['delivery_distance_km'] %} &bull; ~{{ rental['delivery_distance_km']|round(1) }} km{% endif %}</div>
+                                    {% endif %}
+                                    <div class="text-muted small mb-3">Offer total: Rs {{ rental['total_amount']|round(2) }}</div>
                                     <div class="d-flex gap-2 flex-wrap">
                                         <form method="post" action="{{ url_for('owner_respond_rental', rental_id=rental['id']) }}">
                                             <input type="hidden" name="action" value="accept">
@@ -191,9 +208,26 @@
                         {% if awaiting %}
                             {% for rental in awaiting %}
                                 <div class="border rounded-4 p-3 mb-3">
+                                    {% set base_amount = rental['rental_amount'] if rental['rental_amount'] else (rental['total_amount'] or 0) - (rental['delivery_fee'] or 0) %}
+                                    {% set delivery_fee = rental['delivery_fee'] or 0 %}
+                                    {% set delivery_label = rental['delivery_address'] or 'Pinned delivery location' %}
                                     <div class="fw-semibold">{{ rental['car_name'] }} - {{ rental['renter_username'] }}</div>
-                                    <div class="text-muted small mb-2">Total due Rs {{ rental['total_amount']|round|int }} by {{ rental['payment_due_at'] or 'n/a' }}</div>
-                                    <div class="text-muted small">We have alerted the renter. You will be notified once payment is confirmed.</div>
+                                    <div class="text-muted small">Rental Rs {{ (base_amount or 0)|round(2) }}
+                                        {% if rental['delivery_type'] == 'delivery' %}
+                                            &bull; Delivery Rs {{ delivery_fee|round(2) }}
+                                        {% else %}
+                                            &bull; Pickup only
+                                        {% endif %}
+                                    </div>
+                                    {% if rental['delivery_type'] == 'delivery' %}
+                                        <div class="text-muted small">Delivery to {{ delivery_label }}
+                                            {% if rental['delivery_distance_km'] %}
+                                                &bull; ~{{ rental['delivery_distance_km']|round(1) }} km
+                                            {% endif %}
+                                        </div>
+                                    {% endif %}
+                                    <div class="text-muted small mb-2">Total due Rs {{ rental['total_amount']|round(2) }} by {{ rental['payment_due_at'] or 'n/a' }}</div>
+                                    <div class="text-muted small">We have alerted the renter. Host payout: 10% releases after payment; remaining 90% after the trip.</div>
                                 </div>
                             {% endfor %}
                         {% else %}
@@ -383,6 +417,23 @@
                                 </div>
                             </div>
                             <div class="col-12">
+                                <label class="form-label">Delivery options</label>
+                                <div class="text-muted small mb-2">Offer delivery for an extra fee (₹). Leave unchecked if not available.</div>
+                                <div class="row g-2" id="add-delivery-options">
+                                    {% for distance in delivery_choices %}
+                                        <div class="col-md-6" data-distance="{{ distance }}">
+                                            <div class="input-group">
+                                                <div class="input-group-text">
+                                                    <input class="form-check-input mt-0" type="checkbox" value="{{ distance }}" name="delivery_options" data-add-delivery-checkbox>
+                                                    <span class="ms-2 small">Up to {{ distance }} km</span>
+                                                </div>
+                                                <input type="number" class="form-control" name="delivery_price_{{ distance }}" data-add-delivery-price placeholder="Charge (₹)" min="0" step="50" disabled>
+                                            </div>
+                                        </div>
+                                    {% endfor %}
+                                </div>
+                            </div>
+                            <div class="col-12">
                                 <label class="form-label" for="description">Highlights</label>
                                 <textarea class="form-control" id="description" name="description" rows="3" placeholder="Mention delivery options, add-ons, insurance, etc."></textarea>
                             </div>
@@ -506,6 +557,23 @@
                                 </div>
                                 <input type="hidden" id="edit-latitude" name="latitude">
                                 <input type="hidden" id="edit-longitude" name="longitude">
+                                <div class="col-12">
+                                    <label class="form-label">Delivery options</label>
+                                    <div class="text-muted small mb-2">Offer delivery for an extra fee (₹). Leave unchecked if not available.</div>
+                                    <div class="row g-2" id="edit-delivery-options">
+                                        {% for distance in delivery_choices %}
+                                            <div class="col-md-6" data-delivery-distance="{{ distance }}">
+                                                <div class="input-group">
+                                                    <div class="input-group-text">
+                                                        <input class="form-check-input mt-0" type="checkbox" value="{{ distance }}" name="delivery_options" data-delivery-checkbox>
+                                                        <span class="ms-2 small">Up to {{ distance }} km</span>
+                                                    </div>
+                                                    <input type="number" class="form-control" name="delivery_price_{{ distance }}" data-delivery-price placeholder="Charge (₹)" min="0" step="50" disabled>
+                                                </div>
+                                            </div>
+                                        {% endfor %}
+                                    </div>
+                                </div>
                                 <div class="col-md-6">
                                     <div class="form-check mt-4">
                                         <input class="form-check-input" type="checkbox" id="edit-has-gps" name="has_gps">
