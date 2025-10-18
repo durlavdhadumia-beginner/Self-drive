@@ -2781,6 +2781,7 @@ def owner_cars() -> str:
         """,
         (g.user["id"],),
     ).fetchall()
+    city_entries = load_city_entries(include_coordinates=True)
     label_lookup: Dict[str, Tuple[float, float]] = {}
     for entry in city_entries:
         try:
@@ -2826,7 +2827,6 @@ def owner_cars() -> str:
             destinations_with_coords.append(entry)
         rental["trip_destinations_map"] = destinations_with_coords
         rentals_data.append(rental)
-    city_entries = load_city_entries(include_coordinates=True)
     vehicle_type_values = load_vehicle_type_options()
     other_vehicle_types = [
         vt for vt in vehicle_type_values if vt not in POPULAR_VEHICLE_TYPES]
