@@ -218,6 +218,14 @@
                                          data-datalist="destination-options"
                                          data-required="true"
                                          data-initial="{{ destinations|tojson|safe }}">
+                                        {% for destination in destinations %}
+                                            <div class="input-group destination-input-row" data-role="destination-input-row">
+                                                <input type="text" class="form-control" name="destinations" value="{{ destination }}" placeholder="Enter destination" autocomplete="off">
+                                                <button type="button" class="btn btn-outline-danger" data-role="remove-destination">
+                                                    <i class="bi bi-x-lg"></i>
+                                                </button>
+                                            </div>
+                                        {% endfor %}
                                     </div>
                                     <div class="d-flex justify-content-between align-items-center mt-2">
                                         <div class="form-text mb-0">Add your planned stops. At least one destination is required.</div>
@@ -393,6 +401,9 @@
                                             <input type="hidden" name="delivery_address" value="" data-role="delivery-address">
                                             <input type="hidden" name="delivery_fee" value="0" data-role="delivery-fee-input">
                                             <input type="hidden" name="delivery_distance" value="" data-role="delivery-distance">
+                                            {% for destination in destinations %}
+                                                <input type="hidden" name="destinations" value="{{ destination }}">
+                                            {% endfor %}
                                             <div class="col-12">
                                                 <label class="form-label small text-muted d-block">How would you like to receive the vehicle?</label>
                                                 <div class="form-check">
@@ -1194,6 +1205,42 @@
             const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
             return 6371 * c;
         };
+        const destinationsContainer = searchForm ? searchForm.querySelector('[data-destination-container]') : null;
+        const collectCurrentDestinations = () => {
+            if (!destinationsContainer) {
+                return [];
+            }
+            return Array.from(destinationsContainer.querySelectorAll('input[name="destinations"]'))
+                .map((input) => input.value.trim())
+                .filter((value, index, array) => value && array.indexOf(value) === index);
+        };
+        const presetDestinations = {{ destinations|tojson|safe }};
+        if (destinationsContainer && Array.isArray(presetDestinations) && presetDestinations.length) {
+            const inputs = Array.from(destinationsContainer.querySelectorAll('input[name="destinations"]'));
+            presetDestinations.forEach((value, index) => {
+                if (!value) {
+                    return;
+                }
+                const currentInput = inputs[index];
+                if (currentInput && !currentInput.value) {
+                    currentInput.value = value;
+                }
+            });
+        }
+        const syncDestinationsIntoForm = (form) => {
+            if (!form) {
+                return;
+            }
+            form.querySelectorAll('input[name="destinations"]').forEach((input) => input.remove());
+            collectCurrentDestinations().forEach((destination) => {
+                const hidden = document.createElement('input');
+                hidden.type = 'hidden';
+                hidden.name = 'destinations';
+                hidden.value = destination;
+                hidden.dataset.role = 'dynamic-destination';
+                form.appendChild(hidden);
+            });
+        };
 
         const registerRentForms = () => {
             document.querySelectorAll('form[id^="rent-form-"]').forEach((form) => {
@@ -1470,6 +1517,7 @@
                     if (hiddenAddress && addressInput) {
                         hiddenAddress.value = addressInput.value.trim();
                     }
+                    syncDestinationsIntoForm(form);
                     if (state.mode === 'delivery') {
                         if (!deliveryEntries.length) {
                             event.preventDefault();

@@ -140,6 +140,13 @@
                                         <div class="text-muted small">Complete payment now. The host receives 10% instantly and the remaining 90% after the trip.</div>
                                     {% endif %}
                                 </div>
+                                {% if rental['trip_destinations_list'] %}
+                                    <div class="text-muted small mb-3">Destinations: {{ rental['trip_destinations_list']|join(', ') }}</div>
+                                {% endif %}
+                                {% set show_cancel_note = rental['cancel_reason'] and (rental['status'] in ('cancelled',) or rental['owner_response'] == 'rejected') %}
+                                {% if show_cancel_note %}
+                                    <div class="alert alert-warning small mb-3">Host note: {{ rental['cancel_reason'] }}</div>
+                                {% endif %}
 
 
                                 <div class="mt-auto">

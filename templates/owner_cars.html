@@ -56,22 +56,21 @@
             <div class="bg-white shadow-sm rounded-4 px-4 py-3 d-flex gap-4">
                 <div>
                     <div class="small text-uppercase text-muted fw-semibold">Active rentals</div>
-                    <div class="fw-bold fs-5 text-success">{{ rentals|selectattr('status', 'equalto', 'active')|list|length }}</div>
+                    <div class="fw-bold fs-5 text-success">{{ active_trips|length }}</div>
                 </div>
                 <div>
                     <div class="small text-uppercase text-muted fw-semibold">Pending requests</div>
-                    <div class="fw-bold fs-5 text-success">{{ rentals|selectattr('owner_response', 'equalto', 'pending')|list|length }}</div>
+                    <div class="fw-bold fs-5 text-success">{{ pending_requests|length }}</div>
                 </div>
             </div>
         </div>
 
         {% if pending_payments %}
         <div class="alert alert-info d-flex flex-column flex-lg-row justify-content-between align-items-lg-center gap-2 mb-4">
-            {% set pending_total = pending_payments|sum(attribute='total_amount') %}
             <div>
                 <strong>{{ pending_payments|length }} payout{% if pending_payments|length > 1 %}s{% endif %} pending.</strong> DriveNow receives each customer payment, retains a 5% service fee, and then schedules the remaining 95% for your account.
             </div>
-            <div class="text-muted small">Latest request total: Rs {{ pending_total|round|int }} - Your take-home: Rs {{ (pending_total * (1 - commission_rate / 100))|round(2) }}</div>
+            <div class="text-muted small">Latest request total: Rs {{ pending_total_amount|round|int }} - Your take-home: Rs {{ (pending_total_amount * (1 - commission_rate / 100))|round(2) }}</div>
         </div>
         {% endif %}
         <div class="row g-4">
@@ -155,8 +154,6 @@
                 <div class="card card-zoom mb-4">
                     <div class="card-body">
                         <h2 class="h5 fw-semibold mb-3">Pending booking requests</h2>
-                        {% set pending_requests = rentals|selectattr('owner_response', 'equalto', 'pending')|list %}
-                        {% set counter_requests = rentals|selectattr('owner_response', 'equalto', 'counter')|list %}
                         {% if pending_requests or counter_requests %}
                             {% for rental in pending_requests %}
                                 <div class="border rounded-4 p-3 mb-3">
@@ -168,6 +165,17 @@
                                     <div class="text-muted small">Rental Rs {{ (base_amount or 0)|round(2) }}{% if rental['delivery_type'] == 'delivery' %} &bull; Delivery Rs {{ delivery_fee|round(2) }}{% else %} &bull; Pickup only{% endif %}</div>
                                     {% if rental['delivery_type'] == 'delivery' %}
                                         <div class="text-muted small">Delivery to {{ delivery_label }}{% if rental['delivery_distance_km'] %} &bull; ~{{ rental['delivery_distance_km']|round(1) }} km{% endif %}</div>
+                                    {% endif %}
+                                    {% if rental['trip_destinations_list'] %}
+                                        <div class="text-muted small mt-1">Destinations: {{ rental['trip_destinations_list']|join(', ') }}</div>
+                                    {% endif %}
+                                    {% if rental['delivery_type'] == 'delivery' and rental['delivery_latitude'] is not none and rental['delivery_longitude'] is not none %}
+                                        <div class="rounded-4 border overflow-hidden mt-3 mb-3 owner-request-map" data-owner-request-map
+                                             data-delivery-lat="{{ rental['delivery_latitude'] }}" data-delivery-lng="{{ rental['delivery_longitude'] }}"
+                                             data-car-lat="{{ rental['car_latitude'] if rental['car_latitude'] is not none else '' }}"
+                                             data-car-lng="{{ rental['car_longitude'] if rental['car_longitude'] is not none else '' }}"
+                                             data-destinations="{{ rental['trip_destinations_map']|tojson|safe }}"
+                                             style="height: 220px;"></div>
                                     {% endif %}
                                     <div class="text-muted small mb-3">Offer total: Rs {{ rental['total_amount']|round(2) }}</div>
                                     <div class="d-flex gap-2 flex-wrap">
@@ -193,6 +201,17 @@
                                 <div class="border rounded-4 p-3 mb-3 bg-warning-subtle">
                                     <div class="fw-semibold">{{ rental['car_name'] }} - {{ rental['renter_username'] }}</div>
                                     <div class="text-muted small">Waiting for renter to respond to your counter offer of Rs {{ rental['counter_amount']|round|int }}.</div>
+                                    {% if rental['trip_destinations_list'] %}
+                                        <div class="text-muted small mt-1">Destinations: {{ rental['trip_destinations_list']|join(', ') }}</div>
+                                    {% endif %}
+                                    {% if rental['delivery_type'] == 'delivery' and rental['delivery_latitude'] is not none and rental['delivery_longitude'] is not none %}
+                                        <div class="rounded-4 border overflow-hidden mt-3 owner-request-map" data-owner-request-map
+                                             data-delivery-lat="{{ rental['delivery_latitude'] }}" data-delivery-lng="{{ rental['delivery_longitude'] }}"
+                                             data-car-lat="{{ rental['car_latitude'] if rental['car_latitude'] is not none else '' }}"
+                                             data-car-lng="{{ rental['car_longitude'] if rental['car_longitude'] is not none else '' }}"
+                                             data-destinations="{{ rental['trip_destinations_map']|tojson|safe }}"
+                                             style="height: 220px;"></div>
+                                    {% endif %}
                                 </div>
                             {% endfor %}
                         {% else %}
@@ -204,9 +223,8 @@
                 <div class="card card-zoom mb-4">
                     <div class="card-body">
                         <h2 class="h5 fw-semibold mb-3">Awaiting payment</h2>
-                        {% set awaiting = rentals|selectattr('payment_status', 'equalto', 'awaiting_payment')|list %}
-                        {% if awaiting %}
-                            {% for rental in awaiting %}
+                        {% if awaiting_payments %}
+                            {% for rental in awaiting_payments %}
                                 <div class="border rounded-4 p-3 mb-3">
                                     {% set base_amount = rental['rental_amount'] if rental['rental_amount'] else (rental['total_amount'] or 0) - (rental['delivery_fee'] or 0) %}
                                     {% set delivery_fee = rental['delivery_fee'] or 0 %}
@@ -226,6 +244,9 @@
                                             {% endif %}
                                         </div>
                                     {% endif %}
+                                    {% if rental['trip_destinations_list'] %}
+                                        <div class="text-muted small">Destinations: {{ rental['trip_destinations_list']|join(', ') }}</div>
+                                    {% endif %}
                                     <div class="text-muted small mb-2">Total due Rs {{ rental['total_amount']|round(2) }} by {{ rental['payment_due_at'] or 'n/a' }}</div>
                                     <div class="text-muted small">We have alerted the renter. Host payout: 10% releases after payment; remaining 90% after the trip.</div>
                                 </div>
@@ -239,8 +260,6 @@
                 <div class="card card-zoom mb-4">
                     <div class="card-body">
                         <h2 class="h5 fw-semibold mb-3">Trips in progress</h2>
-                        {% set active_trips = rentals|selectattr('status', 'equalto', 'active')|list %}
-                        {% set ready_to_start = rentals|selectattr('status', 'equalto', 'booked')|selectattr('owner_response', 'equalto', 'accepted')|selectattr('payment_status', 'equalto', 'paid')|list %}
                         {% if active_trips or ready_to_start %}
                             {% for rental in ready_to_start %}
                                 <div class="border rounded-4 p-3 mb-3">
@@ -275,7 +294,6 @@
                 <div class="card card-zoom">
                     <div class="card-body">
                         <h2 class="h5 fw-semibold mb-3">Completed trips awaiting review</h2>
-                        {% set completed_trips = rentals|selectattr('status', 'equalto', 'completed')|list %}
                         {% if completed_trips %}
                             {% for rental in completed_trips %}
                                 <div class="border rounded-4 p-3 mb-3">

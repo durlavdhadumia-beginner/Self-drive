@@ -157,6 +157,14 @@
                                      data-datalist="destination-options"
                                      data-required="true"
                                      data-initial="{{ requested_destinations|tojson|safe }}">
+                                    {% for destination in requested_destinations %}
+                                        <div class="input-group destination-input-row" data-role="destination-input-row">
+                                            <input type="text" class="form-control" name="destinations" value="{{ destination }}" placeholder="Enter destination" autocomplete="off">
+                                            <button type="button" class="btn btn-outline-danger" data-role="remove-destination">
+                                                <i class="bi bi-x-lg"></i>
+                                            </button>
+                                        </div>
+                                    {% endfor %}
                                 </div>
                                 <div class="d-flex justify-content-between align-items-center mt-2">
                                     <div class="form-text mb-0">Add each planned stop. At least one destination is required.</div>

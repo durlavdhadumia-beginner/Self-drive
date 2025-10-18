@@ -751,6 +751,63 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     const ownerMapElement = document.getElementById('owner-map');
+    const initPendingRequestMaps = () => {
+        if (typeof L === 'undefined') {
+            return;
+        }
+        document.querySelectorAll('[data-owner-request-map]').forEach((container) => {
+            if (!container || container.dataset.mapReady === '1') {
+                return;
+            }
+            const deliveryLat = Number(container.getAttribute('data-delivery-lat'));
+            const deliveryLng = Number(container.getAttribute('data-delivery-lng'));
+            if (!Number.isFinite(deliveryLat) || !Number.isFinite(deliveryLng)) {
+                return;
+            }
+            const map = L.map(container, { zoomControl: false, attributionControl: false });
+            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                maxZoom: 18,
+                attribution: '&copy; <a href="https://www.openstreetmap.org">OpenStreetMap</a> contributors',
+            }).addTo(map);
+            const bounds = [];
+            const addMarker = (lat, lng, options = {}) => {
+                if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
+                    return null;
+                }
+                const marker = L.marker([lat, lng], options).addTo(map);
+                bounds.push([lat, lng]);
+                return marker;
+            };
+            addMarker(deliveryLat, deliveryLng, { title: 'Delivery location' });
+            const carLat = Number(container.getAttribute('data-car-lat'));
+            const carLng = Number(container.getAttribute('data-car-lng'));
+            if (Number.isFinite(carLat) && Number.isFinite(carLng)) {
+                addMarker(carLat, carLng, { title: 'Vehicle location' });
+            }
+            let destinations = [];
+            try {
+                destinations = JSON.parse(container.getAttribute('data-destinations') || '[]');
+            } catch (error) {
+                destinations = [];
+            }
+            destinations.forEach((destination) => {
+                const lat = Number(destination.latitude);
+                const lng = Number(destination.longitude);
+                if (Number.isFinite(lat) && Number.isFinite(lng)) {
+                    addMarker(lat, lng, { title: destination.name || 'Destination' });
+                }
+            });
+            if (bounds.length) {
+                const latLngBounds = L.latLngBounds(bounds);
+                map.fitBounds(latLngBounds.pad(0.25));
+            } else {
+                map.setView([deliveryLat, deliveryLng], 12);
+            }
+            setTimeout(() => map.invalidateSize(), 120);
+            container.dataset.mapReady = '1';
+        });
+    };
+    initPendingRequestMaps();
     if (ownerMapElement && typeof L !== 'undefined') {
         const cityInput = document.getElementById('city');
         const latitudeField = document.getElementById('latitude');

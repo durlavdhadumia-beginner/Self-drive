@@ -12,57 +12,79 @@
         }
         const addButton = addButtonSelector ? document.querySelector(addButtonSelector) : null;
 
-        const getRows = () => container.querySelectorAll('[data-role="destination-input-row"]');
+        const getRows = () => Array.from(container.querySelectorAll('[data-role="destination-input-row"]'));
 
         const updateRemoveButtons = () => {
             const rows = getRows();
             rows.forEach((row, index) => {
                 const removeBtn = row.querySelector('[data-role="remove-destination"]');
-                if (!removeBtn) {
-                    return;
+                if (removeBtn) {
+                    removeBtn.disabled = required && rows.length === 1 && index === 0;
                 }
-                removeBtn.disabled = index === 0 && required && rows.length === 1;
+                const input = row.querySelector('input');
+                if (input) {
+                    input.required = !!(required && index === 0);
+                }
             });
+        };
+
+        const bindRow = (row, isFirst = false) => {
+            if (!row) {
+                return;
+            }
+            row.classList.add('destination-input-row');
+            row.dataset.role = 'destination-input-row';
+            let input = row.querySelector('input');
+            if (!input) {
+                input = document.createElement('input');
+                input.type = 'text';
+                row.insertBefore(input, row.firstChild || null);
+            }
+            input.name = inputName;
+            input.classList.add('form-control');
+            input.placeholder = input.placeholder || 'Enter destination';
+            input.autocomplete = 'off';
+            if (datalistId) {
+                input.setAttribute('list', datalistId);
+            } else {
+                input.removeAttribute('list');
+            }
+            input.required = !!(required && isFirst);
+
+            let removeBtn = row.querySelector('[data-role="remove-destination"]');
+            if (!removeBtn) {
+                removeBtn = document.createElement('button');
+                removeBtn.type = 'button';
+                removeBtn.className = 'btn btn-outline-danger';
+                removeBtn.dataset.role = 'remove-destination';
+                removeBtn.innerHTML = '<i class="bi bi-x-lg"></i>';
+                row.appendChild(removeBtn);
+            }
+            if (!removeBtn.dataset.bound) {
+                removeBtn.addEventListener('click', () => {
+                    const rows = getRows();
+                    if (required && rows.length === 1) {
+                        input.value = '';
+                        input.focus();
+                        return;
+                    }
+                    row.remove();
+                    updateRemoveButtons();
+                });
+                removeBtn.dataset.bound = '1';
+            }
         };
 
         const createRow = (value = '', isFirst = false) => {
             const row = document.createElement('div');
             row.className = 'input-group destination-input-row';
-            row.dataset.role = 'destination-input-row';
-
             const input = document.createElement('input');
             input.type = 'text';
-            input.name = inputName;
-            input.className = 'form-control';
-            input.placeholder = 'Enter destination';
-            input.autocomplete = 'off';
-            if (datalistId) {
-                input.setAttribute('list', datalistId);
-            }
             if (value) {
                 input.value = value;
             }
-            if (required && isFirst) {
-                input.required = true;
-            }
-
-            const removeBtn = document.createElement('button');
-            removeBtn.type = 'button';
-            removeBtn.className = 'btn btn-outline-danger';
-            removeBtn.dataset.role = 'remove-destination';
-            removeBtn.innerHTML = '<i class="bi bi-x-lg"></i>';
-            removeBtn.addEventListener('click', () => {
-                if (required && getRows().length === 1) {
-                    input.value = '';
-                    input.focus();
-                    return;
-                }
-                row.remove();
-                updateRemoveButtons();
-            });
-
             row.appendChild(input);
-            row.appendChild(removeBtn);
+            bindRow(row, isFirst);
             return row;
         };
 
@@ -79,7 +101,11 @@
             }
         };
 
-        if (initial.length) {
+        const existingRows = getRows();
+        if (existingRows.length) {
+            existingRows.forEach((row, index) => bindRow(row, index === 0));
+            updateRemoveButtons();
+        } else if (initial.length) {
             initial.forEach((value, index) => addRow(value, index === initial.length - 1));
         } else {
             addRow('', false);

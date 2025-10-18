@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import os
 import re
 import sqlite3
@@ -340,6 +341,7 @@ def init_db() -> None:
             delivery_latitude REAL,
             delivery_longitude REAL,
             delivery_address TEXT DEFAULT '',
+            trip_destinations TEXT NOT NULL DEFAULT '[]',
             total_amount REAL NOT NULL DEFAULT 0,
             owner_response TEXT NOT NULL DEFAULT 'pending',
             owner_response_at TEXT,
@@ -472,6 +474,7 @@ def init_db() -> None:
         "ALTER TABLE rentals ADD COLUMN delivery_latitude REAL",
         "ALTER TABLE rentals ADD COLUMN delivery_longitude REAL",
         "ALTER TABLE rentals ADD COLUMN delivery_address TEXT DEFAULT ''",
+        "ALTER TABLE rentals ADD COLUMN trip_destinations TEXT NOT NULL DEFAULT '[]'",
         "ALTER TABLE rentals ADD COLUMN total_amount REAL NOT NULL DEFAULT 0",
         "ALTER TABLE rentals ADD COLUMN owner_response TEXT NOT NULL DEFAULT 'pending'",
         "ALTER TABLE rentals ADD COLUMN owner_response_at TEXT",
@@ -2122,13 +2125,48 @@ def rentals() -> str:
         """,
         (g.user["id"],),
     ).fetchall()
-    awaiting_payment = [row for row in rows if row["payment_status"]
-                        == 'awaiting_payment' and row["owner_response"] == 'accepted']
-    pending_host_action = [row for row in rows if row["owner_response"] in (
-        'pending', 'counter') and row["status"] == 'booked']
+    car_ids = [row["car_id"] for row in rows]
+    image_map = fetch_car_images(car_ids)
+    rentals_list: List[Dict[str, object]] = []
+    for row in rows:
+        rental = dict(row)
+        primary_image: Optional[str] = None
+        car_images = image_map.get(row["car_id"], [])
+        if car_images:
+            primary_image = url_for("serve_upload", filename=car_images[0])
+        else:
+            raw_image = rental.get("image_url") or ""
+            if raw_image and isinstance(raw_image, str):
+                if raw_image.startswith(("http://", "https://")):
+                    primary_image = raw_image
+                else:
+                    primary_image = url_for(
+                        "serve_upload", filename=raw_image.lstrip("/")
+                    )
+        rental["image_url"] = primary_image
+        try:
+            rental["trip_destinations_list"] = json.loads(
+                rental.get("trip_destinations") or "[]"
+            )
+        except (TypeError, json.JSONDecodeError):
+            rental["trip_destinations_list"] = []
+        rentals_list.append(rental)
+
+    awaiting_payment = [
+        rental
+        for rental in rentals_list
+        if rental.get("payment_status") == "awaiting_payment"
+        and rental.get("owner_response") == "accepted"
+    ]
+    pending_host_action = [
+        rental
+        for rental in rentals_list
+        if rental.get("owner_response") in ("pending", "counter")
+        and rental.get("status") == "booked"
+    ]
     return render_template(
         "rentals.html",
-        rentals=rows,
+        rentals=rentals_list,
         awaiting_payment=awaiting_payment,
         pending_host_action=pending_host_action,
     )
@@ -2185,6 +2223,13 @@ def rent_car(car_id: int) -> str:
         delivery_lng = None
         delivery_address = ""
 
+    destinations_list = [
+        value.strip()
+        for value in request.form.getlist("destinations")
+        if value and value.strip()
+    ]
+    destinations_json = json.dumps(destinations_list)
+
     pricing = calculate_pricing(
         rate_per_hour=car["rate_per_hour"],
         daily_rate=car["daily_rate"] or car["rate_per_hour"] * 24,
@@ -2215,9 +2260,10 @@ def rent_car(car_id: int) -> str:
             delivery_latitude,
             delivery_longitude,
             delivery_address,
+            trip_destinations,
             total_amount
         )
-        VALUES (?, ?, 'booked', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        VALUES (?, ?, 'booked', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """,
         (
             car_id,
@@ -2233,6 +2279,7 @@ def rent_car(car_id: int) -> str:
             delivery_lat,
             delivery_lng,
             delivery_address,
+            destinations_json,
             total_amount,
         ),
     )
@@ -2718,7 +2765,8 @@ def owner_cars() -> str:
         car_dicts.append(car)
     rental_rows = db.execute(
         """
-        SELECT rentals.*, users.username AS renter_username, cars.brand, cars.model, cars.name AS car_name
+        SELECT rentals.*, users.username AS renter_username, cars.brand, cars.model, cars.name AS car_name,
+               cars.latitude AS car_latitude, cars.longitude AS car_longitude, cars.city AS car_city
         FROM rentals
         JOIN cars ON cars.id = rentals.car_id
         JOIN users ON users.id = rentals.renter_id
@@ -2733,18 +2781,64 @@ def owner_cars() -> str:
         """,
         (g.user["id"],),
     ).fetchall()
+    rentals_data: List[Dict[str, object]] = []
+    for row in rental_rows:
+        rental = dict(row)
+        try:
+            rental["trip_destinations_list"] = json.loads(
+                rental.get("trip_destinations") or "[]"
+            )
+        except (TypeError, json.JSONDecodeError):
+            rental["trip_destinations_list"] = []
+        delivery_lat = rental.get("delivery_latitude")
+        delivery_lng = rental.get("delivery_longitude")
+        rental["delivery_latitude"] = float(delivery_lat) if delivery_lat is not None else None
+        rental["delivery_longitude"] = float(delivery_lng) if delivery_lng is not None else None
+        car_lat = rental.get("car_latitude")
+        car_lng = rental.get("car_longitude")
+        rental["car_latitude"] = float(car_lat) if car_lat is not None else None
+        rental["car_longitude"] = float(car_lng) if car_lng is not None else None
+        destinations_with_coords: List[Dict[str, object]] = []
+        for destination in rental["trip_destinations_list"]:
+            entry: Dict[str, object] = {"name": destination}
+            coords = lookup_city_coordinates(destination)
+            if coords:
+                entry["latitude"], entry["longitude"] = coords
+            destinations_with_coords.append(entry)
+        rental["trip_destinations_map"] = destinations_with_coords
+        rentals_data.append(rental)
     city_entries = load_city_entries(include_coordinates=True)
     vehicle_type_values = load_vehicle_type_options()
     other_vehicle_types = [
         vt for vt in vehicle_type_values if vt not in POPULAR_VEHICLE_TYPES]
     fuel_types = build_fuel_type_list()
-    pending_payments = [
-        row for row in rental_rows if row["payment_status"] == 'awaiting_payment']
+    pending_requests = [r for r in rentals_data if r.get("owner_response") == "pending"]
+    counter_requests = [r for r in rentals_data if r.get("owner_response") == "counter"]
+    awaiting_payments = [r for r in rentals_data if r.get("payment_status") == "awaiting_payment"]
+    ready_to_start = [
+        r
+        for r in rentals_data
+        if r.get("status") == "booked"
+        and r.get("owner_response") == "accepted"
+        and r.get("payment_status") == "paid"
+    ]
+    active_trips = [r for r in rentals_data if r.get("status") == "active"]
+    completed_trips = [r for r in rentals_data if r.get("status") == "completed"]
+    pending_total_amount = sum(
+        float(r.get("total_amount") or 0) for r in awaiting_payments
+    )
     return render_template(
         "owner_cars.html",
         cars=car_dicts,
-        rentals=rental_rows,
-        pending_payments=pending_payments,
+        rentals=rentals_data,
+        pending_payments=awaiting_payments,
+        pending_total_amount=pending_total_amount,
+        pending_requests=pending_requests,
+        counter_requests=counter_requests,
+        awaiting_payments=awaiting_payments,
+        ready_to_start=ready_to_start,
+        active_trips=active_trips,
+        completed_trips=completed_trips,
         commission_rate=int(COMPANY_COMMISSION_RATE * 100),
         city_entries=city_entries,
         popular_vehicle_types=POPULAR_VEHICLE_TYPES,
