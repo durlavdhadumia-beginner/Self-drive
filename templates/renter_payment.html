@@ -10,15 +10,15 @@
                         <h1 class="h4 fw-bold mb-3">Review &amp; confirm payment</h1>
                         <p class="text-muted mb-4">
                             Please double-check the trip details before marking the payment as complete.
-                            The total shown below already includes our {{ payment_summary.commission_rate }}% service fee.
                             Once you confirm, the host receives {{ payment_summary.initial_rate }}% immediately and the remaining {{ payment_summary.final_rate }}% after the trip.
                         </p>
 
                         <div class="d-flex flex-column flex-md-row justify-content-between gap-3 mb-4">
                             <div>
                                 <div class="fw-semibold">{{ rental.car_label }}</div>
-                                <div class="text-muted small">{{ rental.owner_display_name }}</div>
-                                <div class="text-muted small">Trip window: {{ rental.start_time }} to {{ rental.end_time or 'TBD' }}</div>
+                                <div class="text-muted small">{{ rental.owner_public_name }}</div>
+                                <div class="text-muted small">Trip start: {{ rental.start_time|trip_datetime }}</div>
+                                <div class="text-muted small">Trip end: {{ rental.end_time|trip_datetime if rental.end_time else 'TBD' }}</div>
                             </div>
                             <div class="text-muted small text-md-end">
                                 Booking ID: {{ rental.id }}<br>
@@ -60,7 +60,6 @@
                             <ul class="mb-0 text-muted small ps-3">
                                 <li>{{ payment_summary.initial_rate }}% of the total reaches the host instantly once you confirm payment.</li>
                                 <li>The remaining {{ payment_summary.final_rate }}% is released after the trip concludes successfully.</li>
-                                <li>Our {{ payment_summary.commission_rate }}% service fee is retained by DriveNow.</li>
                             </ul>
                         </div>
 
@@ -74,7 +73,7 @@
                                 </select>
                             </div>
                             <div class="col-12 col-md-6 d-flex align-items-end">
-                                <button type="submit" class="btn btn-success w-100">Mark payment completed</button>
+                                <button type="submit" class="btn btn-success w-100">Mark payment</button>
                             </div>
                         </form>
                     </div>

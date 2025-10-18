@@ -7,7 +7,7 @@ import os
 import re
 import sqlite3
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from math import asin, ceil, cos, radians, sin, sqrt
 from pathlib import Path
 from typing import Callable, Dict, List, Optional, Tuple
@@ -41,6 +41,7 @@ PROMO_CODES: Dict[str, float] = {
 COMPANY_COMMISSION_RATE = 0.10
 OWNER_INITIAL_PAYOUT_RATE = 0.10
 OWNER_FINAL_PAYOUT_RATE = 0.90
+HOST_SERVICE_FEE_RATE = 0.40
 MAX_CAR_IMAGES = 8
 POPULAR_VEHICLE_TYPES: List[str] = [
     "SUV",
@@ -74,6 +75,15 @@ app.config.update(
 app.logger.setLevel("INFO")
 
 
+def naive_utcnow() -> datetime:
+    """Return a timezone-naive UTC timestamp compatible with legacy data."""
+    return datetime.now(timezone.utc).replace(tzinfo=None)
+
+
+def naive_utcnow_iso() -> str:
+    return naive_utcnow().isoformat()
+
+
 @dataclass
 class Car:
     id: int
@@ -86,6 +96,7 @@ class Car:
     daily_rate: float
     seats: int
     owner_username: str
+    owner_public_name: str
     city: str
     image_url: str
     vehicle_type: str
@@ -130,6 +141,24 @@ def normalize_contact(username: str) -> Tuple[str, str]:
     if not re.fullmatch(r"91[6-9]\d{9}", normalized):
         return ("", "")
     return ("phone", normalized)
+
+
+def build_public_label(
+    raw_value: Optional[str],
+    *,
+    fallback_prefix: str,
+    fallback_id: Optional[int] = None,
+) -> str:
+    """Return a safe, non-contact label for displaying user names to other users."""
+    text = (raw_value or "").strip()
+    if text:
+        contact_type, _ = normalize_contact(text)
+        digits = re.sub(r"\D", "", text)
+        # Treat long digit sequences as potential contact numbers.
+        if not contact_type and len(digits) < 6 and "@" not in text:
+            return text
+    suffix = f" #{fallback_id}" if fallback_id else ""
+    return f"{fallback_prefix}{suffix}".strip()
 
 
 def _format_city_label(name: str, state: str) -> str:
@@ -532,7 +561,7 @@ def init_db() -> None:
     seed_cities_if_needed(db)
     db.execute(
         "INSERT OR IGNORE INTO company_payout_config (id, updated_at) VALUES (1, ?)",
-        (datetime.utcnow().isoformat(),),
+        (naive_utcnow_iso(),),
     )
     db.commit()
 
@@ -558,7 +587,7 @@ def save_car_images(car_id: int, files: List, limit: Optional[int] = None) -> Li
         if not allowed_file(upload.filename):
             continue
         safe_name = secure_filename(upload.filename)
-        timestamp = datetime.utcnow().strftime("%Y%m%d%H%M%S%f")
+        timestamp = naive_utcnow().strftime("%Y%m%d%H%M%S%f")
         filename = f"{timestamp}_{safe_name}"
         filepath = target_dir.joinpath(filename)
         upload.save(filepath)
@@ -587,7 +616,7 @@ def save_user_documents(user_id: int, files: List, types: List[str]) -> List[str
         if ext not in DOCUMENT_EXTENSIONS:
             continue
         safe_name = secure_filename(filename)
-        timestamp = datetime.utcnow().strftime("%Y%m%d%H%M%S%f")
+        timestamp = naive_utcnow().strftime("%Y%m%d%H%M%S%f")
         final_name = f"{timestamp}_{index}_{safe_name}"
         path = target.joinpath(final_name)
         upload.save(path)
@@ -645,7 +674,7 @@ def fetch_car_delivery_options(car_ids: List[int]) -> Dict[int, Dict[int, float]
 def save_car_delivery_options(car_id: int, options: Dict[int, float]) -> None:
     db = get_db()
     db.execute("DELETE FROM car_delivery_options WHERE car_id = ?", (car_id,))
-    now_iso = datetime.utcnow().isoformat()
+    now_iso = naive_utcnow_iso()
     for distance, price in options.items():
         db.execute(
             """
@@ -697,7 +726,7 @@ def get_company_payout_details() -> dict:
     if row is None:
         db.execute(
             "INSERT INTO company_payout_config (id, updated_at) VALUES (1, ?)",
-            (datetime.utcnow().isoformat(),),
+            (naive_utcnow_iso(),),
         )
         db.commit()
         row = db.execute(
@@ -804,8 +833,14 @@ def role_required(*required_roles: str) -> Callable:
         def wrapped(*args, **kwargs):
             if g.user is None:
                 return redirect(url_for("login"))
-            user_role = g.user.get("role") if isinstance(
-                g.user, dict) else g.user["role"]
+            if isinstance(g.user, dict):
+                is_admin_flag = bool(g.user.get("is_admin"))
+                user_role = g.user.get("role")
+            else:
+                is_admin_flag = bool(g.user["is_admin"])
+                user_role = g.user["role"]
+            if is_admin_flag:
+                return view(*args, **kwargs)
             if not allowed:
                 return view(*args, **kwargs)
             if user_role == "both":
@@ -952,7 +987,9 @@ def fetch_available_cars(
 
     rows = db.execute(
         f"""
-        SELECT cars.*, users.username AS owner_username,
+        SELECT cars.*,
+               users.username AS owner_username,
+               COALESCE(users.account_name, '') AS owner_account_name,
                EXISTS(
                    SELECT 1 FROM rentals
                    WHERE rentals.car_id = cars.id
@@ -976,6 +1013,11 @@ def fetch_available_cars(
         if radius_km and distance > radius_km:
             continue
         is_available = row["is_available"] and not row["has_active_rental"]
+        owner_label = build_public_label(
+            row["owner_account_name"] or row["owner_username"],
+            fallback_prefix="Host",
+            fallback_id=row["owner_id"],
+        )
         status = "Available" if is_available else "Unavailable"
         cars.append(
             Car(
@@ -989,6 +1031,7 @@ def fetch_available_cars(
                 daily_rate=row["daily_rate"] or row["rate_per_hour"] * 24,
                 seats=row["seats"],
                 owner_username=row["owner_username"],
+                owner_public_name=owner_label,
                 city=row["city"] or "",
                 image_url=row["image_url"] or "",
                 vehicle_type=row["vehicle_type"] or "",
@@ -1019,7 +1062,7 @@ def has_role(role: str) -> bool:
 
 app.jinja_env.globals.update(
     has_role=has_role,
-    now=datetime.utcnow,
+    now=naive_utcnow,
     promo_codes=PROMO_CODES,
     profile_is_complete=profile_is_complete,
 )
@@ -1044,13 +1087,13 @@ def parse_iso(value: Optional[str]) -> Optional[datetime]:
         return None
 
 
-def parse_float(value: Optional[str]) -> Optional[float]:
+def parse_float(value: Optional[str], default: Optional[float] = None) -> Optional[float]:
     if value in (None, ""):
-        return None
+        return default
     try:
         return float(value)
     except (TypeError, ValueError):
-        return None
+        return default
 
 
 def parse_int(value: Optional[str]) -> Optional[int]:
@@ -1222,7 +1265,7 @@ def profile() -> str:
                 vehicle_registration,
                 gps_tracking,
                 0 if missing_fields else 1,
-                datetime.utcnow().isoformat(),
+                naive_utcnow_iso(),
                 email_contact,
                 g.user["id"],
             ),
@@ -1239,7 +1282,7 @@ def profile() -> str:
                 account_number,
                 ifsc_code,
                 upi_id,
-                datetime.utcnow().isoformat(),
+                naive_utcnow_iso(),
                 g.user["id"],
             ),
         )
@@ -1406,7 +1449,7 @@ def resolve_complaint(complaint_id: int) -> str:
     if complaint is None:
         abort(404)
     resolution = request.form.get("resolution", "").strip()
-    now_iso = datetime.utcnow().isoformat()
+    now_iso = naive_utcnow_iso()
     db.execute(
         "UPDATE complaints SET status = 'resolved', resolved_at = ?, resolution = ? WHERE id = ?",
         (now_iso, resolution, complaint_id),
@@ -1529,7 +1572,7 @@ def admin_verify_user(user_id: int) -> str:
     db = get_db()
     db.execute(
         "UPDATE user_profiles SET profile_verified_at = ? WHERE user_id = ?",
-        (datetime.utcnow().isoformat(), user_id),
+        (naive_utcnow_iso(), user_id),
     )
     db.commit()
     return redirect(url_for("admin_users"))
@@ -1605,7 +1648,7 @@ def admin_update_payment(rental_id: int) -> str:
     final_amount = float(rental["owner_final_payout_amount"] or 0)
     final_status = rental["owner_final_payout_status"] or owner_status
     final_released = rental["owner_final_payout_released_at"]
-    now_iso = datetime.utcnow().isoformat()
+    now_iso = naive_utcnow_iso()
     if new_status == "paid":
         total_amount = float(rental["total_amount"] or 0)
         commission = round(total_amount * COMPANY_COMMISSION_RATE, 2)
@@ -1681,7 +1724,7 @@ def admin_release_owner_payout(rental_id: int) -> str:
         return redirect(url_for("admin_rentals"))
     if rental["owner_payout_status"] == "paid":
         return redirect(url_for("admin_rentals"))
-    now_iso = datetime.utcnow().isoformat()
+    now_iso = naive_utcnow_iso()
     db.execute(
         """
         UPDATE rentals
@@ -1796,7 +1839,7 @@ def admin_payment_settings() -> str:
                 WHERE id = 1
                 """,
                 (account_holder, account_number, ifsc_code,
-                 upi_id, datetime.utcnow().isoformat()),
+                 upi_id, naive_utcnow_iso()),
             )
             db.commit()
             config = get_company_payout_details()
@@ -2047,6 +2090,24 @@ def search() -> str:
     start_dt = parse_iso(parse_datetime(start_time_raw))
     end_dt = parse_iso(parse_datetime(end_time_raw))
 
+    app.logger.info(
+        "search results count=%s filters=%s lat=%s lng=%s radius=%s destinations=%s user_id=%s",
+        len(cars),
+        {
+            "vehicle_types": filters["vehicle_types"],
+            "seat_min": filters["seat_min"],
+            "seat_max": filters["seat_max"],
+            "price_min": filters["price_min"],
+            "price_max": filters["price_max"],
+            "require_gps": filters["require_gps"],
+            "fuel_type": filters["fuel_type"],
+        },
+        latitude,
+        longitude,
+        radius,
+        destinations,
+        user["id"] if user else None,
+    )
     if cars:
         for car in cars:
             cars_payload.append(
@@ -2060,7 +2121,7 @@ def search() -> str:
                     "rate_per_hour": car.rate_per_hour,
                     "daily_rate": car.daily_rate,
                     "seats": car.seats,
-                    "owner_username": car.owner_username,
+                    "owner_public_name": car.owner_public_name,
                     "city": car.city,
                     "image_url": car.image_url,
                     "vehicle_type": car.vehicle_type,
@@ -2116,7 +2177,9 @@ def rentals() -> str:
     rows = db.execute(
         """
         SELECT rentals.*, cars.brand, cars.model, cars.licence_plate, cars.image_url, cars.name AS car_name,
-               owners.username AS owner_username
+               cars.owner_id AS owner_id,
+               owners.username AS owner_username,
+               COALESCE(owners.account_name, '') AS owner_account_name
         FROM rentals
         JOIN cars ON cars.id = rentals.car_id
         JOIN users AS owners ON owners.id = cars.owner_id
@@ -2130,6 +2193,14 @@ def rentals() -> str:
     rentals_list: List[Dict[str, object]] = []
     for row in rows:
         rental = dict(row)
+        owner_label = build_public_label(
+            rental.get("owner_account_name") or rental.get("owner_username"),
+            fallback_prefix="Host",
+            fallback_id=rental.get("owner_id"),
+        )
+        rental["owner_public_name"] = owner_label
+        rental["owner_username"] = owner_label
+        rental.pop("owner_account_name", None)
         primary_image: Optional[str] = None
         car_images = image_map.get(row["car_id"], [])
         if car_images:
@@ -2190,9 +2261,9 @@ def rent_car(car_id: int) -> str:
     end_raw = request.form.get("end_time")
     promo_code = request.form.get("promo_code", "")
 
-    start_iso = parse_datetime(start_raw) or datetime.utcnow().isoformat()
+    start_iso = parse_datetime(start_raw) or naive_utcnow_iso()
     end_iso = parse_datetime(end_raw)
-    start_dt = parse_iso(start_iso) or datetime.utcnow()
+    start_dt = parse_iso(start_iso) or naive_utcnow()
     end_dt = parse_iso(end_iso) if end_iso else start_dt + timedelta(hours=4)
 
     delivery_type_raw = (request.form.get("delivery_type", "pickup") or "pickup").strip().lower()
@@ -2286,7 +2357,7 @@ def rent_car(car_id: int) -> str:
     rental_id = cursor.lastrowid
     db.execute(
         "UPDATE cars SET is_available = 0, updated_at = ? WHERE id = ?",
-        (datetime.utcnow().isoformat(), car_id),
+        (naive_utcnow_iso(), car_id),
     )
     db.commit()
 
@@ -2349,7 +2420,7 @@ def _process_rental_complaint(rental_id: int, category: str, description: str) -
     db.execute(
         "INSERT INTO complaints (rental_id, submitted_by, target_user_id, role, category, description, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
         (rental_id, g.user["id"], target_user_id, role,
-         category, description, datetime.utcnow().isoformat()),
+         category, description, naive_utcnow_iso()),
     )
     db.commit()
     car_label = rental["car_name"] or f"{rental['brand']} {rental['model']}"
@@ -2412,7 +2483,7 @@ def submit_feedback() -> str:
     cursor = db.execute(
         "INSERT INTO support_feedback (user_id, role, category, description, rental_id, created_at) VALUES (?, ?, ?, ?, ?, ?)",
         (g.user["id"], feedback_role, category,
-         description, None, datetime.utcnow().isoformat()),
+         description, None, naive_utcnow_iso()),
     )
     db.commit()
     feedback_id = cursor.lastrowid
@@ -2463,7 +2534,7 @@ def renter_review(rental_id: int) -> str:
         "SELECT id FROM reviews WHERE rental_id = ? AND reviewer_id = ?",
         (rental_id, g.user["id"]),
     ).fetchone()
-    now_iso = datetime.utcnow().isoformat()
+    now_iso = naive_utcnow_iso()
     if existing:
         db.execute(
             "UPDATE reviews SET trip_rating = ?, car_rating = ?, owner_rating = ?, passenger_rating = NULL, comment = ?, created_at = ? WHERE id = ?",
@@ -2507,11 +2578,13 @@ def renter_respond_rental(rental_id: int) -> str:
     ).fetchone()
     if rental is None:
         abort(404)
-    now = datetime.utcnow()
+    now = naive_utcnow()
     car_label = rental["car_name"] or f"{rental['brand']} {rental['model']}"
     if action == "accept_counter" and rental["owner_response"] == "counter":
         counter_amount = rental["counter_amount"] or rental["total_amount"]
         new_total = round(counter_amount, 2)
+        delivery_fee_existing = float(rental["delivery_fee"] or 0.0)
+        base_rental_updated = max(0.0, round(new_total - delivery_fee_existing, 2))
         db.execute(
             """
             UPDATE rentals
@@ -2519,6 +2592,7 @@ def renter_respond_rental(rental_id: int) -> str:
                 renter_response = 'accepted',
                 renter_response_at = ?,
                 total_amount = ?,
+                rental_amount = ?,
                 payment_status = 'awaiting_payment',
                 payment_due_at = ?,
                 payment_channel = 'manual',
@@ -2529,6 +2603,7 @@ def renter_respond_rental(rental_id: int) -> str:
             WHERE id = ?
             """,
             (now.isoformat(), new_total,
+             base_rental_updated,
              (now + timedelta(hours=1)).isoformat(), rental_id),
         )
         db.commit()
@@ -2576,7 +2651,7 @@ def finalize_rental_payment(
     final_payout = max(0.0, round(owner_net - initial_payout, 2))
     if round(initial_payout + final_payout, 2) != round(owner_net, 2):
         final_payout = max(0.0, round(owner_net - initial_payout, 2))
-    now_iso = datetime.utcnow().isoformat()
+    now_iso = naive_utcnow_iso()
     stored_order_id = payment_order_id or rental["payment_order_id"] or ""
     initial_status = "paid" if initial_payout > 0 else "not_required"
     initial_released_at = now_iso if initial_payout > 0 else None
@@ -2642,6 +2717,7 @@ def renter_payment_page(rental_id: int) -> str:
                cars.brand,
                cars.model,
                cars.licence_plate,
+               cars.owner_id AS owner_id,
                COALESCE(owners.account_name, owners.username) AS owner_display_name
         FROM rentals
         JOIN cars ON cars.id = rentals.car_id
@@ -2659,11 +2735,27 @@ def renter_payment_page(rental_id: int) -> str:
     rental_dict = dict(rental)
     car_label = rental_dict.get("car_name") or f"{rental_dict.get('brand', '')} {rental_dict.get('model', '')}".strip()
     rental_dict["car_label"] = car_label.strip() or "Vehicle"
-    rental_amount = float(rental_dict.get("rental_amount") or 0.0)
+    rental_dict["owner_public_name"] = build_public_label(
+        rental_dict.get("owner_display_name"),
+        fallback_prefix="Host",
+        fallback_id=rental_dict.get("owner_id"),
+    )
+    total_amount = float(rental_dict.get("total_amount") or 0.0)
     delivery_fee = float(rental_dict.get("delivery_fee") or 0.0)
-    total_amount = float(rental_dict.get("total_amount") or (rental_amount + delivery_fee))
-    if not rental_amount:
-        rental_amount = max(0.0, round(total_amount - delivery_fee, 2))
+    if delivery_fee < 0:
+        delivery_fee = 0.0
+    rental_amount = float(rental_dict.get("rental_amount") or 0.0)
+    if total_amount <= 0:
+        total_amount = round(rental_amount + delivery_fee, 2)
+    base_from_total = max(0.0, round(total_amount - delivery_fee, 2))
+    if rental_amount <= 0 or abs((rental_amount + delivery_fee) - total_amount) > 0.01:
+        rental_amount = base_from_total
+    else:
+        rental_amount = round(rental_amount, 2)
+    total_amount = round(rental_amount + delivery_fee, 2)
+    rental_dict["rental_amount"] = rental_amount
+    rental_dict["delivery_fee"] = delivery_fee
+    rental_dict["total_amount"] = total_amount
     commission_amount = round(total_amount * COMPANY_COMMISSION_RATE, 2)
     owner_net = max(0.0, round(total_amount - commission_amount, 2))
     initial_payout = round(owner_net * OWNER_INITIAL_PAYOUT_RATE, 2)
@@ -2735,11 +2827,11 @@ def cancel_rental(rental_id: int) -> str:
         abort(404)
     db.execute(
         "UPDATE rentals SET status = 'cancelled', end_time = ? WHERE id = ?",
-        (datetime.utcnow().isoformat(), rental_id),
+        (naive_utcnow_iso(), rental_id),
     )
     db.execute(
         "UPDATE cars SET is_available = 1, updated_at = ? WHERE id = ?",
-        (datetime.utcnow().isoformat(), rental["car_id"]),
+        (naive_utcnow_iso(), rental["car_id"]),
     )
     db.commit()
     return redirect(url_for("rentals"))
@@ -2765,7 +2857,9 @@ def owner_cars() -> str:
         car_dicts.append(car)
     rental_rows = db.execute(
         """
-        SELECT rentals.*, users.username AS renter_username, cars.brand, cars.model, cars.name AS car_name,
+        SELECT rentals.*, users.username AS renter_username,
+               COALESCE(users.account_name, '') AS renter_account_name,
+               cars.brand, cars.model, cars.name AS car_name,
                cars.latitude AS car_latitude, cars.longitude AS car_longitude, cars.city AS car_city
         FROM rentals
         JOIN cars ON cars.id = rentals.car_id
@@ -2798,12 +2892,32 @@ def owner_cars() -> str:
     rentals_data: List[Dict[str, object]] = []
     for row in rental_rows:
         rental = dict(row)
+        renter_label = build_public_label(
+            rental.get("renter_account_name") or rental.get("renter_username"),
+            fallback_prefix="Guest",
+            fallback_id=rental.get("renter_id"),
+        )
+        rental["renter_public_name"] = renter_label
+        rental["renter_username"] = renter_label
+        rental.pop("renter_account_name", None)
         try:
             rental["trip_destinations_list"] = json.loads(
                 rental.get("trip_destinations") or "[]"
             )
         except (TypeError, json.JSONDecodeError):
             rental["trip_destinations_list"] = []
+        total_amount = float(rental.get("total_amount") or 0.0)
+        delivery_fee_value = float(rental.get("delivery_fee") or 0.0)
+        base_rental_amount = float(rental.get("rental_amount") or 0.0)
+        if base_rental_amount <= 0 or abs((base_rental_amount + delivery_fee_value) - total_amount) > 0.01:
+            base_rental_amount = max(0.0, round(total_amount - delivery_fee_value, 2))
+        else:
+            base_rental_amount = round(base_rental_amount, 2)
+        rental["host_rental_amount"] = base_rental_amount
+        service_fee_amount = round(total_amount * HOST_SERVICE_FEE_RATE, 2)
+        rental["host_service_fee"] = service_fee_amount
+        rental["host_service_fee_rate"] = int(HOST_SERVICE_FEE_RATE * 100)
+        rental["host_net_take_home"] = max(0.0, round(total_amount - service_fee_amount, 2))
         delivery_lat = rental.get("delivery_latitude")
         delivery_lng = rental.get("delivery_longitude")
         rental["delivery_latitude"] = float(delivery_lat) if delivery_lat is not None else None
@@ -2970,7 +3084,7 @@ def owner_toggle_availability(car_id: int) -> str:
     new_state = 0 if car["is_available"] else 1
     db.execute(
         "UPDATE cars SET is_available = ?, updated_at = ? WHERE id = ?",
-        (new_state, datetime.utcnow().isoformat(), car_id),
+        (new_state, naive_utcnow_iso(), car_id),
     )
     db.commit()
     return redirect(url_for("owner_cars"))
@@ -2988,8 +3102,7 @@ def owner_update_location(car_id: int) -> str:
     db = get_db()
     updated = db.execute(
         "UPDATE cars SET latitude = ?, longitude = ?, updated_at = ? WHERE id = ? AND owner_id = ?",
-        (latitude, longitude, datetime.utcnow(
-        ).isoformat(), car_id, g.user["id"]),
+        (latitude, longitude, naive_utcnow_iso(), car_id, g.user["id"]),
     )
     db.commit()
     if updated.rowcount == 0:
@@ -3146,7 +3259,7 @@ def owner_update_car(car_id: int):
         description,
         latitude,
         longitude,
-        datetime.utcnow().isoformat(),
+        naive_utcnow_iso(),
         car_id,
     ]
     update_query = """
@@ -3282,7 +3395,7 @@ def owner_start_rental(rental_id: int) -> str:
     ).fetchone()
     if rental is None or rental["payment_status"] != "paid":
         abort(404)
-    now_iso = datetime.utcnow().isoformat()
+    now_iso = naive_utcnow_iso()
     db.execute(
         "UPDATE rentals SET status = 'active', owner_started_at = ? WHERE id = ?",
         (now_iso, rental_id),
@@ -3319,7 +3432,7 @@ def owner_extend_rental(rental_id: int) -> str:
     ).fetchone()
     if rental is None:
         abort(404)
-    end_dt = parse_iso(rental["end_time"]) or datetime.utcnow()
+    end_dt = parse_iso(rental["end_time"]) or naive_utcnow()
     new_end = end_dt + timedelta(hours=extra_hours)
     additional_amount = round(rental["rate_per_hour"] * extra_hours, 2)
     base_rental_amount = float(rental["rental_amount"] or 0)
@@ -3331,7 +3444,7 @@ def owner_extend_rental(rental_id: int) -> str:
     new_due = rental["payment_due_at"]
     if rental["payment_status"] == "paid":
         new_status = "awaiting_payment"
-        new_due = (datetime.utcnow() + timedelta(hours=1)).isoformat()
+        new_due = (naive_utcnow() + timedelta(hours=1)).isoformat()
     commission = float(rental["company_commission_amount"] or 0)
     owner_payout = float(rental["owner_payout_amount"] or 0)
     owner_payout_status = rental["owner_payout_status"] or "pending"
@@ -3437,7 +3550,7 @@ def owner_complete_rental(rental_id: int) -> str:
     ).fetchone()
     if rental is None:
         abort(404)
-    now_iso = datetime.utcnow().isoformat()
+    now_iso = naive_utcnow_iso()
     commission = float(rental["company_commission_amount"] or 0)
     owner_net = float(rental["owner_payout_amount"] or 0)
     owner_status = rental["owner_payout_status"] or "pending"
@@ -3559,7 +3672,7 @@ def owner_review_rental(rental_id: int) -> str:
         "SELECT id FROM reviews WHERE rental_id = ? AND reviewer_id = ?",
         (rental_id, g.user["id"]),
     ).fetchone()
-    now_iso = datetime.utcnow().isoformat()
+    now_iso = naive_utcnow_iso()
     if existing:
         db.execute(
             "UPDATE reviews SET passenger_rating = ?, trip_rating = NULL, car_rating = NULL, owner_rating = NULL, comment = ?, created_at = ? WHERE id = ?",
@@ -3602,7 +3715,7 @@ def owner_respond_rental(rental_id: int) -> str:
     ).fetchone()
     if rental is None:
         abort(404)
-    now = datetime.utcnow()
+    now = naive_utcnow()
     car_label = rental["car_name"] or f"{rental['brand']} {rental['model']}"
     if action == "accept" and rental["owner_response"] in ("pending", "counter"):
         payment_due = (now + timedelta(hours=1)).isoformat()
@@ -3852,12 +3965,6 @@ def cancellations_and_refunds() -> str:
     return render_template("cancellations_and_refunds.html")
 
 
-def main() -> None:
-    app.run(debug=True, port=5000)
-
-
-if __name__ == "__main__":
-    main()
 def ordinal_number(value: int) -> str:
     suffix = "th"
     if value % 100 not in (11, 12, 13):
@@ -3884,3 +3991,11 @@ def format_trip_datetime(value: str | datetime | None) -> str:
     month_part = date_value.strftime("%b")
     year_part = date_value.strftime("%Y")
     return f"{time_part}, {day_part} {month_part} {year_part}"
+
+
+def main() -> None:
+    app.run(debug=True, port=5000)
+
+
+if __name__ == "__main__":
+    main()

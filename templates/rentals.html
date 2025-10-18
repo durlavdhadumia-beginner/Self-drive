@@ -11,56 +11,11 @@
             <a href="{{ url_for('search') }}" class="btn btn-success"><i class="bi bi-plus-circle"></i> Book another car</a>
         </div>
 
-        {% if awaiting_payment %}
-            <div class="alert alert-warning" role="alert">
-                <strong>Pending payment:</strong> you have {{ awaiting_payment|length }} trip(s) waiting for payment confirmation. Payments are routed to DriveNow first; we deduct a 5% service fee and then credit the host.
-            </div>
-        {% endif %}
         {% if pending_host_action %}
             <div class="alert alert-info" role="alert">
                 <strong>Waiting for host:</strong> {{ pending_host_action|length }} booking(s) still need the owner's response.
             </div>
         {% endif %}
-
-        <div class="card card-zoom mb-4">
-            <div class="card-body">
-                <h2 class="h5 fw-semibold mb-3">Feedback &amp; complaints</h2>
-                <p class="text-muted small mb-3">Spot an issue with a trip or want to share feedback on the platform? Let our support team know and we will follow up.</p>
-                <form class="row g-3 align-items-end" method="post" action="{{ url_for('submit_feedback') }}">
-                    <input type="hidden" name="redirect_endpoint" value="rentals">
-                    <input type="hidden" name="feedback_role" value="renter">
-                    <div class="col-md-4">
-                        <label class="form-label small" for="renter-feedback-trip">Trip (optional)</label>
-                        <select class="form-select" id="renter-feedback-trip" name="rental_id">
-                            <option value="" selected>General platform feedback</option>
-                            {% for rental in rentals %}
-                                <option value="{{ rental['id'] }}">
-                                    {{ rental['car_name'] or rental['brand'] ~ ' ' ~ rental['model'] }} ({{ rental['start_time'] }} to {{ rental['end_time'] or 'TBD' }})
-                                </option>
-                            {% endfor %}
-                        </select>
-                    </div>
-                    <div class="col-md-3">
-                        <label class="form-label small" for="renter-feedback-category">Category</label>
-                        <select class="form-select" id="renter-feedback-category" name="category">
-                            <option value="Platform issue">Platform issue</option>
-                            <option value="Service">Service</option>
-                            <option value="Vehicle condition">Vehicle condition</option>
-                            <option value="Payments">Payments</option>
-                            <option value="Host behaviour">Host behaviour</option>
-                            <option value="Other">Other</option>
-                        </select>
-                    </div>
-                    <div class="col-md-5">
-                        <label class="form-label small" for="renter-feedback-description">Describe the issue</label>
-                        <textarea class="form-control" id="renter-feedback-description" name="description" rows="2" placeholder="Share details so we can help" required></textarea>
-                    </div>
-                    <div class="col-12 text-end">
-                        <button type="submit" class="btn btn-outline-success">Send to support</button>
-                    </div>
-                </form>
-            </div>
-        </div>
 
         {% if rentals %}
             <div class="row row-cols-1 row-cols-md-2 g-4">
@@ -84,7 +39,7 @@
                                 <div class="d-flex flex-column gap-1 text-muted small mb-3">
                                     <span><i class="bi bi-calendar-event"></i> Trip start: {{ rental['start_time']|trip_datetime }}</span>
                                     <span><i class="bi bi-calendar-check"></i> Trip end: {{ rental['end_time']|trip_datetime }}</span>
-                                    <span><i class="bi bi-person"></i> Host: {{ rental['owner_username'] }}</span>
+                                    <span><i class="bi bi-person"></i> Host: {{ rental['owner_public_name'] }}</span>
                                 </div>
                                 <div class="d-flex flex-wrap gap-2 mb-3">
                                     {% if rental['owner_response'] == 'pending' %}
@@ -112,7 +67,12 @@
                                             Delivery: Pickup at host location
                                         {% endif %}
                                     </div>
-                                    <div class="fw-semibold text-success">Total: Rs {{ (rental['total_amount'] or 0)|round(2) }}</div>
+                                    {% if rental['owner_response'] == 'counter' and rental['counter_amount'] %}
+                                        <div class="fw-semibold text-danger">Host counter offer: Rs {{ rental['counter_amount']|round(2) }}</div>
+                                        <div class="text-muted small">Current total: Rs {{ (rental['total_amount'] or 0)|round(2) }}</div>
+                                    {% else %}
+                                        <div class="fw-semibold text-success">Total: Rs {{ (rental['total_amount'] or 0)|round(2) }}</div>
+                                    {% endif %}
                                     {% if rental['delivery_type'] == 'delivery' %}
                                         <div class="text-muted small">
                                             Delivery {{ delivery_label }}
@@ -131,8 +91,10 @@
                                     <div class="text-muted small mt-2">
                                         Booking status: <strong>{{ rental['owner_response']|replace('_', ' ')|title }}</strong> &bull; Payment status: <strong>{{ rental['payment_status']|replace('_', ' ')|title }}</strong>
                                     </div>
-                                    {% if rental['owner_response'] == 'counter' %}
-                                        <div class="text-muted small">Host suggested Rs {{ rental['counter_amount']|round|int }}. Respond below.</div>
+                                    {% if rental['owner_response'] == 'counter' and rental['counter_amount'] %}
+                                        <div class="alert alert-warning small mt-2">
+                                            Host revised the price to <strong>Rs {{ rental['counter_amount']|round(2) }}</strong>. Please respond below.
+                                        </div>
                                     {% endif %}
                                     {% if rental['payment_status'] == 'paid' %}
                                         <div class="text-muted small">Host payout progress: 10% released, 90% reserved until the trip completes.</div>
@@ -215,6 +177,46 @@
                 You have no trips yet. Head back to the <a href="{{ url_for('search') }}" class="alert-link">search page</a> and reserve your first car.
             </div>
         {% endif %}
+
+        <div class="card card-zoom mt-4">
+            <div class="card-body">
+                <h2 class="h5 fw-semibold mb-3">Feedback &amp; complaints</h2>
+                <p class="text-muted small mb-3">Spot an issue with a trip or want to share feedback on the platform? Let our support team know and we will follow up.</p>
+                <form class="row g-3 align-items-end" method="post" action="{{ url_for('submit_feedback') }}">
+                    <input type="hidden" name="redirect_endpoint" value="rentals">
+                    <input type="hidden" name="feedback_role" value="renter">
+                    <div class="col-md-4">
+                        <label class="form-label small" for="renter-feedback-trip">Trip (optional)</label>
+                        <select class="form-select" id="renter-feedback-trip" name="rental_id">
+                            <option value="" selected>General platform feedback</option>
+                            {% for rental in rentals %}
+                                <option value="{{ rental['id'] }}">
+                                    {{ rental['car_name'] or rental['brand'] ~ ' ' ~ rental['model'] }} ({{ rental['start_time'] }} to {{ rental['end_time'] or 'TBD' }})
+                                </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label small" for="renter-feedback-category">Category</label>
+                        <select class="form-select" id="renter-feedback-category" name="category">
+                            <option value="Platform issue">Platform issue</option>
+                            <option value="Service">Service</option>
+                            <option value="Vehicle condition">Vehicle condition</option>
+                            <option value="Payments">Payments</option>
+                            <option value="Host behaviour">Host behaviour</option>
+                            <option value="Other">Other</option>
+                        </select>
+                    </div>
+                    <div class="col-md-5">
+                        <label class="form-label small" for="renter-feedback-description">Describe the issue</label>
+                        <textarea class="form-control" id="renter-feedback-description" name="description" rows="2" placeholder="Share details so we can help" required></textarea>
+                    </div>
+                    <div class="col-12 text-end">
+                        <button type="submit" class="btn btn-outline-success">Send to support</button>
+                    </div>
+                </form>
+            </div>
+        </div>
     </div>
 </section>
 {% endblock %}

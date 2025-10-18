@@ -82,9 +82,8 @@
         {% if pending_payments %}
         <div class="alert alert-info d-flex flex-column flex-lg-row justify-content-between align-items-lg-center gap-2 mb-4">
             <div>
-                <strong>{{ pending_payments|length }} payout{% if pending_payments|length > 1 %}s{% endif %} pending.</strong> DriveNow receives each customer payment, retains a 5% service fee, and then schedules the remaining 95% for your account.
+                <strong>{{ pending_payments|length }} payout{% if pending_payments|length > 1 %}s{% endif %} pending.</strong> CarRentalNTravel receives each customer payment, retains a 40% service fee, and schedules the remaining 60% for your account.
             </div>
-            <div class="text-muted small">Latest request total: Rs {{ pending_total_amount|round|int }} - Your take-home: Rs {{ (pending_total_amount * (1 - commission_rate / 100))|round(2) }}</div>
         </div>
         {% endif %}
         <div class="row g-4">
@@ -171,10 +170,10 @@
                         {% if pending_requests or counter_requests %}
                             {% for rental in pending_requests %}
                                 <div class="border rounded-4 p-3 mb-3">
-                                    {% set base_amount = rental['rental_amount'] if rental['rental_amount'] else (rental['total_amount'] or 0) - (rental['delivery_fee'] or 0) %}
+                                    {% set base_amount = rental['host_rental_amount'] if rental['host_rental_amount'] is not none else (rental['total_amount'] or 0) - (rental['delivery_fee'] or 0) %}
                                     {% set delivery_fee = rental['delivery_fee'] or 0 %}
                                     {% set delivery_label = rental['delivery_address'] or 'Pinned delivery location' %}
-                                    <div class="fw-semibold">{{ rental['car_name'] }} - {{ rental['renter_username'] }}</div>
+                                    <div class="fw-semibold">{{ rental['car_name'] }} - {{ rental['renter_public_name'] }}</div>
                                     <div class="text-muted small">Trip start: {{ rental['start_time']|trip_datetime }}</div>
                                     <div class="text-muted small mb-2">Trip end: {{ rental['end_time']|trip_datetime }}</div>
                                     <div class="text-muted small">Rental: Rs {{ (base_amount or 0)|round(2) }}</div>
@@ -185,7 +184,8 @@
                                             Delivery: Pickup only
                                         {% endif %}
                                     </div>
-                                    <div class="fw-semibold text-success">Total: Rs {{ rental['total_amount']|round(2) }}</div>
+                                    <div class="text-muted small text-danger">Service fee ({{ rental['host_service_fee_rate'] }}%): -Rs {{ rental['host_service_fee']|round(2) }}</div>
+                                    <div class="fw-semibold text-success">Net take-home: Rs {{ rental['host_net_take_home']|round(2) }}</div>
                                     {% if rental['delivery_type'] == 'delivery' %}
                                         <div class="text-muted small">Delivery to {{ delivery_label }}{% if rental['delivery_distance_km'] %} &bull; ~{{ rental['delivery_distance_km']|round(1) }} km{% endif %}</div>
                                     {% endif %}
@@ -197,7 +197,7 @@
                                              data-delivery-lat="{{ rental['delivery_latitude'] }}" data-delivery-lng="{{ rental['delivery_longitude'] }}"
                                              data-car-lat="{{ rental['car_latitude'] if rental['car_latitude'] is not none else '' }}"
                                              data-car-lng="{{ rental['car_longitude'] if rental['car_longitude'] is not none else '' }}"
-                                             data-destinations="{{ rental['trip_destinations_map']|tojson|safe }}"
+                                             data-destinations='{{ rental['trip_destinations_map']|tojson }}'
                                              style="height: 220px;"></div>
                                     {% endif %}
                                     <div class="d-flex gap-2 flex-wrap">
@@ -221,7 +221,7 @@
                             {% endfor %}
                             {% for rental in counter_requests %}
                                 <div class="border rounded-4 p-3 mb-3 bg-warning-subtle">
-                                    <div class="fw-semibold">{{ rental['car_name'] }} - {{ rental['renter_username'] }}</div>
+                                    <div class="fw-semibold">{{ rental['car_name'] }} - {{ rental['renter_public_name'] }}</div>
                                     <div class="text-muted small">Trip start: {{ rental['start_time']|trip_datetime }}</div>
                                     <div class="text-muted small">Trip end: {{ rental['end_time']|trip_datetime }}</div>
                                     <div class="text-muted small">Waiting for renter to respond to your counter offer of Rs {{ rental['counter_amount']|round|int }}.</div>
@@ -233,7 +233,7 @@
                                              data-delivery-lat="{{ rental['delivery_latitude'] }}" data-delivery-lng="{{ rental['delivery_longitude'] }}"
                                              data-car-lat="{{ rental['car_latitude'] if rental['car_latitude'] is not none else '' }}"
                                              data-car-lng="{{ rental['car_longitude'] if rental['car_longitude'] is not none else '' }}"
-                                             data-destinations="{{ rental['trip_destinations_map']|tojson|safe }}"
+                                             data-destinations='{{ rental['trip_destinations_map']|tojson }}'
                                              style="height: 220px;"></div>
                                     {% endif %}
                                 </div>
@@ -253,7 +253,7 @@
                                     {% set base_amount = rental['rental_amount'] if rental['rental_amount'] else (rental['total_amount'] or 0) - (rental['delivery_fee'] or 0) %}
                                     {% set delivery_fee = rental['delivery_fee'] or 0 %}
                                     {% set delivery_label = rental['delivery_address'] or 'Pinned delivery location' %}
-                                    <div class="fw-semibold">{{ rental['car_name'] }} - {{ rental['renter_username'] }}</div>
+                                    <div class="fw-semibold">{{ rental['car_name'] }} - {{ rental['renter_public_name'] }}</div>
                                     <div class="text-muted small">Trip start: {{ rental['start_time']|trip_datetime }}</div>
                                     <div class="text-muted small mb-1">Trip end: {{ rental['end_time']|trip_datetime }}</div>
                                     <div class="text-muted small">Rental: Rs {{ (base_amount or 0)|round(2) }}</div>
@@ -264,7 +264,8 @@
                                             Delivery: Pickup only
                                         {% endif %}
                                     </div>
-                                    <div class="fw-semibold text-success">Total: Rs {{ rental['total_amount']|round(2) }}</div>
+                                    <div class="text-muted small text-danger">Service fee ({{ rental['host_service_fee_rate'] }}%): -Rs {{ rental['host_service_fee']|round(2) }}</div>
+                                    <div class="fw-semibold text-success">Net take-home: Rs {{ rental['host_net_take_home']|round(2) }}</div>
                                     {% if rental['delivery_type'] == 'delivery' %}
                                         <div class="text-muted small">Delivery to {{ delivery_label }}
                                             {% if rental['delivery_distance_km'] %}
@@ -276,7 +277,7 @@
                                         <div class="text-muted small">Destinations: {{ rental['trip_destinations_list']|join(', ') }}</div>
                                     {% endif %}
                                     <div class="text-muted small mb-2">Total due Rs {{ rental['total_amount']|round(2) }} by {{ rental['payment_due_at'] or 'n/a' }}</div>
-                                    <div class="text-muted small">We have alerted the renter. Host payout: 10% releases after payment; remaining 90% after the trip.</div>
+                                    <div class="text-muted small">We have alerted the renter. Your payout is released once payment is confirmed, with the balance settling after the trip completes.</div>
                                 </div>
                             {% endfor %}
                         {% else %}
@@ -291,7 +292,7 @@
                         {% if active_trips or ready_to_start %}
                             {% for rental in ready_to_start %}
                                 <div class="border rounded-4 p-3 mb-3">
-                                    <div class="fw-semibold">{{ rental['car_name'] }} - {{ rental['renter_username'] }}</div>
+                                    <div class="fw-semibold">{{ rental['car_name'] }} - {{ rental['renter_public_name'] }}</div>
                                     <div class="text-muted small mb-2">Payment confirmed. Mark the trip as started when you hand over the car.</div>
                                     <form method="post" action="{{ url_for('owner_start_rental', rental_id=rental['id']) }}">
                                         <button type="submit" class="btn btn-sm btn-success">Mark trip started</button>
@@ -300,7 +301,7 @@
                             {% endfor %}
                             {% for rental in active_trips %}
                                 <div class="border rounded-4 p-3 mb-3">
-                                    <div class="fw-semibold">{{ rental['car_name'] }} - {{ rental['renter_username'] }}</div>
+                                    <div class="fw-semibold">{{ rental['car_name'] }} - {{ rental['renter_public_name'] }}</div>
                                     <div class="text-muted small">Started {{ rental['owner_started_at'] or rental['start_time'] }}</div>
                                     <div class="d-flex flex-wrap gap-2 mt-2">
                                         <form method="post" action="{{ url_for('owner_extend_rental', rental_id=rental['id']) }}" class="d-flex gap-2">
@@ -325,7 +326,7 @@
                         {% if completed_trips %}
                             {% for rental in completed_trips %}
                                 <div class="border rounded-4 p-3 mb-3">
-                                    <div class="fw-semibold">{{ rental['car_name'] }} - {{ rental['renter_username'] }}</div>
+                                    <div class="fw-semibold">{{ rental['car_name'] }} - {{ rental['renter_public_name'] }}</div>
                                     <div class="text-muted small mb-2">Ended {{ rental['completed_at'] or rental['end_time'] }}</div>
                                     <form method="post" action="{{ url_for('owner_review_rental', rental_id=rental['id']) }}" class="row g-2">
                                         <div class="col-4">
@@ -504,7 +505,7 @@
                             <option value="" selected>General platform feedback</option>
                             {% for rental in rentals %}
                                 <option value="{{ rental['id'] }}">
-                                    {{ rental['car_name'] }} with {{ rental['renter_username'] }} ({{ rental['start_time'] }} to {{ rental['end_time'] or 'TBD' }})
+                                    {{ rental['car_name'] }} with {{ rental['renter_public_name'] }} ({{ rental['start_time'] }} to {{ rental['end_time'] or 'TBD' }})
                                 </option>
                             {% endfor %}
                         </select>

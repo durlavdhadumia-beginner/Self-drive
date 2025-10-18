@@ -2,19 +2,95 @@
 {% block title %}Admin | {{ user['display_name'] }} profile{% endblock %}
 {% block head %}
     {{ super() }}
+    <link rel="stylesheet" href="{{ url_for('static', filename='vendor/leaflet/leaflet.css') }}">
     <style>
-        body {
-            min-height: 100vh;
-        }
         .admin-user-detail-page {
             flex: 1 0 auto;
             display: flex;
             flex-direction: column;
-            min-height: calc(100vh - 140px);
+            min-height: 100%;
         }
         .admin-user-detail-page .page-content {
             flex: 1 0 auto;
+            display: flex;
+            flex-direction: column;
             padding-bottom: 4rem;
+        }
+        .admin-user-detail-page .page-content .row.g-4 {
+            flex: 1 0 auto;
+        }
+        .admin-vehicle-column {
+            display: flex;
+            flex-direction: column;
+            gap: 1.5rem;
+            height: 100%;
+        }
+        .admin-vehicle-list-card {
+            flex: 1 1 auto;
+            display: flex;
+            flex-direction: column;
+        }
+        .admin-vehicle-list-card .card-body {
+            display: flex;
+            flex-direction: column;
+            flex: 1 1 auto;
+        }
+        .admin-vehicle-list {
+            flex: 1 1 auto;
+            overflow-y: auto;
+        }
+        .admin-gallery-thumb {
+            width: 96px;
+            height: 64px;
+            object-fit: cover;
+            border-radius: 0.5rem;
+        }
+        .admin-detail-map,
+        .admin-edit-location-map {
+            height: 240px;
+            min-height: 240px;
+        }
+        .map-pin {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 28px;
+            height: 28px;
+            border-radius: 50%;
+            border: 2px solid #fff;
+            font-weight: 600;
+            color: #fff;
+            box-shadow: 0 6px 12px rgba(15, 118, 110, 0.25);
+            position: relative;
+            background: #2563eb;
+        }
+        .map-pin::after {
+            content: "";
+            position: absolute;
+            bottom: -8px;
+            left: 50%;
+            margin-left: -6px;
+            width: 0;
+            height: 0;
+            border: 6px solid transparent;
+            border-top-color: currentColor;
+        }
+        .map-pin-labeled {
+            font-size: 0.75rem;
+        }
+        .map-pin-car {
+            background: #2563eb;
+        }
+        .map-pin-delivery {
+            background: #0d9488;
+        }
+        .admin-edit-modal-body {
+            max-height: calc(100vh - 200px);
+            overflow-y: auto;
+        }
+        .admin-photo-input-row {
+            display: flex;
+            gap: 0.5rem;
         }
     </style>
 {% endblock %}
@@ -31,142 +107,179 @@
                 <a href="{{ url_for('admin_dashboard') }}" class="btn btn-outline-success">Admin dashboard</a>
             </div>
         </div>
-        <div class="row g-4">
+        <div class="row g-4 flex-grow-1">
             <div class="col-lg-7">
-                <div class="card card-zoom h-100 mb-4 mb-lg-0">
-                    <div class="card-body">
-                        <div class="d-flex flex-column flex-lg-row justify-content-between gap-3">
-                            <div>
-                                <h2 class="h5 fw-bold mb-1">{{ user['display_name'] }}</h2>
-                                <div class="text-muted small">Login ID: {{ user['username'] }}</div>
-                                <p class="text-muted small mb-0">Account ID #{{ user['id'] }}</p>
-                            </div>
-                            <div class="d-flex flex-wrap gap-2">
-                                <span class="badge bg-success-subtle text-success text-uppercase">{{ user['role']|replace('_', ' ') }}</span>
-                                {% if user['is_admin'] %}
-                                    <span class="badge bg-dark-subtle text-dark">Admin</span>
-                                {% endif %}
-                                {% if profile.get('profile_completed') %}
-                                    <span class="badge bg-success-subtle text-success">Profile complete</span>
-                                {% else %}
-                                    <span class="badge bg-warning-subtle text-warning-emphasis">Profile incomplete</span>
-                                {% endif %}
-                                {% if profile.get('profile_verified_at') %}
-                                    <span class="badge bg-primary-subtle text-primary">Verified {{ profile['profile_verified_at'] }}</span>
-                                {% else %}
-                                    <span class="badge bg-secondary-subtle text-secondary">Not verified</span>
-                                {% endif %}
-                            </div>
-                        </div>
-                        <hr class="my-4">
-                        <div class="row g-3">
-                            <div class="col-md-6">
-                                <span class="text-muted text-uppercase small fw-semibold">Full name</span>
-                                <div class="fw-semibold">{{ profile['full_name'] or 'Not provided' }}</div>
-                            </div>
-                            <div class="col-md-6">
-                                <span class="text-muted text-uppercase small fw-semibold">Date of birth</span>
-                                <div class="fw-semibold">{{ profile['date_of_birth'] or 'Not provided' }}</div>
-                            </div>
-                            <div class="col-md-6">
-                                <span class="text-muted text-uppercase small fw-semibold">Mobile</span>
-                                <div class="fw-semibold">{{ profile['phone'] or 'Not provided' }}</div>
-                            </div>
-                            <div class="col-md-6">
-                                <span class="text-muted text-uppercase small fw-semibold">Email</span>
-                                <div class="fw-semibold">{{ profile['email_contact'] or 'Not provided' }}</div>
-                            </div>
-                            <div class="col-md-6">
-                                <span class="text-muted text-uppercase small fw-semibold">Address</span>
-                                <div class="fw-semibold">{{ profile['address'] or 'Not provided' }}</div>
-                            </div>
-                            <div class="col-md-6">
-                                <span class="text-muted text-uppercase small fw-semibold">Vehicle registration</span>
-                                <div class="fw-semibold">{{ profile['vehicle_registration'] or 'Not provided' }}</div>
-                            </div>
-                            <div class="col-md-6">
-                                <span class="text-muted text-uppercase small fw-semibold">GPS tracking consent</span>
-                                <div class="fw-semibold">{{ 'Enabled' if profile.get('gps_tracking') else 'Disabled' }}</div>
-                            </div>
-                        </div>
-                        <div class="mt-4 p-3 rounded bg-light d-flex flex-wrap gap-4">
-                            <div>
-                                <div class="text-muted text-uppercase small">Vehicles hosted</div>
-                                <div class="fs-5 fw-bold">{{ stats['vehicle_count'] }}</div>
-                            </div>
-                            <div>
-                                <div class="text-muted text-uppercase small">Trips booked</div>
-                                <div class="fs-5 fw-bold">{{ stats['trip_count'] }}</div>
-                            </div>
-                            <div>
-                                <div class="text-muted text-uppercase small">Documents</div>
-                                <div class="fs-5 fw-bold">{{ documents|length }}</div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-                <div class="card card-zoom mt-4">
-                    <div class="card-body">
-                        <h2 class="h5 fw-bold mb-3">Payout preferences</h2>
-                        <div class="row g-3">
-                            <div class="col-md-6">
-                                <span class="text-muted text-uppercase small fw-semibold">Account holder</span>
-                                <div class="fw-semibold">{{ payout.get('account_holder') or profile['full_name'] or 'Not provided' }}</div>
-                            </div>
-                            <div class="col-md-6">
-                                <span class="text-muted text-uppercase small fw-semibold">Account number</span>
-                                <div class="fw-semibold">{{ payout.get('account_number') or 'Not provided' }}</div>
-                            </div>
-                            <div class="col-md-6">
-                                <span class="text-muted text-uppercase small fw-semibold">IFSC code</span>
-                                <div class="fw-semibold">{{ payout.get('ifsc_code') or 'Not provided' }}</div>
-                            </div>
-                            <div class="col-md-6">
-                                <span class="text-muted text-uppercase small fw-semibold">UPI ID</span>
-                                <div class="fw-semibold">{{ payout.get('upi_id') or 'Not provided' }}</div>
-                            </div>
-                        </div>
-                        {% if payout.get('updated_at') %}
-                            <p class="text-muted small mb-0 mt-3">Last updated {{ payout['updated_at'] }}</p>
-                        {% endif %}
-                    </div>
-                </div>
-                {% if cars %}
-                <div class="card card-zoom mt-4">
-                    <div class="card-body">
-                        <h2 class="h5 fw-bold mb-3">Vehicles listed ({{ cars|length }})</h2>
-                        <div class="d-flex flex-column gap-3">
-                            {% for car in cars %}
-                                <div class="border rounded-3 p-3">
-                                    <div class="d-flex flex-column flex-sm-row justify-content-between align-items-sm-center gap-2">
-                                        <div>
-                                            <div class="fw-semibold">{{ car['name'] or car['brand'] ~ ' ' ~ car['model'] }}</div>
-                                            <div class="text-muted small">{{ car['brand'] }} {{ car['model'] }}{% if car['city'] %} • {{ car['city'] }}{% endif %}</div>
-                                            <div class="text-muted small">Rate: ₹{{ car['rate_per_hour']|round(2) }}/hr • ₹{{ car['daily_rate']|round(2) }} per day</div>
-                                        </div>
-                                        <div class="text-muted small">Added {{ car['created_at'] or 'recently' }}</div>
-                                    </div>
-                                    {% if car['images'] %}
-                                    <div class="d-flex flex-wrap gap-2 mt-3">
-                                        {% for image in car['images'] %}
-                                            <a href="{{ url_for('serve_upload', filename=image) }}" target="_blank" rel="noopener" class="d-inline-block">
-                                                <img src="{{ url_for('serve_upload', filename=image) }}" alt="{{ car['name'] }}" class="rounded" style="width:96px;height:64px;object-fit:cover;">
-                                            </a>
-                                        {% endfor %}
-                                    </div>
-                                    {% else %}
-                                    <div class="text-muted small mt-2">No gallery images uploaded.</div>
-                                    {% endif %}
-                                    <div class="d-flex flex-wrap gap-2 mt-3">
-                                        <button type="button" class="btn btn-sm btn-outline-success" data-admin-car="{{ car['id'] }}">View details</button>
-                                        <button type="button" class="btn btn-sm btn-outline-secondary" data-admin-edit="{{ car['id'] }}">Edit listing</button>
-                                    </div>
+                <div class="admin-vehicle-column">
+                    <div class="card card-zoom">
+                        <div class="card-body">
+                            <div class="d-flex flex-column flex-lg-row justify-content-between gap-3">
+                                <div>
+                                    <h2 class="h5 fw-bold mb-1">{{ user['display_name'] }}</h2>
+                                    <div class="text-muted small">Login ID: {{ user['username'] }}</div>
+                                    <p class="text-muted small mb-0">Account ID #{{ user['id'] }}</p>
                                 </div>
-                            {% endfor %}
+                                <div class="d-flex flex-wrap gap-2">
+                                    <span class="badge bg-success-subtle text-success text-uppercase">{{ user['role']|replace('_', ' ') }}</span>
+                                    {% if user['is_admin'] %}
+                                        <span class="badge bg-dark-subtle text-dark">Admin</span>
+                                    {% endif %}
+                                    {% if profile.get('profile_completed') %}
+                                        <span class="badge bg-success-subtle text-success">Profile complete</span>
+                                    {% else %}
+                                        <span class="badge bg-warning-subtle text-warning-emphasis">Profile incomplete</span>
+                                    {% endif %}
+                                    {% if profile.get('profile_verified_at') %}
+                                        <span class="badge bg-primary-subtle text-primary">Verified {{ profile['profile_verified_at'] }}</span>
+                                    {% else %}
+                                        <span class="badge bg-secondary-subtle text-secondary">Not verified</span>
+                                    {% endif %}
+                                </div>
+                            </div>
+                            <hr class="my-4">
+                            <div class="row g-3">
+                                <div class="col-md-6">
+                                    <span class="text-muted text-uppercase small fw-semibold">Full name</span>
+                                    <div class="fw-semibold">{{ profile['full_name'] or 'Not provided' }}</div>
+                                </div>
+                                <div class="col-md-6">
+                                    <span class="text-muted text-uppercase small fw-semibold">Date of birth</span>
+                                    <div class="fw-semibold">{{ profile['date_of_birth'] or 'Not provided' }}</div>
+                                </div>
+                                <div class="col-md-6">
+                                    <span class="text-muted text-uppercase small fw-semibold">Mobile</span>
+                                    <div class="fw-semibold">{{ profile['phone'] or 'Not provided' }}</div>
+                                </div>
+                                <div class="col-md-6">
+                                    <span class="text-muted text-uppercase small fw-semibold">Email</span>
+                                    <div class="fw-semibold">{{ profile['email_contact'] or 'Not provided' }}</div>
+                                </div>
+                                <div class="col-md-6">
+                                    <span class="text-muted text-uppercase small fw-semibold">Address</span>
+                                    <div class="fw-semibold">{{ profile['address'] or 'Not provided' }}</div>
+                                </div>
+                                <div class="col-md-6">
+                                    <span class="text-muted text-uppercase small fw-semibold">Vehicle registration</span>
+                                    <div class="fw-semibold">{{ profile['vehicle_registration'] or 'Not provided' }}</div>
+                                </div>
+                                <div class="col-md-6">
+                                    <span class="text-muted text-uppercase small fw-semibold">GPS tracking consent</span>
+                                    <div class="fw-semibold">{{ 'Enabled' if profile.get('gps_tracking') else 'Disabled' }}</div>
+                                </div>
+                            </div>
+                            <div class="mt-4 p-3 rounded bg-light d-flex flex-wrap gap-4">
+                                <div>
+                                    <div class="text-muted text-uppercase small">Vehicles hosted</div>
+                                    <div class="fs-5 fw-bold">{{ stats['vehicle_count'] }}</div>
+                                </div>
+                                <div>
+                                    <div class="text-muted text-uppercase small">Trips booked</div>
+                                    <div class="fs-5 fw-bold">{{ stats['trip_count'] }}</div>
+                                </div>
+                                <div>
+                                    <div class="text-muted text-uppercase small">Documents</div>
+                                    <div class="fs-5 fw-bold">{{ documents|length }}</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="card card-zoom mt-4">
+                        <div class="card-body">
+                            <h2 class="h5 fw-bold mb-3">Payout preferences</h2>
+                            <div class="row g-3">
+                                <div class="col-md-6">
+                                    <span class="text-muted text-uppercase small fw-semibold">Account holder</span>
+                                    <div class="fw-semibold">{{ payout.get('account_holder') or profile['full_name'] or 'Not provided' }}</div>
+                                </div>
+                                <div class="col-md-6">
+                                    <span class="text-muted text-uppercase small fw-semibold">Account number</span>
+                                    <div class="fw-semibold">{{ payout.get('account_number') or 'Not provided' }}</div>
+                                </div>
+                                <div class="col-md-6">
+                                    <span class="text-muted text-uppercase small fw-semibold">IFSC code</span>
+                                    <div class="fw-semibold">{{ payout.get('ifsc_code') or 'Not provided' }}</div>
+                                </div>
+                                <div class="col-md-6">
+                                    <span class="text-muted text-uppercase small fw-semibold">UPI ID</span>
+                                    <div class="fw-semibold">{{ payout.get('upi_id') or 'Not provided' }}</div>
+                                </div>
+                            </div>
+                            {% if payout.get('updated_at') %}
+                                <p class="text-muted small mb-0 mt-3">Last updated {{ payout['updated_at'] }}</p>
+                            {% endif %}
+                        </div>
+                    </div>
+                    <div class="card card-zoom admin-vehicle-list-card">
+                        <div class="card-body">
+                            <div class="d-flex justify-content-between align-items-center mb-3">
+                                <h2 class="h5 fw-bold mb-0">Vehicles listed ({{ cars|length }})</h2>
+                                {% if cars %}
+                                    <span class="badge bg-success-subtle text-success text-uppercase">Active fleet</span>
+                                {% else %}
+                                    <span class="badge bg-secondary-subtle text-secondary text-uppercase">No vehicles</span>
+                                {% endif %}
+                            </div>
+                            {% if cars %}
+                                <div class="list-group list-group-flush admin-vehicle-list">
+                                    {% for car in cars %}
+                                        <div class="list-group-item px-0 py-3" data-admin-car-card="{{ car['id'] }}" data-admin-detail-url="{{ url_for('owner_get_car_data', car_id=car['id']) }}" data-admin-update-url="{{ url_for('owner_update_car', car_id=car['id']) }}">
+                                            <div class="d-flex justify-content-between align-items-start mb-3 gap-3">
+                                                <div>
+                                                    <h3 class="h6 fw-semibold mb-1" data-admin-role="name">{{ car['name'] or car['brand'] ~ ' ' ~ car['model'] }}</h3>
+                                                    <p class="text-muted small mb-0" data-admin-role="subtitle">
+                                                        {{ car['brand'] or 'Unknown' }} {{ car['model'] or '' }}{% if car['city'] %} &bull; {{ car['city'] }}{% else %} &bull; City not set{% endif %}
+                                                    </p>
+                                                </div>
+                                                <span class="badge {{ 'bg-success' if car['is_available'] else 'bg-secondary' }} text-white" data-admin-role="availability">
+                                                    {{ 'Available' if car['is_available'] else 'Unavailable' }}
+                                                </span>
+                                            </div>
+                                            <div class="d-flex flex-wrap gap-2 mb-3" data-admin-role="gallery">
+                                                {% if car['images'] %}
+                                                    {% for image in car['images'] %}
+                                                        <button type="button" class="btn btn-link p-0" data-admin-view="{{ car['id'] }}" aria-label="Preview {{ car['name'] or car['brand'] ~ ' ' ~ car['model'] }}">
+                                                            <img src="{{ url_for('serve_upload', filename=image) }}" alt="{{ car['name'] }}" class="admin-gallery-thumb">
+                                                        </button>
+                                                    {% endfor %}
+                                                {% else %}
+                                                    <button type="button" class="btn btn-outline-secondary btn-sm" data-admin-edit="{{ car['id'] }}">
+                                                        <i class="bi bi-plus-circle me-1"></i>Add photos
+                                                    </button>
+                                                {% endif %}
+                                            </div>
+                                            <div class="row g-2 text-muted small mb-3">
+                                                <div class="col-sm-6" data-admin-role="licence">Licence: {{ car['licence_plate'] or 'Pending' }}</div>
+                                                <div class="col-sm-6" data-admin-role="seats">Seats: {{ car['seats'] or 'N/A' }}</div>
+                                                <div class="col-sm-6" data-admin-role="rate-hour">Hourly rate: &#8377;{{ '%.0f'|format(car['rate_per_hour'] or 0) }}</div>
+                                                <div class="col-sm-6" data-admin-role="rate-day">Daily rate: &#8377;{{ '%.0f'|format(car['daily_rate'] or 0) }}</div>
+                                                <div class="col-sm-6" data-admin-role="fuel">Fuel: {{ car['fuel_type'] or 'N/A' }}</div>
+                                                <div class="col-sm-6" data-admin-role="transmission">Transmission: {{ car['transmission'] or 'N/A' }}</div>
+                                                <div class="col-12" data-admin-role="location-label">
+                                                    Location: {% if car['city'] %}{{ car['city'] }}{% else %}Not set{% endif %}
+                                                </div>
+                                                {% set delivery_map = car['delivery_options'] or {} %}
+                                                <div class="col-12" data-admin-role="delivery-summary">
+                                                    {% if delivery_map %}
+                                                        Delivery: {% for distance, price in delivery_map|dictsort %}
+                                                            Up to {{ distance }} km (&#8377;{{ price|round|int }}){% if not loop.last %}, {% endif %}
+                                                        {% endfor %}
+                                                    {% else %}
+                                                        Delivery: Not offered
+                                                    {% endif %}
+                                                </div>
+                                            </div>
+                                            <div class="d-flex flex-wrap gap-2">
+                                                <button type="button" class="btn btn-outline-success btn-sm" data-admin-view="{{ car['id'] }}">View details</button>
+                                                <button type="button" class="btn btn-outline-secondary btn-sm" data-admin-edit="{{ car['id'] }}">Manage listing</button>
+                                            </div>
+                                        </div>
+                                    {% endfor %}
+                                </div>
+                            {% else %}
+                                <p class="text-muted mb-0">This user has not listed any vehicles yet.</p>
+                            {% endif %}
                         </div>
                     </div>
                 </div>
-                {% endif %}
             </div>
             <div class="col-lg-5">
                 <div class="card card-zoom h-100">
@@ -230,6 +343,11 @@
                     </div>
                 </div>
                 <div class="mb-3">
+                    <div class="text-muted text-uppercase small fw-semibold mb-2">Location map</div>
+                    <div class="rounded-4 border overflow-hidden admin-detail-map" id="admin-detail-map"></div>
+                    <div class="text-muted small mt-2" data-admin-detail="location-summary">Location not set.</div>
+                </div>
+                <div class="mb-3">
                     <div class="text-muted text-uppercase small fw-semibold mb-2">Delivery options</div>
                     <ul class="list-group" data-admin-detail="delivery">
                         <li class="list-group-item text-muted small">No delivery charges configured.</li>
@@ -260,7 +378,7 @@
                     <h5 class="modal-title" id="adminEditCarModalLabel">Edit vehicle</h5>
                     <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
                 </div>
-                <div class="modal-body">
+                <div class="modal-body admin-edit-modal-body">
                     <div class="alert alert-success d-none" role="alert" data-admin-edit-feedback></div>
                     <input type="hidden" name="car_id" data-admin-field="id">
                     <div class="row g-3">
@@ -332,8 +450,28 @@
                             <input type="number" class="form-control" id="admin-edit-longitude" name="longitude" step="0.000001" data-admin-field="longitude">
                         </div>
                         <div class="col-12">
+                            <label class="form-label small" for="admin-edit-location-map">Location map</label>
+                            <div class="rounded-4 border overflow-hidden admin-edit-location-map" id="admin-edit-location-map"></div>
+                            <div class="form-text" data-admin-location-summary>Click the map to update latitude and longitude. We use the city field to suggest a starting position.</div>
+                        </div>
+                        <div class="col-12">
                             <label class="form-label small" for="admin-edit-description">Highlights</label>
                             <textarea class="form-control" id="admin-edit-description" name="description" rows="3" data-admin-field="description"></textarea>
+                        </div>
+                        <div class="col-12">
+                            <label class="form-label small">Current gallery</label>
+                            <div class="d-flex flex-wrap gap-3" data-admin-current-images></div>
+                            <div class="form-text small">Remove images you no longer want to show. Changes apply after saving.</div>
+                        </div>
+                        <div class="col-12">
+                            <label class="form-label small" for="admin-edit-photo-input-list">Add new gallery photos</label>
+                            <div id="admin-edit-photo-input-list" class="d-flex flex-column gap-2"></div>
+                            <div class="d-flex justify-content-between align-items-center mt-2">
+                                <div class="form-text small mb-0" data-admin-photo-helper>Upload additional images (max 8 in total).</div>
+                                <button type="button" class="btn btn-outline-success btn-sm" id="admin-add-photo-input">
+                                    <i class="bi bi-plus-circle"></i> Add another
+                                </button>
+                            </div>
                         </div>
                         <div class="col-12">
                             <label class="form-label small">Delivery options</label>
@@ -361,8 +499,6 @@
             </form>
         </div>
     </div>
-</div>
-
 <datalist id="admin-city-options">
     {% for entry in city_entries %}
         {% set label = entry.name ~ (', ' ~ entry.state if entry.state) %}
@@ -373,279 +509,12 @@
 
 {% block scripts %}
     {{ super() }}
-    <script>
-        (() => {
-            const detailModalEl = document.getElementById('adminCarModal');
-            const editModalEl = document.getElementById('adminEditCarModal');
-            const detailModal = detailModalEl && window.bootstrap ? new window.bootstrap.Modal(detailModalEl) : null;
-            const editModal = editModalEl && window.bootstrap ? new window.bootstrap.Modal(editModalEl) : null;
-            const detailSummary = {
-                name: detailModalEl ? detailModalEl.querySelector('[data-admin-detail=\"name\"]') : null,
-                subtitle: detailModalEl ? detailModalEl.querySelector('[data-admin-detail=\"subtitle\"]') : null,
-                city: detailModalEl ? detailModalEl.querySelector('[data-admin-detail=\"city\"]') : null,
-                rates: detailModalEl ? detailModalEl.querySelector('[data-admin-detail=\"rates\"]') : null,
-                vehicle: detailModalEl ? detailModalEl.querySelector('[data-admin-detail=\"vehicle\"]') : null,
-                fuel: detailModalEl ? detailModalEl.querySelector('[data-admin-detail=\"fuel\"]') : null,
-                delivery: detailModalEl ? detailModalEl.querySelector('[data-admin-detail=\"delivery\"]') : null,
-                description: detailModalEl ? detailModalEl.querySelector('[data-admin-detail=\"description\"]') : null,
-                gallery: detailModalEl ? detailModalEl.querySelector('[data-admin-detail=\"gallery\"]') : null,
-                editButton: detailModalEl ? detailModalEl.querySelector('[data-admin-detail=\"open-edit\"]') : null,
-            };
-            const editForm = document.getElementById('admin-edit-car-form');
-            const editFeedback = editModalEl ? editModalEl.querySelector('[data-admin-edit-feedback]') : null;
-            const submitButton = editModalEl ? editModalEl.querySelector('[data-admin-edit-submit]') : null;
-            let activeCarId = null;
-
-            const showToast = (message, type = 'success') => {
-                if (!editFeedback) {
-                    window.alert(message);
-                    return;
-                }
-                editFeedback.classList.remove('d-none', 'alert-success', 'alert-danger');
-                editFeedback.classList.add(type === 'success' ? 'alert-success' : 'alert-danger');
-                editFeedback.textContent = message;
-            };
-
-            const formatCurrency = (value) => {
-                const numeric = Number(value);
-                if (!Number.isFinite(numeric)) {
-                    return '0';
-                }
-                return Math.round(numeric).toLocaleString('en-IN');
-            };
-
-            const populateDeliveryRows = (options = {}) => {
-                if (!editModalEl) {
-                    return;
-                }
-                const rows = editModalEl.querySelectorAll('[data-admin-delivery-row]');
-                rows.forEach((row) => {
-                    const distance = Number(row.getAttribute('data-admin-delivery-row') || '0');
-                    const checkbox = row.querySelector('[data-admin-delivery-checkbox]');
-                    const priceInput = row.querySelector('[data-admin-delivery-price]');
-                    if (!checkbox || !priceInput) {
-                        return;
-                    }
-                    const fee = options[String(distance)] ?? options[distance];
-                    if (fee !== undefined && fee !== null) {
-                        checkbox.checked = true;
-                        priceInput.disabled = false;
-                        priceInput.value = Number(fee);
-                    } else {
-                        checkbox.checked = false;
-                        priceInput.disabled = true;
-                        priceInput.value = '';
-                    }
-                });
-            };
-
-            const wireDeliveryRows = () => {
-                if (!editModalEl) {
-                    return;
-                }
-                editModalEl.querySelectorAll('[data-admin-delivery-checkbox]').forEach((checkbox) => {
-                    checkbox.addEventListener('change', () => {
-                        const row = checkbox.closest('[data-admin-delivery-row]');
-                        if (!row) {
-                            return;
-                        }
-                        const priceInput = row.querySelector('[data-admin-delivery-price]');
-                        if (!priceInput) {
-                            return;
-                        }
-                        priceInput.disabled = !checkbox.checked;
-                        if (!checkbox.checked) {
-                            priceInput.value = '';
-                        } else if (!priceInput.value) {
-                            priceInput.value = 0;
-                        }
-                    });
-                });
-            };
-            wireDeliveryRows();
-
-            const populateDetailModal = (car) => {
-                if (!detailSummary.name) {
-                    return;
-                }
-                detailSummary.name.textContent = car.display_name || car.name || 'Vehicle';
-                detailSummary.subtitle.textContent = `${car.brand || ''} ${car.model || ''}`.trim() || 'Model details unavailable';
-                detailSummary.city.textContent = car.city ? car.city : 'City not set';
-                detailSummary.rates.textContent = `Rs ${formatCurrency(car.rate_per_hour)} / hr • Rs ${formatCurrency(car.daily_rate)} per day`;
-                detailSummary.vehicle.textContent = `${car.vehicle_type || 'Vehicle'} • ${car.size_category || 'Size not set'}`;
-                detailSummary.fuel.textContent = `${car.fuel_type || 'Fuel N/A'} • ${car.transmission || 'Transmission N/A'}`;
-                detailSummary.description.textContent = car.description || 'No highlights provided for this listing.';
-
-                if (detailSummary.delivery) {
-                    detailSummary.delivery.innerHTML = '';
-                    const entries = Object.entries(car.delivery_options || {}).sort((a, b) => Number(a[0]) - Number(b[0]));
-                    if (!entries.length) {
-                        detailSummary.delivery.innerHTML = '<li class="list-group-item text-muted small">No delivery charges configured.</li>';
-                    } else {
-                        entries.forEach(([distance, price]) => {
-                            const item = document.createElement('li');
-                            item.className = 'list-group-item d-flex justify-content-between align-items-center small';
-                            item.innerHTML = `<span>Up to ${distance} km</span><span class="fw-semibold">Rs ${formatCurrency(price)}</span>`;
-                            detailSummary.delivery.appendChild(item);
-                        });
-                    }
-                }
-
-                if (detailSummary.gallery) {
-                    detailSummary.gallery.innerHTML = '';
-                    if (Array.isArray(car.images) && car.images.length) {
-                        car.images.forEach((image) => {
-                            if (!image || !image.url) {
-                                return;
-                            }
-                            const link = document.createElement('a');
-                            link.href = image.url;
-                            link.target = '_blank';
-                            link.rel = 'noopener';
-                            link.className = 'd-inline-block';
-                            link.innerHTML = `<img src="${image.url}" alt="Vehicle photo" class="rounded" style="width:96px;height:64px;object-fit:cover;">`;
-                            detailSummary.gallery.appendChild(link);
-                        });
-                    } else if (car.image_url) {
-                        const link = document.createElement('a');
-                        link.href = car.image_url;
-                        link.target = '_blank';
-                        link.rel = 'noopener';
-                        link.className = 'd-inline-block';
-                        link.innerHTML = `<img src="${car.image_url}" alt="Vehicle photo" class="rounded" style="width:96px;height:64px;object-fit:cover;">`;
-                        detailSummary.gallery.appendChild(link);
-                    } else {
-                        detailSummary.gallery.innerHTML = '<span class="text-muted small">No images uploaded.</span>';
-                    }
-                }
-
-                if (detailSummary.editButton) {
-                    detailSummary.editButton.dataset.adminEdit = String(car.id);
-                    detailSummary.editButton.disabled = false;
-                }
-            };
-
-            const populateEditModal = (car) => {
-                if (!editForm) {
-                    return;
-                }
-                activeCarId = car.id;
-                editForm.action = `/owner/cars/${car.id}/update`;
-                editForm.querySelectorAll('[data-admin-field]').forEach((field) => {
-                    const key = field.getAttribute('data-admin-field');
-                    if (!key) {
-                        return;
-                    }
-                    if (field.type === 'checkbox') {
-                        field.checked = Boolean(car[key]);
-                    } else {
-                        field.value = car[key] !== undefined && car[key] !== null ? car[key] : '';
-                    }
-                });
-                populateDeliveryRows(car.delivery_options || {});
-                if (editFeedback) {
-                    editFeedback.classList.add('d-none');
-                }
-            };
-
-            const fetchCar = (carId, mode) => {
-                if (!carId) {
-                    return;
-                }
-                fetch(`/owner/cars/${carId}/data`, { headers: { 'X-Requested-With': 'XMLHttpRequest' } })
-                    .then((response) => {
-                        if (!response.ok) {
-                            throw new Error('Unable to load vehicle data.');
-                        }
-                        return response.json();
-                    })
-                    .then((payload) => {
-                        const car = payload && payload.car ? payload.car : null;
-                        if (!car) {
-                            throw new Error('Vehicle data was missing in the response.');
-                        }
-                        if (mode === 'view') {
-                            populateDetailModal(car);
-                            if (detailModal) {
-                                detailModal.show();
-                            }
-                        } else if (mode === 'edit') {
-                            populateEditModal(car);
-                            if (editModal) {
-                                editModal.show();
-                            }
-                        }
-                    })
-                    .catch((error) => {
-                        window.alert(error.message || 'Something went wrong while loading vehicle details.');
-                    });
-            };
-
-            document.querySelectorAll('[data-admin-car]').forEach((button) => {
-                button.addEventListener('click', () => {
-                    const carId = button.getAttribute('data-admin-car');
-                    fetchCar(carId, 'view');
-                });
-            });
-
-            document.querySelectorAll('[data-admin-edit]').forEach((button) => {
-                button.addEventListener('click', () => {
-                    const carId = button.getAttribute('data-admin-edit');
-                    fetchCar(carId, 'edit');
-                });
-            });
-
-            if (detailSummary.editButton) {
-                detailSummary.editButton.addEventListener('click', () => {
-                    const carId = detailSummary.editButton.getAttribute('data-admin-edit') || activeCarId;
-                    if (detailModal) {
-                        detailModal.hide();
-                    }
-                    fetchCar(carId, 'edit');
-                });
-            }
-
-            if (editForm) {
-                editForm.addEventListener('submit', (event) => {
-                    event.preventDefault();
-                    if (!activeCarId) {
-                        showToast('Vehicle context missing.', 'danger');
-                        return;
-                    }
-                    const formData = new FormData(editForm);
-                    if (submitButton) {
-                        submitButton.disabled = true;
-                        submitButton.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Saving...';
-                    }
-                    fetch(editForm.action, {
-                        method: 'POST',
-                        body: formData,
-                        headers: { 'X-Requested-With': 'XMLHttpRequest' },
-                    })
-                        .then((response) => {
-                            if (!response.ok) {
-                                throw new Error('Unable to save vehicle changes.');
-                            }
-                            return response.json();
-                        })
-                        .then((payload) => {
-                            if (!payload || !payload.success) {
-                                throw new Error(payload && payload.error ? payload.error : 'Update failed.');
-                            }
-                            showToast('Vehicle updated successfully.');
-                            setTimeout(() => window.location.reload(), 1200);
-                        })
-                        .catch((error) => {
-                            showToast(error.message || 'Update failed. Please try again.', 'danger');
-                        })
-                        .finally(() => {
-                            if (submitButton) {
-                                submitButton.disabled = false;
-                                submitButton.textContent = 'Save changes';
-                            }
-                        });
-                });
-            }
-        })();
-    </script>
+    <script>window.ADMIN_CITY_ENTRIES = {{ city_entries|tojson|safe }};</script>
+    <script src="{{ url_for('static', filename='vendor/leaflet/leaflet.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/admin_user_detail.js') }}"></script>
 {% endblock %}
+
+
+
+
+

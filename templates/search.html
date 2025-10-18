@@ -787,8 +787,8 @@
                 if (distanceLabel) {
                     metaChips.push(buildFeatureBadge('bi bi-signpost-2', `${distanceLabel} km away`));
                 }
-                if (car.owner_username) {
-                    metaChips.push(buildFeatureBadge('bi bi-person-badge', `Host ${car.owner_username}`));
+                if (car.owner_public_name) {
+                    metaChips.push(buildFeatureBadge('bi bi-person-badge', `Host ${car.owner_public_name}`));
                 }
                 if (Number.isFinite(Number(car.rating))) {
                     metaChips.push(buildFeatureBadge('bi bi-star-fill text-warning', `${Number(car.rating).toFixed(1)} rating`));
