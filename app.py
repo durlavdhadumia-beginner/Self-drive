@@ -4371,12 +4371,12 @@ def format_trip_datetime(value: str | datetime | None) -> str:
         date_value = parsed
     hour = date_value.strftime("%I").lstrip("0") or "0"
     minute = date_value.strftime("%M")
-    period = date_value.strftime("%p").lower()
+    period = date_value.strftime("%p")
     time_part = f"{hour}{period}" if minute == "00" else f"{hour}:{minute}{period}"
     day_part = ordinal_number(date_value.day)
     month_part = date_value.strftime("%b")
     year_part = date_value.strftime("%Y")
-    return f"{time_part}, {day_part} {month_part} {year_part}"
+    return f"{time_part}, {day_part} {month_part}, {year_part}"
 
 
 def main() -> None:

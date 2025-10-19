@@ -2,7 +2,7 @@
 {% block title %}Admin | Live Map{% endblock %}
 {% block head %}
     {{ super() }}
-    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4bM3Dprb8kJkIBlEYwH2Rn8B4QTFwPp2d9f7Hf0+4M=" crossorigin=""/>
+    <link rel="stylesheet" href="{{ url_for('static', filename='vendor/leaflet/leaflet.css') }}">
     <style>
         #admin-map {
             height: 480px;
@@ -17,6 +17,9 @@
                 height: 360px;
                 min-height: 360px;
             }
+        }
+        .leaflet-marker-icon.marker-active {
+            filter: hue-rotate(-120deg) saturate(1.6);
         }
     </style>
 {% endblock %}
@@ -36,47 +39,68 @@
 {% endblock %}
 {% block scripts %}
     {{ super() }}
-    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+    <script src="{{ url_for('static', filename='vendor/leaflet/leaflet.js') }}"></script>
     <script>
-        const map = L.map('admin-map').setView([20.5937, 78.9629], 5);
-        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-            maxZoom: 18,
-            attribution: '&copy; <a href="https://www.openstreetmap.org">OpenStreetMap</a> contributors'
-        }).addTo(map);
-
-        const listings = {{ vehicles|tojson|safe }};
-        const activeIds = new Set({{ active_vehicle_ids|tojson|safe }});
-        if (listings.length) {
-            const bounds = L.latLngBounds();
-            listings.forEach((vehicle) => {
-                if (!vehicle.latitude || !vehicle.longitude) {
-                    return;
-                }
-                const marker = L.marker([vehicle.latitude, vehicle.longitude], {
-                    icon: activeIds.has(vehicle.id) ? L.icon({
-                        iconUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png',
-                        iconSize: [25, 41],
-                        iconAnchor: [12, 41],
-                        popupAnchor: [0, -30],
-                        className: 'marker-active'
-                    }) : undefined
-                });
-                const popup = `<strong>${vehicle.name}</strong><br>${vehicle.vehicle_type || 'Vehicle'} - ${vehicle.city || 'City not set'}<br>Hosted by ${vehicle.owner_username}`;
-                marker.bindPopup(popup);
-                marker.addTo(map);
-                bounds.extend([vehicle.latitude, vehicle.longitude]);
-            });
-            if (bounds.isValid()) {
-                map.fitBounds(bounds.pad(0.2));
+        let adminMapInstance = null;
+        document.addEventListener('DOMContentLoaded', () => {
+            const mapElement = document.getElementById('admin-map');
+            if (!mapElement) {
+                return;
             }
-        }
-        const invalidate = () => map.invalidateSize();
-        requestAnimationFrame(invalidate);
-        setTimeout(invalidate, 200);
-        let resizeTimer;
-        window.addEventListener('resize', () => {
-            clearTimeout(resizeTimer);
-            resizeTimer = setTimeout(invalidate, 150);
+            adminMapInstance = L.map(mapElement).setView([20.5937, 78.9629], 5);
+            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                maxZoom: 18,
+                attribution: '&copy; <a href="https://www.openstreetmap.org">OpenStreetMap</a> contributors'
+            }).addTo(adminMapInstance);
+
+            L.Icon.Default.mergeOptions({
+                iconUrl: "{{ url_for('static', filename='vendor/leaflet/images/marker-icon.png') }}",
+                iconRetinaUrl: "{{ url_for('static', filename='vendor/leaflet/images/marker-icon-2x.png') }}",
+                shadowUrl: "{{ url_for('static', filename='vendor/leaflet/images/marker-shadow.png') }}"
+            });
+            const activeIcon = L.icon({
+                iconUrl: "{{ url_for('static', filename='vendor/leaflet/images/marker-icon.png') }}",
+                iconRetinaUrl: "{{ url_for('static', filename='vendor/leaflet/images/marker-icon-2x.png') }}",
+                shadowUrl: "{{ url_for('static', filename='vendor/leaflet/images/marker-shadow.png') }}",
+                className: 'marker-active'
+            });
+
+            const listings = {{ vehicles|tojson|safe }};
+            const activeIds = new Set({{ active_vehicle_ids|tojson|safe }});
+            if (Array.isArray(listings) && listings.length) {
+                const bounds = L.latLngBounds();
+                listings.forEach((vehicle) => {
+                    const lat = Number(vehicle.latitude);
+                    const lng = Number(vehicle.longitude);
+                    if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
+                        return;
+                    }
+                    const markerOptions = activeIds.has(vehicle.id) ? { icon: activeIcon } : {};
+                    const marker = L.marker([lat, lng], markerOptions);
+                    const popup = `<strong>${vehicle.name || 'Vehicle'}</strong><br>${vehicle.vehicle_type || 'Vehicle'} &middot; ${vehicle.city || 'City not set'}<br>Hosted by ${vehicle.owner_username || 'Host'}`;
+                    marker.bindPopup(popup);
+                    marker.addTo(adminMapInstance);
+                    bounds.extend([lat, lng]);
+                });
+                if (bounds.isValid()) {
+                    adminMapInstance.fitBounds(bounds.pad(0.2));
+                }
+            }
+
+            const invalidate = () => adminMapInstance && adminMapInstance.invalidateSize();
+            requestAnimationFrame(invalidate);
+            setTimeout(invalidate, 250);
+            let resizeTimer;
+            window.addEventListener('resize', () => {
+                clearTimeout(resizeTimer);
+                resizeTimer = setTimeout(invalidate, 150);
+            });
+        });
+
+        window.addEventListener('load', () => {
+            if (adminMapInstance) {
+                setTimeout(() => adminMapInstance.invalidateSize(), 200);
+            }
         });
     </script>
 {% endblock %}
