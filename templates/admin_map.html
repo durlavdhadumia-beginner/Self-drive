@@ -21,6 +21,35 @@
         .leaflet-marker-icon.marker-active {
             filter: hue-rotate(-120deg) saturate(1.6);
         }
+        .admin-map-pin {
+            display: block;
+            width: 20px;
+            height: 20px;
+            background: #2563eb;
+            border: 3px solid #fff;
+            border-radius: 50%;
+            box-shadow: 0 4px 10px rgba(37, 99, 235, 0.4);
+            position: relative;
+        }
+        .admin-map-pin::after {
+            content: "";
+            position: absolute;
+            bottom: -8px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 0;
+            height: 0;
+            border-left: 6px solid transparent;
+            border-right: 6px solid transparent;
+            border-top: 8px solid #2563eb;
+        }
+        .admin-map-pin-active {
+            background: #16a34a;
+            box-shadow: 0 4px 12px rgba(22, 163, 74, 0.45);
+        }
+        .admin-map-pin-active::after {
+            border-top-color: #16a34a;
+        }
     </style>
 {% endblock %}
 {% block content %}
@@ -53,23 +82,14 @@
                 attribution: '&copy; <a href="https://www.openstreetmap.org">OpenStreetMap</a> contributors'
             }).addTo(adminMapInstance);
 
-            const DEFAULT_ICON = 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png';
-            const DEFAULT_ICON_2X = 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon-2x.png';
-            const DEFAULT_SHADOW = 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png';
-            L.Icon.Default.mergeOptions({
-                iconUrl: DEFAULT_ICON,
-                iconRetinaUrl: DEFAULT_ICON_2X,
-                shadowUrl: DEFAULT_SHADOW
-            });
-            const activeIcon = L.icon({
-                iconUrl: DEFAULT_ICON,
-                iconRetinaUrl: DEFAULT_ICON_2X,
-                shadowUrl: DEFAULT_SHADOW,
-                className: 'marker-active'
-            });
-
             const listings = {{ vehicles|tojson|safe }};
             const activeIds = new Set({{ active_vehicle_ids|tojson|safe }});
+            const buildIcon = (isActive) => L.divIcon({
+                className: isActive ? 'admin-map-pin admin-map-pin-active' : 'admin-map-pin',
+                iconSize: [20, 28],
+                iconAnchor: [10, 24],
+                popupAnchor: [0, -20]
+            });
             if (Array.isArray(listings) && listings.length) {
                 const bounds = L.latLngBounds();
                 listings.forEach((vehicle) => {
@@ -78,8 +98,9 @@
                     if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
                         return;
                     }
-                    const markerOptions = activeIds.has(vehicle.id) ? { icon: activeIcon } : {};
-                    const marker = L.marker([lat, lng], markerOptions);
+                    const marker = L.marker([lat, lng], {
+                        icon: buildIcon(activeIds.has(vehicle.id))
+                    });
                     const popup = `<strong>${vehicle.name || 'Vehicle'}</strong><br>${vehicle.vehicle_type || 'Vehicle'} &middot; ${vehicle.city || 'City not set'}<br>Hosted by ${vehicle.owner_username || 'Host'}`;
                     marker.bindPopup(popup);
                     marker.addTo(adminMapInstance);
