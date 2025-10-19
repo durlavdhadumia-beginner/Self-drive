@@ -25,11 +25,13 @@
                     <div class="card-body">
                         <h2 class="h5 fw-semibold">Contact channels</h2>
                         <ul class="list-unstyled text-muted mb-0">
-                            <li class="mb-2"><strong>Email:</strong> <a href="mailto:support@carrentalntravel.com">support@carrentalntravel.com</a></li>
-                            <li class="mb-2"><strong>Phone:</strong> +91&nbsp;98765&nbsp;43210</li>
+                            <li class="mb-2"><strong>Email:</strong> <a href="mailto:{{ support_email }}">{{ support_email }}</a></li>
+                            <li class="mb-2"><strong>Phone:</strong> <a href="tel:{{ support_phone }}">{{ support_phone }}</a></li>
+                            <li class="mb-2"><strong>WhatsApp:</strong> <a href="https://wa.me/{{ support_whatsapp.lstrip('+') }}" target="_blank" rel="noopener">{{ support_phone }}</a></li>
                             <li class="mb-0"><strong>Registered address:</strong><br>
-                                CarRentalNTravel, 2nd Floor, Orbit Plaza, MG Road,<br>
-                                Bengaluru, Karnataka&nbsp;560001, India
+                                #2, Ground Floor, Shantaram Complex, near UCO Bank,<br>
+                                Sonapur New Market, Sonapur, Kamrup Metro,<br>
+                                Assam &mdash; 782402
                             </li>
                         </ul>
                     </div>

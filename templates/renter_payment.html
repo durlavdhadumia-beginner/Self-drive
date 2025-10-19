@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% block title %}Complete Payment | DriveNow{% endblock %}
+{% block title %}Complete Payment | CarRentalNTravel{% endblock %}
 {% block content %}
 <section class="py-5">
     <div class="container">
@@ -63,7 +63,7 @@
                             </ul>
                         </div>
 
-                        <form method="post" action="{{ url_for('renter_confirm_payment', rental_id=rental.id) }}" class="row g-3">
+                        <form method="post" action="{{ url_for('renter_payment_instructions', rental_id=rental.id) }}" class="row g-3">
                             <div class="col-12 col-md-6">
                                 <label class="form-label small" for="payment_channel">Payment channel</label>
                                 <select class="form-select" id="payment_channel" name="payment_channel" required>
@@ -73,7 +73,7 @@
                                 </select>
                             </div>
                             <div class="col-12 col-md-6 d-flex align-items-end">
-                                <button type="submit" class="btn btn-success w-100">Mark payment</button>
+                                <button type="submit" class="btn btn-success w-100">Make payment</button>
                             </div>
                         </form>
                     </div>

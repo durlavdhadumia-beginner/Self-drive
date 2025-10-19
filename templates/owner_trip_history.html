@@ -1,0 +1,183 @@
+{% extends "base.html" %}
+{% block title %}Host My Trips | DriveNow{% endblock %}
+{% block head %}
+    {{ super() }}
+    <link rel="stylesheet" href="{{ url_for('static', filename='vendor/leaflet/leaflet.css') }}">
+    <style>
+        .trip-card img {
+            min-height: 200px;
+            object-fit: cover;
+        }
+        .trip-card .badge {
+            letter-spacing: 0.04em;
+        }
+        .trip-card .section-divider + .section-divider {
+            margin-top: 1.25rem;
+            padding-top: 1.25rem;
+            border-top: 1px solid rgba(148, 163, 184, 0.18);
+        }
+        .trip-map {
+            height: 220px;
+            border-radius: 1rem;
+            background: rgba(226, 232, 240, 0.4);
+        }
+        .trip-map[data-has-gps="0"] {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #64748b;
+            font-style: italic;
+        }
+    </style>
+{% endblock %}
+{% block content %}
+<section class="py-5">
+    <div class="container">
+        <div class="d-flex flex-column flex-lg-row justify-content-between align-items-start align-items-lg-center gap-3 mb-4">
+            <div>
+                <h1 class="h3 fw-bold mb-1">My trips</h1>
+                <p class="text-muted mb-0">Review every booking in the order it was received.</p>
+            </div>
+            <a href="{{ url_for('owner_cars') }}" class="btn btn-outline-secondary">
+                <i class="bi bi-arrow-left"></i> Back to dashboard
+            </a>
+        </div>
+
+        {% if trips %}
+            <div class="d-flex flex-column gap-4">
+                {% for trip in trips %}
+                    {% set car_meta = cars_by_id.get(trip.car_id) %}
+                    {% set licence_plate = trip.licence_plate or (car_meta and car_meta['licence_plate']) %}
+                    {% set seats = trip.car_seats or (car_meta and car_meta['seats']) %}
+                    {% set vehicle_type = trip.car_vehicle_type or (car_meta and car_meta['vehicle_type']) %}
+                    {% set image_src = trip.primary_image_url %}
+                    <div class="card card-zoom trip-card">
+                        <div class="row g-0 align-items-stretch">
+                            <div class="col-lg-4">
+                                <img src="{{ image_src if image_src else 'https://images.unsplash.com/photo-1489515217757-5fd1be406fef?auto=format&fit=crop&w=900&q=80' }}"
+                                     alt="{{ trip.car_display_name }}"
+                                     class="img-fluid w-100 h-100 rounded-top rounded-lg-start">
+                            </div>
+                            <div class="col-lg-8">
+                                <div class="card-body d-flex flex-column h-100">
+                                    <div class="d-flex flex-column flex-md-row justify-content-between align-items-start gap-3 mb-3">
+                                        <div>
+                                            <h2 class="h5 mb-1">{{ trip.car_display_name }}</h2>
+                                            <p class="text-muted small mb-0">
+                                                {% if vehicle_type %}{{ vehicle_type }} &middot; {% endif %}
+                                                {% if seats %}{{ seats }} seats &middot; {% endif %}
+                                                {% if licence_plate %}Licence {{ licence_plate }}{% endif %}
+                                            </p>
+                                            <p class="text-muted small mb-0">Guest: {{ trip.renter_public_name }}</p>
+                                        </div>
+                                        <div class="d-flex flex-wrap gap-2">
+                                            <span class="badge bg-primary text-uppercase">{{ trip.status|replace('_',' ')|title }}</span>
+                                            <span class="badge bg-secondary text-uppercase">{{ trip.payment_status|replace('_',' ')|title }}</span>
+                                            {% if trip.owner_response and trip.owner_response not in ('accepted', 'confirmed') %}
+                                                <span class="badge bg-warning text-dark text-uppercase">{{ trip.owner_response|replace('_',' ')|title }}</span>
+                                            {% endif %}
+                                            {% if trip.owner_payout_status %}
+                                                <span class="badge bg-success text-uppercase">{{ trip.owner_payout_status|replace('_',' ')|title }}</span>
+                                            {% endif %}
+                                        </div>
+                                    </div>
+
+                                    <div class="row g-3 text-muted small mb-3">
+                                        <div class="col-sm-6">
+                                            <div><i class="bi bi-calendar-event"></i> Trip start: {{ trip.start_time|trip_datetime }}</div>
+                                            <div><i class="bi bi-calendar-check"></i> Trip end: {{ trip.end_time|trip_datetime if trip.end_time else 'TBD' }}</div>
+                                            {% if trip.delivery_type == 'delivery' %}
+                                                <div><i class="bi bi-truck"></i> Delivery: {{ trip.delivery_address or 'Pinned location' }}</div>
+                                            {% else %}
+                                                <div><i class="bi bi-geo"></i> Pickup at host location</div>
+                                            {% endif %}
+                                            {% if trip.trip_destinations_list %}
+                                                <div><i class="bi bi-map"></i> Destinations: {{ trip.trip_destinations_list|join(', ') }}</div>
+                                            {% endif %}
+                                        </div>
+                                        <div class="col-sm-6">
+                                            <div><span class="fw-semibold text-dark">Rental:</span> Rs {{ (trip.host_rental_amount or 0)|round(2) }}</div>
+                                            <div><span class="fw-semibold text-dark">Delivery:</span> Rs {{ (trip.delivery_fee or 0)|round(2) }}</div>
+                                            <div><span class="fw-semibold text-dark">Service fee ({{ service_fee_rate }}%):</span> -Rs {{ (trip.host_service_fee or 0)|round(2) }}</div>
+                                            <div><span class="fw-semibold text-dark">Net take-home:</span> Rs {{ (trip.host_net_take_home or 0)|round(2) }}</div>
+                                            <div><span class="fw-semibold text-dark">Received:</span> Rs {{ (trip.host_amount_received or 0)|round(2) }}</div>
+                                            <div><span class="fw-semibold text-dark">Balance:</span> Rs {{ (trip.host_amount_balance or 0)|round(2) }}</div>
+                                        </div>
+                                    </div>
+
+                                    <div class="section-divider">
+                                        <h3 class="h6 text-uppercase text-muted fw-semibold mb-2">Customer review</h3>
+                                        {% set review = trip.renter_review %}
+                                        {% if review %}
+                                            <div class="text-muted small">
+                                                <div>
+                                                    {% if review.trip_rating %}<span class="fw-semibold text-dark">Trip:</span> {{ review.trip_rating }}/5{% endif %}
+                                                    {% if review.car_rating %} &middot; <span class="fw-semibold text-dark">Car:</span> {{ review.car_rating }}/5{% endif %}
+                                                    {% if review.owner_rating %} &middot; <span class="fw-semibold text-dark">Host:</span> {{ review.owner_rating }}/5{% endif %}
+                                                </div>
+                                                {% if review.comment %}
+                                                    <div class="fst-italic">"{{ review.comment }}"</div>
+                                                {% else %}
+                                                    <div>No written feedback.</div>
+                                                {% endif %}
+                                                {% if review.created_at %}
+                                                    <div class="mt-1">Shared on {{ review.created_at|trip_datetime }}</div>
+                                                {% endif %}
+                                            </div>
+                                        {% else %}
+                                            <div class="text-muted small">No review from the guest yet.</div>
+                                        {% endif %}
+                                    </div>
+
+                                    <div class="section-divider">
+                                        <h3 class="h6 text-uppercase text-muted fw-semibold mb-2">Your review</h3>
+                                        {% if trip.host_review %}
+                                            <div class="text-muted small">
+                                                <div><span class="fw-semibold text-dark">Passenger rating:</span> {{ trip.host_review.passenger_rating }}/5</div>
+                                                {% if trip.host_review.comment %}
+                                                    <div class="fst-italic">"{{ trip.host_review.comment }}"</div>
+                                                {% else %}
+                                                    <div>No written comment.</div>
+                                                {% endif %}
+                                                {% if trip.host_review.created_at %}
+                                                    <div class="mt-1">Submitted on {{ trip.host_review.created_at|trip_datetime }}</div>
+                                                {% endif %}
+                                            </div>
+                                        {% else %}
+                                            <div class="text-muted small">You have not rated this guest yet.</div>
+                                        {% endif %}
+                                    </div>
+
+                                    <div class="section-divider">
+                                        <h3 class="h6 text-uppercase text-muted fw-semibold mb-2">Route map</h3>
+                                        {% set has_gps = 1 if trip.has_gps and (trip.car_latitude is not none or trip.delivery_latitude is not none or trip.trip_destinations_map) else 0 %}
+                                        <div class="trip-map"
+                                             data-trip-map
+                                             data-has-gps="{{ has_gps }}"
+                                             data-car-lat="{{ trip.car_latitude if trip.car_latitude is not none else '' }}"
+                                             data-car-lng="{{ trip.car_longitude if trip.car_longitude is not none else '' }}"
+                                             data-delivery-lat="{{ trip.delivery_latitude if trip.delivery_latitude is not none else '' }}"
+                                             data-delivery-lng="{{ trip.delivery_longitude if trip.delivery_longitude is not none else '' }}"
+                                             data-destinations='{{ trip.trip_destinations_map|tojson|safe }}'>
+                                            {% if not has_gps %}
+                                                GPS coordinates were not captured for this trip.
+                                            {% endif %}
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                {% endfor %}
+            </div>
+        {% else %}
+            <div class="alert alert-info">No trips recorded yet. New bookings will appear here once received.</div>
+        {% endif %}
+    </div>
+</section>
+{% endblock %}
+{% block scripts %}
+    {{ super() }}
+    <script src="{{ url_for('static', filename='vendor/leaflet/leaflet.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/owner_trip_history.js') }}"></script>
+{% endblock %}

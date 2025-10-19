@@ -1,11 +1,11 @@
 {% extends "base.html" %}
-{% block title %}My Trips | DriveNow{% endblock %}
+{% block title %}My Trips | CarRentalNTravel{% endblock %}
 {% block content %}
 <section class="py-5">
     <div class="container">
         <div class="d-flex justify-content-between align-items-center mb-4">
             <div>
-                <h1 class="h3 fw-bold mb-1">My upcoming & past trips</h1>
+                <h1 class="h3 fw-bold mb-1">My upcoming &amp; past trips</h1>
                 <p class="text-muted mb-0">Manage bookings, handle payments, and share feedback.</p>
             </div>
             <a href="{{ url_for('search') }}" class="btn btn-success"><i class="bi bi-plus-circle"></i> Book another car</a>
@@ -18,153 +18,184 @@
         {% endif %}
 
         {% if rentals %}
-            <div class="row row-cols-1 row-cols-md-2 g-4">
+            <div class="d-flex flex-column gap-4">
                 {% for rental in rentals %}
-                    <div class="col">
-                        <div class="card card-zoom h-100">
-                            <img src="{{ rental['image_url'] or 'https://images.unsplash.com/photo-1542362567-b07e54358753?auto=format&fit=crop&w=900&q=80' }}" class="card-img-top" alt="{{ rental['brand'] }} {{ rental['model'] }}" style="height: 200px; object-fit: cover;">
-                            <div class="card-body d-flex flex-column">
-                                <div class="d-flex justify-content-between align-items-center mb-2">
-                                    <h2 class="h5 mb-0">{{ rental['car_name'] or rental['brand'] ~ ' ' ~ rental['model'] }}</h2>
-                                    <span class="badge
-                                        {% if rental['status'] == 'booked' %}bg-info
-                                        {% elif rental['status'] == 'active' %}bg-success
-                                        {% elif rental['status'] == 'completed' %}bg-secondary
-                                        {% else %}bg-warning text-dark
-                                        {% endif %}">
-                                        {{ rental['status']|capitalize }}
-                                    </span>
-                                </div>
-                                <p class="text-muted small mb-2">Licence plate: {{ rental['licence_plate'] }}</p>
-                                <div class="d-flex flex-column gap-1 text-muted small mb-3">
-                                    <span><i class="bi bi-calendar-event"></i> Trip start: {{ rental['start_time']|trip_datetime }}</span>
-                                    <span><i class="bi bi-calendar-check"></i> Trip end: {{ rental['end_time']|trip_datetime }}</span>
-                                    <span><i class="bi bi-person"></i> Host: {{ rental['owner_public_name'] }}</span>
-                                </div>
-                                <div class="d-flex flex-wrap gap-2 mb-3">
-                                    {% if rental['owner_response'] == 'pending' %}
-                                        <span class="badge bg-info text-dark">Booking request sent</span>
-                                    {% elif rental['owner_response'] == 'accepted' %}
-                                        <span class="badge bg-success-subtle text-success">Accepted by host</span>
-                                    {% elif rental['owner_response'] == 'rejected' %}
-                                        <span class="badge bg-danger-subtle text-danger">Declined by host</span>
-                                    {% endif %}
-                                    {% if rental['payment_status'] == 'awaiting_payment' %}
-                                        <span class="badge bg-warning text-dark">Payment pending</span>
-                                    {% elif rental['payment_status'] == 'paid' %}
-                                        <span class="badge bg-success">Payment confirmed</span>
-                                    {% endif %}
-                                </div>
-                                <div class="bg-light rounded-4 px-3 py-2 mb-3">
-                                    {% set base_amount = rental['rental_amount'] if rental['rental_amount'] else (rental['total_amount'] or 0) - (rental['delivery_fee'] or 0) %}
-                                    {% set delivery_fee = rental['delivery_fee'] or 0 %}
-                                    {% set delivery_label = rental['delivery_address'] or 'Pinned delivery location' %}
-                                    <div class="text-muted small">Rental: Rs {{ (base_amount or 0)|round(2) }}</div>
-                                    <div class="text-muted small">
-                                        {% if rental['delivery_type'] == 'delivery' %}
-                                            Delivery: Rs {{ delivery_fee|round(2) }}
-                                        {% else %}
-                                            Delivery: Pickup at host location
-                                        {% endif %}
-                                    </div>
-                                    {% if rental['owner_response'] == 'counter' and rental['counter_amount'] %}
-                                        <div class="fw-semibold text-danger">Host counter offer: Rs {{ rental['counter_amount']|round(2) }}</div>
-                                        <div class="text-muted small">Current total: Rs {{ (rental['total_amount'] or 0)|round(2) }}</div>
-                                    {% else %}
-                                        <div class="fw-semibold text-success">Total: Rs {{ (rental['total_amount'] or 0)|round(2) }}</div>
-                                    {% endif %}
-                                    {% if rental['delivery_type'] == 'delivery' %}
-                                        <div class="text-muted small">
-                                            Delivery {{ delivery_label }}
-                                            {% if rental['delivery_distance_km'] %}
-                                                &bull; ~{{ rental['delivery_distance_km']|round(1) }} km
+                    <div class="card card-zoom">
+                        <div class="row g-0 align-items-stretch">
+                            <div class="col-lg-4">
+                                <img src="{{ rental['image_url'] or 'https://images.unsplash.com/photo-1542362567-b07e54358753?auto=format&fit=crop&w=900&q=80' }}"
+                                     alt="{{ rental['brand'] }} {{ rental['model'] }}"
+                                     class="img-fluid h-100 w-100 rounded-top rounded-lg-start"
+                                     style="object-fit: cover;">
+                            </div>
+                            <div class="col-lg-8">
+                                <div class="card-body d-flex flex-column">
+                                    <div class="d-flex justify-content-between align-items-start gap-3 flex-wrap mb-3">
+                                        <div>
+                                            <h2 class="h5 mb-1">{{ rental['car_name'] or rental['brand'] ~ ' ' ~ rental['model'] }}</h2>
+                                            <p class="text-muted small mb-0">Licence plate: {{ rental['licence_plate'] }}</p>
+                                            <p class="text-muted small mb-0">Host: {{ rental['owner_public_name'] }}</p>
+                                        </div>
+                                        <div class="d-flex flex-column gap-2 align-items-end">
+                                            <span class="badge
+                                                {% if rental['status'] == 'booked' %}bg-info
+                                                {% elif rental['status'] == 'active' %}bg-success
+                                                {% elif rental['status'] == 'completed' %}bg-secondary
+                                                {% elif rental['status'] == 'cancelled' %}bg-danger
+                                                {% else %}bg-warning text-dark
+                                                {% endif %}">
+                                                {{ rental['status']|replace('_',' ')|title }}
+                                            </span>
+                                            {% if rental['owner_response'] == 'pending' %}
+                                                <span class="badge bg-info text-dark">Booking request sent</span>
+                                            {% elif rental['owner_response'] == 'accepted' %}
+                                                <span class="badge bg-success-subtle text-success">Accepted by host</span>
+                                            {% elif rental['owner_response'] == 'rejected' %}
+                                                <span class="badge bg-danger-subtle text-danger">Declined by host</span>
+                                            {% elif rental['owner_response'] == 'counter' %}
+                                                <span class="badge bg-warning text-dark">Counter offer pending</span>
+                                            {% endif %}
+                                            {% if rental['payment_status'] == 'awaiting_payment' %}
+                                                <span class="badge bg-warning text-dark">Payment pending</span>
+                                            {% elif rental['payment_status'] == 'paid' %}
+                                                <span class="badge bg-success">Payment confirmed</span>
                                             {% endif %}
                                         </div>
-                                    {% endif %}
-                                    <div class="text-muted small">
-                                        {% if rental['discount_amount'] %}
-                                            Includes Rs {{ rental['discount_amount']|round(2) }} off with code {{ rental['promo_code'] or 'N/A' }}
-                                        {% else %}
-                                            Promo code: {{ rental['promo_code'] or 'Not applied' }}
-                                        {% endif %}
                                     </div>
-                                    <div class="text-muted small mt-2">
-                                        Booking status: <strong>{{ rental['owner_response']|replace('_', ' ')|title }}</strong> &bull; Payment status: <strong>{{ rental['payment_status']|replace('_', ' ')|title }}</strong>
-                                    </div>
-                                    {% if rental['owner_response'] == 'counter' and rental['counter_amount'] %}
-                                        <div class="alert alert-warning small mt-2">
-                                            Host revised the price to <strong>Rs {{ rental['counter_amount']|round(2) }}</strong>. Please respond below.
+
+                                    <div class="row g-3 text-muted small mb-3">
+                                        <div class="col-md-6">
+                                            <div><i class="bi bi-calendar-event"></i> Trip start: {{ rental['start_time']|trip_datetime }}</div>
+                                            <div><i class="bi bi-calendar-check"></i> Trip end: {{ rental['end_time']|trip_datetime }}</div>
+                                            {% if rental['trip_destinations_list'] %}
+                                                <div><i class="bi bi-geo-alt"></i> Destinations: {{ rental['trip_destinations_list']|join(', ') }}</div>
+                                            {% endif %}
+                                            {% if rental.get('car_latitude') and rental.get('car_longitude') and rental.get('has_gps') %}
+                                                <div><i class="bi bi-pin-map"></i> Vehicle location: {{ rental['car_latitude']|round(5) }}, {{ rental['car_longitude']|round(5) }}</div>
+                                            {% endif %}
                                         </div>
+                                        <div class="col-md-6">
+                                            {% set base_amount = rental['rental_amount'] if rental['rental_amount'] else (rental['total_amount'] or 0) - (rental['delivery_fee'] or 0) %}
+                                            {% set delivery_fee = rental['delivery_fee'] or 0 %}
+                                            {% set delivery_label = rental['delivery_address'] or 'Pinned delivery location' %}
+                                            <div class="bg-light rounded-4 px-3 py-3 h-100">
+                                                {% if rental['owner_response'] == 'counter' %}
+                                                    <div class="alert border-0 shadow-sm mb-3 fw-bold text-uppercase text-center" style="background-color:#f3e8ff;color:#5b21b6;font-size:1.1rem;">
+                                                        Owner has made a revised price offer as below.
+                                                    </div>
+                                                {% endif %}
+                                                <div>Rental: Rs {{ (base_amount or 0)|round(2) }}</div>
+                                                <div>
+                                                    {% if rental['delivery_type'] == 'delivery' %}
+                                                        Delivery: Rs {{ delivery_fee|round(2) }}
+                                                    {% else %}
+                                                        Delivery: Pickup at host location
+                                                    {% endif %}
+                                                </div>
+                                                <div class="fw-semibold text-success fs-4">Total: Rs {{ (rental['total_amount'] or 0)|round(2) }}</div>
+                                                {% if rental['delivery_type'] == 'delivery' %}
+                                                    <div class="text-muted">
+                                                        Delivery {{ delivery_label }}
+                                                        {% if rental['delivery_distance_km'] %}
+                                                            &bull; ~{{ rental['delivery_distance_km']|round(1) }} km
+                                                        {% endif %}
+                                                    </div>
+                                                {% endif %}
+                                                {% if rental['status'] == 'completed' %}
+                                                    {% set host_review = rental['host_review'] %}
+                                                    <div class="border rounded-4 px-3 py-3 bg-white mt-3">
+                                                        <div class="d-flex justify-content-between align-items-center mb-2">
+                                                            <strong>Review from host</strong>
+                                                            {% if host_review %}
+                                                                <span class="badge bg-secondary">Passenger rating: {{ host_review.passenger_rating }}/5</span>
+                                                            {% endif %}
+                                                        </div>
+                                                        {% if host_review %}
+                                                            {% if host_review.comment %}
+                                                                <p class="text-muted small mb-1 fst-italic">"{{ host_review.comment }}"</p>
+                                                            {% else %}
+                                                                <p class="text-muted small mb-1">No written feedback from the host.</p>
+                                                            {% endif %}
+                                                            {% if host_review.created_at %}
+                                                                <p class="text-muted small mb-0">Shared on {{ host_review.created_at|trip_datetime }}</p>
+                                                            {% endif %}
+                                                        {% else %}
+                                                            <p class="text-muted small mb-0">Your host has not submitted a review yet.</p>
+                                                        {% endif %}
+                                                    </div>
+                                                {% endif %}
+                                             </div>
+                                         </div>
+                                     </div>
+
+                                    {% if rental['status'] == 'cancelled' %}
+                                        <div class="alert alert-warning small mb-3">
+                                            {{ rental['cancelled_by_label'] or 'Trip cancelled.' }}{% if rental['cancel_reason'] %} &mdash; {{ rental['cancel_reason'] }}{% endif %}
+                                        </div>
+                                    {% elif rental['cancel_reason'] %}
+                                        <div class="alert alert-warning small mb-3">Host note: {{ rental['cancel_reason'] }}</div>
                                     {% endif %}
-                                    {% if rental['payment_status'] == 'paid' %}
-                                        <div class="text-muted small">Host payout progress: 10% released, 90% reserved until the trip completes.</div>
-                                    {% elif rental['owner_response'] == 'accepted' and rental['payment_status'] == 'awaiting_payment' %}
-                                        <div class="text-muted small">Complete payment now. The host receives 10% instantly and the remaining 90% after the trip.</div>
-                                    {% endif %}
-                                </div>
-                                {% if rental['trip_destinations_list'] %}
-                                    <div class="text-muted small mb-3">Destinations: {{ rental['trip_destinations_list']|join(', ') }}</div>
-                                {% endif %}
-                                {% set show_cancel_note = rental['cancel_reason'] and (rental['status'] in ('cancelled',) or rental['owner_response'] == 'rejected') %}
-                                {% if show_cancel_note %}
-                                    <div class="alert alert-warning small mb-3">Host note: {{ rental['cancel_reason'] }}</div>
-                                {% endif %}
 
+                                    <div class="mt-auto">
+                                        <div class="d-flex flex-column flex-lg-row flex-wrap gap-2 mb-3">
+                                            {% if rental['owner_response'] == 'counter' %}
+                                                <form method="post" action="{{ url_for('renter_respond_rental', rental_id=rental['id']) }}" class="d-flex gap-2">
+                                                    <input type="hidden" name="action" value="accept_counter">
+                                                    <button type="submit" class="btn btn-sm btn-success">Accept counter offer</button>
+                                                </form>
+                                                <form method="post" action="{{ url_for('renter_respond_rental', rental_id=rental['id']) }}" class="d-flex gap-2">
+                                                    <input type="hidden" name="action" value="decline_counter">
+                                                    <button type="submit" class="btn btn-sm btn-outline-danger">Decline counter</button>
+                                                </form>
+                                            {% endif %}
 
-                                <div class="mt-auto">
-                                    <div class="d-flex flex-column gap-2">
-                                        {% if rental['owner_response'] == 'counter' %}
-                                            <form method="post" action="{{ url_for('renter_respond_rental', rental_id=rental['id']) }}" class="d-flex gap-2">
-                                                <input type="hidden" name="action" value="accept_counter">
-                                                <button type="submit" class="btn btn-sm btn-success">Accept counter</button>
-                                            </form>
-                                            <form method="post" action="{{ url_for('renter_respond_rental', rental_id=rental['id']) }}" class="d-flex gap-2">
-                                                <input type="hidden" name="action" value="decline_counter">
-                                                <button type="submit" class="btn btn-sm btn-outline-danger">Decline counter</button>
-                                            </form>
-                                        {% endif %}
-
-                                        {% if rental['owner_response'] == 'accepted' and rental['payment_status'] == 'awaiting_payment' %}
+                        {% if rental['owner_response'] == 'accepted' and rental['payment_status'] == 'awaiting_payment' %}
                                             <div class="d-flex flex-column flex-sm-row align-items-sm-center gap-2">
-                                                <a class="btn btn-sm btn-success" href="{{ url_for('renter_payment_page', rental_id=rental['id']) }}">Pay now</a>
+                                                <form method="post" action="{{ url_for('renter_payment_instructions', rental_id=rental['id']) }}">
+                                                    <input type="hidden" name="payment_channel" value="upi/netbanking">
+                                                    <button type="submit" class="btn btn-sm btn-success">Make payment</button>
+                                                </form>
                                                 <span class="text-muted small">Due by {{ rental['payment_due_at'] or 'n/a' }}</span>
                                             </div>
-                                        {% endif %}
+                                            {% endif %}
 
-                                        {% if rental['status'] in ('booked', 'active') %}
-                                            <form method="post" class="d-grid" action="{{ url_for('cancel_rental', rental_id=rental['id']) }}">
-                                                <button type="submit" class="btn btn-sm btn-outline-danger">Cancel booking</button>
+                                            {% if rental['status'] in ('booked', 'active') %}
+                                                <form method="post" class="d-grid" action="{{ url_for('cancel_rental', rental_id=rental['id']) }}">
+                                                    <button type="submit" class="btn btn-sm btn-outline-danger">Cancel booking</button>
+                                                </form>
+                                            {% endif %}
+                                        </div>
+
+                                        <div class="d-flex flex-column flex-lg-row gap-2">
+                                            <form method="post" action="{{ url_for('submit_complaint', rental_id=rental['id']) }}" class="d-flex gap-2 flex-grow-1">
+                                                <input type="text" class="form-control form-control-sm" name="category" placeholder="Category" value="Service">
+                                                <input type="text" class="form-control form-control-sm" name="description" placeholder="Describe the issue" required>
+                                                <button type="submit" class="btn btn-sm btn-outline-secondary">Submit complaint</button>
                                             </form>
-                                        {% endif %}
 
-                                        <form method="post" action="{{ url_for('submit_complaint', rental_id=rental['id']) }}" class="d-flex gap-2">
-                                            <input type="text" class="form-control form-control-sm" name="category" placeholder="Category" value="Service">
-                                            <input type="text" class="form-control form-control-sm" name="description" placeholder="Describe the issue" required>
-                                            <button type="submit" class="btn btn-sm btn-outline-secondary">Submit complaint</button>
-                                        </form>
-
-                                        {% if rental['status'] == 'completed' %}
-                                            <form method="post" action="{{ url_for('renter_review', rental_id=rental['id']) }}" class="row g-2">
-                                                <div class="col-4">
-                                                    <label class="form-label small" for="trip_rating_{{ rental['id'] }}">Trip</label>
-                                                    <input type="number" class="form-control form-control-sm" id="trip_rating_{{ rental['id'] }}" name="trip_rating" min="1" max="5" required>
-                                                </div>
-                                                <div class="col-4">
-                                                    <label class="form-label small" for="car_rating_{{ rental['id'] }}">Car</label>
-                                                    <input type="number" class="form-control form-control-sm" id="car_rating_{{ rental['id'] }}" name="car_rating" min="1" max="5" required>
-                                                </div>
-                                                <div class="col-4">
-                                                    <label class="form-label small" for="owner_rating_{{ rental['id'] }}">Host</label>
-                                                    <input type="number" class="form-control form-control-sm" id="owner_rating_{{ rental['id'] }}" name="owner_rating" min="1" max="5" required>
-                                                </div>
-                                                <div class="col-12">
-                                                    <input type="text" class="form-control form-control-sm" name="comment" placeholder="Share your feedback">
-                                                </div>
-                                                <div class="col-12 d-grid">
-                                                    <button type="submit" class="btn btn-sm btn-outline-success">Submit review</button>
-                                                </div>
-                                            </form>
-                                        {% endif %}
+                                            {% if rental['status'] == 'completed' %}
+                                                <form method="post" action="{{ url_for('renter_review', rental_id=rental['id']) }}" class="row g-2 flex-grow-1">
+                                                    <div class="col-4">
+                                                        <label class="form-label small" for="trip_rating_{{ rental['id'] }}">Trip</label>
+                                                        <input type="number" class="form-control form-control-sm" id="trip_rating_{{ rental['id'] }}" name="trip_rating" min="1" max="5" required>
+                                                    </div>
+                                                    <div class="col-4">
+                                                        <label class="form-label small" for="car_rating_{{ rental['id'] }}">Car</label>
+                                                        <input type="number" class="form-control form-control-sm" id="car_rating_{{ rental['id'] }}" name="car_rating" min="1" max="5" required>
+                                                    </div>
+                                                    <div class="col-4">
+                                                        <label class="form-label small" for="owner_rating_{{ rental['id'] }}">Host</label>
+                                                        <input type="number" class="form-control form-control-sm" id="owner_rating_{{ rental['id'] }}" name="owner_rating" min="1" max="5" required>
+                                                    </div>
+                                                    <div class="col-12">
+                                                        <input type="text" class="form-control form-control-sm" name="comment" placeholder="Share your feedback">
+                                                    </div>
+                                                    <div class="col-12 d-grid">
+                                                        <button type="submit" class="btn btn-sm btn-outline-success">Submit review</button>
+                                                    </div>
+                                                </form>
+                                            {% endif %}
+                                        </div>
                                     </div>
                                 </div>
                             </div>

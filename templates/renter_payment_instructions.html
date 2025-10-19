@@ -1,0 +1,111 @@
+{% extends "base.html" %}
+{% block title %}Payment Instructions | CarRentalNTravel{% endblock %}
+{% block content %}
+<section class="py-5">
+    <div class="container">
+        <div class="row justify-content-center">
+            <div class="col-lg-9 col-xl-8">
+                <div class="card card-zoom mb-4">
+                    <div class="card-body">
+                        <h1 class="h4 fw-bold mb-3">Complete your payment</h1>
+                        <p class="text-muted mb-4">
+                            Please transfer the amount shown below using the bank or UPI details. Once you have paid, confirm using the button at the bottom so we can notify the host.
+                        </p>
+
+                        <div class="d-flex flex-column flex-md-row justify-content-between gap-3 mb-4">
+                            <div>
+                                <div class="fw-semibold">{{ rental.car_label }}</div>
+                                <div class="text-muted small">{{ rental.owner_public_name }}</div>
+                                <div class="text-muted small">Trip start: {{ rental.start_time|trip_datetime }}</div>
+                                <div class="text-muted small">Trip end: {{ rental.end_time|trip_datetime if rental.end_time else 'TBD' }}</div>
+                            </div>
+                            <div class="text-muted small text-md-end">
+                                Booking ID: {{ rental.id }}<br>
+                                Car licence: {{ rental.licence_plate or 'N/A' }}
+                            </div>
+                        </div>
+
+                        <div class="border rounded-4 p-3 bg-light mb-4">
+                            <div class="d-flex justify-content-between align-items-center mb-2">
+                                <span class="text-muted">Rental charges</span>
+                                <span class="fw-semibold">Rs {{ payment_summary.rental_amount|round(2) }}</span>
+                            </div>
+                            <div class="d-flex justify-content-between align-items-center mb-2">
+                                <span class="text-muted">
+                                    {% if rental.delivery_type == 'delivery' %}
+                                        Delivery charges{% if rental.delivery_address %} &mdash; {{ rental.delivery_address }}{% endif %}
+                                        {% if rental.delivery_distance_km %}(~{{ rental.delivery_distance_km|round(1) }} km){% endif %}
+                                    {% else %}
+                                        Pickup at host location
+                                    {% endif %}
+                                </span>
+                                <span class="fw-semibold">
+                                    {% if rental.delivery_type == 'delivery' %}
+                                        Rs {{ payment_summary.delivery_fee|round(2) }}
+                                    {% else %}
+                                        Rs 0.00
+                                    {% endif %}
+                                </span>
+                            </div>
+                            <hr class="my-3">
+                            <div class="d-flex justify-content-between align-items-center">
+                                <span class="fw-semibold">Amount payable</span>
+                                <span class="fw-bold fs-4 text-success">Rs {{ payment_summary.total_amount|round(2) }}</span>
+                            </div>
+                        </div>
+
+                        <p class="text-muted small mb-4">
+                            Preferred payment channel: {{ payment_channel|replace('_', ' ')|title }}
+                        </p>
+
+                        <div class="row g-4">
+                            <div class="col-md-6">
+                                <div class="border rounded-4 p-3 h-100">
+                                    <h2 class="h6 fw-semibold mb-3">Bank transfer</h2>
+                                    <ul class="list-unstyled text-muted small mb-0">
+                                        {% if payment_account.bank_name %}<li><strong>Bank:</strong> {{ payment_account.bank_name }}</li>{% endif %}
+                                        {% if payment_account.account_holder %}<li><strong>Account holder:</strong> {{ payment_account.account_holder }}</li>{% endif %}
+                                        {% if payment_account.account_number %}<li><strong>Account number:</strong> {{ payment_account.account_number }}</li>{% endif %}
+                                        {% if payment_account.ifsc_code %}<li><strong>IFSC:</strong> {{ payment_account.ifsc_code }}</li>{% endif %}
+                                        {% if payment_account.branch_address %}<li><strong>Branch:</strong> {{ payment_account.branch_address }}</li>{% endif %}
+                                        {% if not payment_account.account_holder and not payment_account.account_number and not payment_account.ifsc_code and not payment_account.bank_name and not payment_account.branch_address %}<li>No bank account has been configured yet. Please contact support before transferring funds.</li>{% endif %}
+                                    </ul>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="border rounded-4 p-3 h-100">
+                                    <h2 class="h6 fw-semibold mb-3">UPI</h2>
+                                    <p class="mb-0 text-muted small">
+                                        Use your preferred UPI app and send the amount to:<br>
+                                        <strong class="text-dark fs-5">{{ payment_upi }}</strong>
+                                    </p>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="card bg-light border-0 mt-4">
+                            <div class="card-body">
+                                <h2 class="h6 fw-semibold mb-2">Need help?</h2>
+                                <p class="text-muted small mb-2">
+                                    Call us on <a href="tel:{{ support_phone }}">{{ support_phone }}</a><br>
+                                    Email <a href="mailto:{{ support_email }}">{{ support_email }}</a><br>
+                                    Chat via <a href="{{ whatsapp_link }}" target="_blank" rel="noopener">WhatsApp ({{ support_phone }})</a>
+                                </p>
+                            </div>
+                        </div>
+
+                        <form method="post" action="{{ url_for('renter_confirm_payment', rental_id=rental.id) }}" class="mt-4">
+                            <input type="hidden" name="payment_channel" value="{{ payment_channel }}">
+                            <button type="submit" class="btn btn-success w-100">I've completed the payment</button>
+                        </form>
+                    </div>
+                </div>
+                <div class="d-flex justify-content-between">
+                    <a href="{{ url_for('renter_payment_page', rental_id=rental.id) }}" class="btn btn-outline-secondary">Back to review</a>
+                    <a href="{{ url_for('rentals') }}" class="btn btn-outline-success">Return to my trips</a>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+{% endblock %}

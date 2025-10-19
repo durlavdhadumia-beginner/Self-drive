@@ -146,8 +146,8 @@
             <div class="bg-white shadow-sm rounded-4 px-4 py-3">
                 <div class="small text-uppercase text-muted fw-semibold">Trip summary</div>
                 <div class="fw-semibold">City: {{ city_display or detected_city or '-' }}</div>
-                <div class="text-muted">Start: {{ start_time or '-' }}</div>
-                <div class="text-muted">End: {{ end_time or '-' }}</div>
+                <div class="text-muted">Start: {{ start_time_display }}</div>
+                <div class="text-muted">End: {{ end_time_display }}</div>
                 {% if destinations %}
                     <div class="text-muted">Destinations: {{ destinations|join(', ') }}</div>
                 {% endif %}

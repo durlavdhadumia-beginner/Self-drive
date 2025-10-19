@@ -68,15 +68,20 @@
                 <p class="text-muted mb-0">Track your fleet, respond to bookings, and close trips.</p>
             </div>
             <div class="bg-white shadow-sm rounded-4 px-4 py-3 d-flex gap-4">
-                <div>
+                <a href="{{ url_for('owner_trip_list', category='active') }}" class="text-decoration-none text-reset d-flex flex-column">
                     <div class="small text-uppercase text-muted fw-semibold">Active rentals</div>
                     <div class="fw-bold fs-5 text-success">{{ active_trips|length }}</div>
-                </div>
-                <div>
+                </a>
+                <a href="{{ url_for('owner_trip_list', category='pending') }}" class="text-decoration-none text-reset d-flex flex-column">
                     <div class="small text-uppercase text-muted fw-semibold">Pending requests</div>
                     <div class="fw-bold fs-5 text-success">{{ pending_requests|length }}</div>
-                </div>
+                </a>
             </div>
+        </div>
+        <div class="d-flex flex-wrap gap-2 mb-4">
+            <a href="{{ url_for('owner_trip_history') }}" class="btn btn-outline-primary">
+                <i class="bi bi-journal-text"></i> My trips
+            </a>
         </div>
 
         {% if pending_payments %}
@@ -100,9 +105,16 @@
                                         <h3 class="h5 mb-1" data-role="car-name">{{ car['name'] or car['brand'] ~ ' ' ~ car['model'] }}</h3>
                                         <p class="text-muted small mb-0" data-role="car-subtitle">{{ car['brand'] }} {{ car['model'] }} - {{ car['city'] or 'City not set' }}</p>
                                     </div>
-                                    <span class="badge {{ 'bg-success' if car['is_available'] else 'bg-secondary' }}" data-role="car-availability">
-                                        {{ 'Available' if car['is_available'] else 'Unavailable' }}
-                                    </span>
+                                    <div class="d-flex align-items-center gap-2">
+                                        <span class="badge {{ 'bg-success' if car['is_available'] else 'bg-secondary' }}" data-role="car-availability">
+                                            {{ 'Available' if car['is_available'] else 'Unavailable' }}
+                                        </span>
+                                        {% if car.get('has_active_trip') %}
+                                            <span class="badge bg-warning text-dark">On a trip</span>
+                                        {% elif car.get('has_trip_in_progress') %}
+                                            <span class="badge bg-info text-dark">Trip starting</span>
+                                        {% endif %}
+                                    </div>
                                 </div>
                                 <div class="d-flex flex-wrap gap-2 mb-3" data-role="car-gallery">
                                     {% if car['images'] %}
@@ -288,7 +300,12 @@
 
                 <div class="card card-zoom mb-4">
                     <div class="card-body">
-                        <h2 class="h5 fw-semibold mb-3">Trips in progress</h2>
+                        <h2 class="h5 fw-semibold mb-3">
+                            <a href="{{ url_for('owner_trip_list', category='in-progress') }}" class="text-decoration-none text-reset d-inline-flex align-items-center gap-2">
+                                Trips in progress
+                                <i class="bi bi-arrow-right-short"></i>
+                            </a>
+                        </h2>
                         {% if active_trips or ready_to_start %}
                             {% for rental in ready_to_start %}
                                 <div class="border rounded-4 p-3 mb-3">

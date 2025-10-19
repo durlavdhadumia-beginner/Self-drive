@@ -66,6 +66,18 @@ DELIVERY_DISTANCE_CHOICES: List[int] = [25, 50, 100, 200]
 UPLOAD_ROOT.mkdir(parents=True, exist_ok=True)
 USER_DOC_ROOT.mkdir(parents=True, exist_ok=True)
 
+COMPANY_SUPPORT_EMAIL = "support@carrentalntravel.com"
+COMPANY_SUPPORT_PHONE = "+91 98540 50567"
+COMPANY_SUPPORT_WHATSAPP = "+919854050567"
+COMPANY_UPI_ID = "carrentalntravel@ybl"
+COMPANY_BANK_DETAILS: Dict[str, str] = {
+    "bank_name": "HDFC Bank, Guwahati Branch",
+    "account_name": "CarRentalNTravel Pvt Ltd",
+    "account_number": "50100234567890",
+    "ifsc": "HDFC0001234",
+    "branch_address": "Zoo Tiniali, Guwahati, Assam 781003",
+}
+
 app = Flask(__name__)
 app.config.update(
     SECRET_KEY="replace-with-a-secure-random-value",
@@ -141,6 +153,17 @@ def normalize_contact(username: str) -> Tuple[str, str]:
     if not re.fullmatch(r"91[6-9]\d{9}", normalized):
         return ("", "")
     return ("phone", normalized)
+
+
+def first_non_empty(*values: Optional[str]) -> str:
+    """Return the first truthy string value (trimmed) from the inputs."""
+    for value in values:
+        if value is None:
+            continue
+        text = str(value).strip()
+        if text:
+            return text
+    return ""
 
 
 def build_public_label(
@@ -734,6 +757,51 @@ def get_company_payout_details() -> dict:
     return dict(row)
 
 
+def get_primary_admin_payout_details() -> dict:
+    """Return payout preferences configured on the primary admin profile."""
+    db = get_db()
+    row = db.execute(
+        """
+        SELECT
+            users.id AS user_id,
+            COALESCE(
+                NULLIF(upd.account_holder, ''),
+                NULLIF(users.account_name, ''),
+                NULLIF(profile.full_name, ''),
+                users.username
+            ) AS account_holder,
+            COALESCE(upd.account_number, '') AS account_number,
+            COALESCE(upd.ifsc_code, '') AS ifsc_code,
+            COALESCE(upd.upi_id, '') AS upi_id,
+            upd.updated_at AS updated_at
+        FROM users
+        LEFT JOIN user_payout_details AS upd ON upd.user_id = users.id
+        LEFT JOIN user_profiles AS profile ON profile.user_id = users.id
+        WHERE users.is_admin = 1
+        ORDER BY
+            CASE
+                WHEN COALESCE(upd.account_number, '') != '' AND COALESCE(upd.ifsc_code, '') != '' THEN 0
+                ELSE 1
+            END,
+            CASE
+                WHEN COALESCE(upd.upi_id, '') != '' THEN 0
+                ELSE 1
+            END,
+            COALESCE(upd.updated_at, '') DESC,
+            users.id ASC
+        LIMIT 1
+        """,
+    ).fetchone()
+    if row is None:
+        return {}
+    data = dict(row)
+    data["account_holder"] = (data.get("account_holder") or "").strip()
+    data["account_number"] = (data.get("account_number") or "").strip()
+    data["ifsc_code"] = (data.get("ifsc_code") or "").strip().upper()
+    data["upi_id"] = (data.get("upi_id") or "").strip()
+    return data
+
+
 def seed_cities_if_needed(conn: sqlite3.Connection) -> None:
     try:
         existing = conn.execute("SELECT COUNT(*) FROM cities").fetchone()[0]
@@ -1065,6 +1133,11 @@ app.jinja_env.globals.update(
     now=naive_utcnow,
     promo_codes=PROMO_CODES,
     profile_is_complete=profile_is_complete,
+    support_phone=COMPANY_SUPPORT_PHONE,
+    support_email=COMPANY_SUPPORT_EMAIL,
+    support_whatsapp=COMPANY_SUPPORT_WHATSAPP,
+    company_upi=COMPANY_UPI_ID,
+    company_bank=COMPANY_BANK_DETAILS,
 )
 
 
@@ -2144,6 +2217,9 @@ def search() -> str:
                     end_dt,
                 )
 
+    start_display = format_trip_datetime(start_time_raw) if start_time_raw else "-"
+    end_display = format_trip_datetime(end_time_raw) if end_time_raw else "-"
+
     return render_template(
         "search.html",
         cars=cars,
@@ -2157,6 +2233,8 @@ def search() -> str:
         detected_city=detected_city,
         start_time=start_time_raw,
         end_time=end_time_raw,
+        start_time_display=start_display,
+        end_time_display=end_display,
         error=error,
         filters=filters,
         available_vehicle_types=available_vehicle_types,
@@ -2177,14 +2255,14 @@ def rentals() -> str:
     rows = db.execute(
         """
         SELECT rentals.*, cars.brand, cars.model, cars.licence_plate, cars.image_url, cars.name AS car_name,
-               cars.owner_id AS owner_id,
+               cars.owner_id AS owner_id, cars.has_gps, cars.latitude AS car_latitude, cars.longitude AS car_longitude,
                owners.username AS owner_username,
                COALESCE(owners.account_name, '') AS owner_account_name
         FROM rentals
         JOIN cars ON cars.id = rentals.car_id
         JOIN users AS owners ON owners.id = cars.owner_id
         WHERE rentals.renter_id = ?
-        ORDER BY rentals.start_time DESC
+        ORDER BY rentals.id DESC
         """,
         (g.user["id"],),
     ).fetchall()
@@ -2201,6 +2279,26 @@ def rentals() -> str:
         rental["owner_public_name"] = owner_label
         rental["owner_username"] = owner_label
         rental.pop("owner_account_name", None)
+        rental["has_gps"] = bool(rental.get("has_gps"))
+        if rental.get("status") == "cancelled":
+            renter_flag = (rental.get("renter_response") or "").lower()
+            owner_flag = (rental.get("owner_response") or "").lower()
+            if renter_flag in {"cancelled_by_renter", "cancelled", "declined"}:
+                rental["cancelled_by_label"] = "Cancelled by you"
+            elif owner_flag in {"rejected", "cancelled"}:
+                rental["cancelled_by_label"] = "Cancelled by host"
+            else:
+                rental["cancelled_by_label"] = "Cancelled"
+        if rental.get("car_latitude") is not None:
+            try:
+                rental["car_latitude"] = float(rental["car_latitude"])
+            except (TypeError, ValueError):
+                rental["car_latitude"] = None
+        if rental.get("car_longitude") is not None:
+            try:
+                rental["car_longitude"] = float(rental["car_longitude"])
+            except (TypeError, ValueError):
+                rental["car_longitude"] = None
         primary_image: Optional[str] = None
         car_images = image_map.get(row["car_id"], [])
         if car_images:
@@ -2223,6 +2321,32 @@ def rentals() -> str:
             rental["trip_destinations_list"] = []
         rentals_list.append(rental)
 
+    rental_ids = [rental["id"] for rental in rentals_list if rental.get("id") is not None]
+    if rental_ids:
+        placeholders = ",".join("?" for _ in rental_ids)
+        owner_reviews = db.execute(
+            f"""
+            SELECT rental_id, passenger_rating, comment, created_at
+            FROM reviews
+            WHERE rental_id IN ({placeholders})
+              AND reviewer_role = 'owner'
+              AND target_user_id = ?
+            """,
+            (*rental_ids, g.user["id"]),
+        ).fetchall()
+        review_lookup = {
+            row["rental_id"]: {
+                "passenger_rating": row["passenger_rating"],
+                "comment": (row["comment"] or "").strip(),
+                "created_at": row["created_at"],
+            }
+            for row in owner_reviews
+        }
+        for rental in rentals_list:
+            rental["host_review"] = review_lookup.get(rental["id"])
+    else:
+        for rental in rentals_list:
+            rental["host_review"] = None
     awaiting_payment = [
         rental
         for rental in rentals_list
@@ -2593,6 +2717,7 @@ def renter_respond_rental(rental_id: int) -> str:
                 renter_response_at = ?,
                 total_amount = ?,
                 rental_amount = ?,
+                delivery_fee = ?,
                 payment_status = 'awaiting_payment',
                 payment_due_at = ?,
                 payment_channel = 'manual',
@@ -2604,6 +2729,7 @@ def renter_respond_rental(rental_id: int) -> str:
             """,
             (now.isoformat(), new_total,
              base_rental_updated,
+             delivery_fee_existing,
              (now + timedelta(hours=1)).isoformat(), rental_id),
         )
         db.commit()
@@ -2732,7 +2858,16 @@ def renter_payment_page(rental_id: int) -> str:
         return redirect(url_for("rentals"))
     if rental["payment_status"] not in {"awaiting_payment", "pending"}:
         return redirect(url_for("rentals"))
-    rental_dict = dict(rental)
+    rental_dict, payment_summary = build_renter_payment_context(rental)
+    return render_template(
+        "renter_payment.html",
+        rental=rental_dict,
+        payment_summary=payment_summary,
+    )
+
+
+def build_renter_payment_context(rental_row: sqlite3.Row) -> Tuple[Dict[str, object], Dict[str, float]]:
+    rental_dict = dict(rental_row)
     car_label = rental_dict.get("car_name") or f"{rental_dict.get('brand', '')} {rental_dict.get('model', '')}".strip()
     rental_dict["car_label"] = car_label.strip() or "Vehicle"
     rental_dict["owner_public_name"] = build_public_label(
@@ -2753,15 +2888,15 @@ def renter_payment_page(rental_id: int) -> str:
     else:
         rental_amount = round(rental_amount, 2)
     total_amount = round(rental_amount + delivery_fee, 2)
-    rental_dict["rental_amount"] = rental_amount
-    rental_dict["delivery_fee"] = delivery_fee
-    rental_dict["total_amount"] = total_amount
     commission_amount = round(total_amount * COMPANY_COMMISSION_RATE, 2)
     owner_net = max(0.0, round(total_amount - commission_amount, 2))
     initial_payout = round(owner_net * OWNER_INITIAL_PAYOUT_RATE, 2)
     if owner_net <= 0:
         initial_payout = 0.0
     final_payout = max(0.0, round(owner_net - initial_payout, 2))
+    rental_dict["rental_amount"] = rental_amount
+    rental_dict["delivery_fee"] = delivery_fee
+    rental_dict["total_amount"] = total_amount
     payment_summary = {
         "total_amount": round(total_amount, 2),
         "rental_amount": round(rental_amount, 2),
@@ -2774,10 +2909,80 @@ def renter_payment_page(rental_id: int) -> str:
         "initial_rate": int(OWNER_INITIAL_PAYOUT_RATE * 100),
         "final_rate": int(OWNER_FINAL_PAYOUT_RATE * 100),
     }
+    return rental_dict, payment_summary
+
+
+@app.route("/rentals/<int:rental_id>/payment-instructions", methods=["POST", "GET"])
+@login_required
+@role_required("renter", "owner")
+def renter_payment_instructions(rental_id: int) -> str:
+    payment_channel = request.values.get("payment_channel", "upi/netbanking")
+    db = get_db()
+    rental = db.execute(
+        """
+        SELECT rentals.*,
+               cars.name AS car_name,
+               cars.brand,
+               cars.model,
+               cars.licence_plate,
+               cars.owner_id AS owner_id,
+               COALESCE(owners.account_name, owners.username) AS owner_display_name
+        FROM rentals
+        JOIN cars ON cars.id = rentals.car_id
+        JOIN users AS owners ON owners.id = cars.owner_id
+        WHERE rentals.id = ? AND rentals.renter_id = ?
+        """,
+        (rental_id, g.user["id"]),
+    ).fetchone()
+    if rental is None:
+        abort(404)
+    if rental["owner_response"] != "accepted":
+        return redirect(url_for("rentals"))
+    if rental["payment_status"] not in {"awaiting_payment", "pending"}:
+        return redirect(url_for("rentals"))
+    rental_dict, payment_summary = build_renter_payment_context(rental)
+    admin_payout = get_primary_admin_payout_details()
+    company_payout = get_company_payout_details()
+    payment_account = {
+        "account_holder": first_non_empty(
+            admin_payout.get("account_holder"),
+            company_payout.get("account_holder"),
+            COMPANY_BANK_DETAILS.get("account_name"),
+        ),
+        "account_number": first_non_empty(
+            admin_payout.get("account_number"),
+            company_payout.get("account_number"),
+            COMPANY_BANK_DETAILS.get("account_number"),
+        ),
+        "ifsc_code": first_non_empty(
+            admin_payout.get("ifsc_code"),
+            company_payout.get("ifsc_code"),
+            COMPANY_BANK_DETAILS.get("ifsc"),
+        ),
+        "bank_name": first_non_empty(
+            admin_payout.get("bank_name"),
+            company_payout.get("bank_name"),
+        ),
+        "branch_address": first_non_empty(
+            admin_payout.get("branch_address"),
+            company_payout.get("branch_address"),
+        ),
+    }
+    payment_account["ifsc_code"] = payment_account["ifsc_code"].upper()
+    upi_id = first_non_empty(
+        admin_payout.get("upi_id"),
+        company_payout.get("upi_id"),
+        COMPANY_UPI_ID,
+    )
+    whatsapp_link = f"https://wa.me/{COMPANY_SUPPORT_WHATSAPP.lstrip('+')}"
     return render_template(
-        "renter_payment.html",
+        "renter_payment_instructions.html",
         rental=rental_dict,
         payment_summary=payment_summary,
+        payment_channel=payment_channel,
+        whatsapp_link=whatsapp_link,
+        payment_account=payment_account,
+        payment_upi=upi_id,
     )
 
 
@@ -2825,9 +3030,10 @@ def cancel_rental(rental_id: int) -> str:
     ).fetchone()
     if rental is None or rental["status"] not in ("booked", "active"):
         abort(404)
+    cancelled_at = naive_utcnow_iso()
     db.execute(
-        "UPDATE rentals SET status = 'cancelled', end_time = ? WHERE id = ?",
-        (naive_utcnow_iso(), rental_id),
+        "UPDATE rentals SET status = 'cancelled', end_time = ?, renter_response = 'cancelled_by_renter', renter_response_at = ? WHERE id = ?",
+        (cancelled_at, cancelled_at, rental_id),
     )
     db.execute(
         "UPDATE cars SET is_available = 1, updated_at = ? WHERE id = ?",
@@ -2841,10 +3047,15 @@ def cancel_rental(rental_id: int) -> str:
 @login_required
 @role_required("owner")
 def owner_cars() -> str:
+    context = build_owner_dashboard_context(g.user["id"])
+    return render_template("owner_cars.html", **context)
+
+
+def build_owner_dashboard_context(owner_id: int) -> Dict[str, object]:
     db = get_db()
     car_rows = db.execute(
         "SELECT * FROM cars WHERE owner_id = ? ORDER BY created_at DESC",
-        (g.user["id"],),
+        (owner_id,),
     ).fetchall()
     car_dicts = []
     car_ids = [row["id"] for row in car_rows]
@@ -2855,12 +3066,21 @@ def owner_cars() -> str:
         car["images"] = images.get(row["id"], [])
         car["delivery_options"] = delivery_map.get(row["id"], {})
         car_dicts.append(car)
+    cars_by_id = {car["id"]: car for car in car_dicts}
     rental_rows = db.execute(
         """
         SELECT rentals.*, users.username AS renter_username,
                COALESCE(users.account_name, '') AS renter_account_name,
-               cars.brand, cars.model, cars.name AS car_name,
-               cars.latitude AS car_latitude, cars.longitude AS car_longitude, cars.city AS car_city
+               cars.brand,
+               cars.model,
+               cars.name AS car_name,
+               cars.latitude AS car_latitude,
+               cars.longitude AS car_longitude,
+               cars.city AS car_city,
+               cars.image_url AS car_image_url,
+               cars.has_gps AS car_has_gps,
+               cars.vehicle_type AS car_vehicle_type,
+               cars.seats AS car_seats
         FROM rentals
         JOIN cars ON cars.id = rentals.car_id
         JOIN users ON users.id = rentals.renter_id
@@ -2873,7 +3093,7 @@ def owner_cars() -> str:
             ELSE 4
         END, rentals.start_time DESC
         """,
-        (g.user["id"],),
+        (owner_id,),
     ).fetchall()
     city_entries = load_city_entries(include_coordinates=True)
     label_lookup: Dict[str, Tuple[float, float]] = {}
@@ -2892,6 +3112,13 @@ def owner_cars() -> str:
     rentals_data: List[Dict[str, object]] = []
     for row in rental_rows:
         rental = dict(row)
+        rental["has_gps"] = bool(rental.pop("car_has_gps", rental.get("car_has_gps", 0)))
+        rental["car_image_url"] = (rental.get("car_image_url") or "").strip()
+        rental["car_vehicle_type"] = (rental.get("car_vehicle_type") or "").strip()
+        try:
+            rental["car_seats"] = int(rental.get("car_seats") or 0)
+        except (TypeError, ValueError):
+            rental["car_seats"] = 0
         renter_label = build_public_label(
             rental.get("renter_account_name") or rental.get("renter_username"),
             fallback_prefix="Guest",
@@ -2918,6 +3145,18 @@ def owner_cars() -> str:
         rental["host_service_fee"] = service_fee_amount
         rental["host_service_fee_rate"] = int(HOST_SERVICE_FEE_RATE * 100)
         rental["host_net_take_home"] = max(0.0, round(total_amount - service_fee_amount, 2))
+        initial_status = (rental.get("owner_initial_payout_status") or "").lower()
+        final_status = (rental.get("owner_final_payout_status") or "").lower()
+        owner_status = (rental.get("owner_payout_status") or "").lower()
+        initial_paid = float(rental.get("owner_initial_payout_amount") or 0.0) if initial_status == "paid" else 0.0
+        final_paid = float(rental.get("owner_final_payout_amount") or 0.0) if final_status == "paid" else 0.0
+        owner_net = float(rental.get("host_net_take_home") or 0.0)
+        owner_total_paid = initial_paid + final_paid
+        if owner_total_paid <= 0 and owner_status == "paid":
+            owner_total_paid = float(rental.get("owner_payout_amount") or owner_net)
+        owner_total_paid = min(owner_net, round(owner_total_paid, 2)) if owner_net else round(owner_total_paid, 2)
+        rental["host_amount_received"] = owner_total_paid
+        rental["host_amount_balance"] = max(0.0, round(owner_net - owner_total_paid, 2))
         delivery_lat = rental.get("delivery_latitude")
         delivery_lng = rental.get("delivery_longitude")
         rental["delivery_latitude"] = float(delivery_lat) if delivery_lat is not None else None
@@ -2941,6 +3180,80 @@ def owner_cars() -> str:
             destinations_with_coords.append(entry)
         rental["trip_destinations_map"] = destinations_with_coords
         rentals_data.append(rental)
+    rental_ids = [int(r.get("id")) for r in rentals_data if r.get("id") is not None]
+    renter_reviews_by_rental: Dict[int, Dict[str, object]] = {}
+    owner_reviews_by_rental: Dict[int, Dict[str, object]] = {}
+    if rental_ids:
+        placeholders = ",".join("?" for _ in rental_ids)
+        review_rows = db.execute(
+            f"""
+            SELECT rental_id, trip_rating, car_rating, owner_rating, comment, created_at
+            FROM reviews
+            WHERE rental_id IN ({placeholders})
+              AND reviewer_role = 'renter'
+              AND target_user_id = ?
+            """,
+            (*rental_ids, owner_id),
+        ).fetchall()
+        for review_row in review_rows:
+            review_dict = {
+                "trip_rating": review_row["trip_rating"],
+                "car_rating": review_row["car_rating"],
+                "owner_rating": review_row["owner_rating"],
+                "comment": (review_row["comment"] or "").strip(),
+                "created_at": review_row["created_at"],
+            }
+            renter_reviews_by_rental[int(review_row["rental_id"])] = review_dict
+        owner_review_rows = db.execute(
+            f"""
+            SELECT rental_id, passenger_rating, comment, created_at
+            FROM reviews
+            WHERE rental_id IN ({placeholders})
+              AND reviewer_role = 'owner'
+              AND reviewer_id = ?
+            """,
+            (*rental_ids, owner_id),
+        ).fetchall()
+        for review_row in owner_review_rows:
+            owner_reviews_by_rental[int(review_row["rental_id"])] = {
+                "passenger_rating": review_row["passenger_rating"],
+                "comment": (review_row["comment"] or "").strip(),
+                "created_at": review_row["created_at"],
+            }
+    for rental in rentals_data:
+        rental_id_raw = rental.get("id")
+        try:
+            sort_key = int(rental_id_raw)
+        except (TypeError, ValueError):
+            sort_key = 0
+        rental["_booking_sort_key"] = sort_key
+        rental["renter_review"] = renter_reviews_by_rental.get(sort_key)
+        rental["host_review"] = owner_reviews_by_rental.get(sort_key)
+        car = cars_by_id.get(rental.get("car_id"))
+        images_for_car = []
+        if car:
+            images_for_car = car.get("images") or []
+        primary_image = ""
+        if images_for_car:
+            primary_image = url_for("serve_upload", filename=images_for_car[0])
+        elif car and car.get("image_url"):
+            raw_image = str(car.get("image_url")).strip()
+            if raw_image.startswith(("http://", "https://")):
+                primary_image = raw_image
+            else:
+                primary_image = url_for("serve_upload", filename=raw_image.lstrip("/"))
+        elif rental.get("car_image_url"):
+            raw_image = rental["car_image_url"]
+            if raw_image.startswith(("http://", "https://")):
+                primary_image = raw_image
+            else:
+                primary_image = url_for("serve_upload", filename=raw_image.lstrip("/"))
+        rental["primary_image_url"] = primary_image
+        brand = (rental.get("brand") or "").strip()
+        model = (rental.get("model") or "").strip()
+        fallback_name = " ".join(part for part in (brand, model) if part)
+        display_name = first_non_empty(rental.get("car_name"), fallback_name)
+        rental["car_display_name"] = display_name or "Vehicle"
     vehicle_type_values = load_vehicle_type_options()
     other_vehicle_types = [
         vt for vt in vehicle_type_values if vt not in POPULAR_VEHICLE_TYPES]
@@ -2956,28 +3269,101 @@ def owner_cars() -> str:
         and r.get("payment_status") == "paid"
     ]
     active_trips = [r for r in rentals_data if r.get("status") == "active"]
-    completed_trips = [r for r in rentals_data if r.get("status") == "completed"]
+    completed_trips = [
+        r
+        for r in rentals_data
+        if r.get("status") == "completed" and r.get("id") not in owner_reviews_by_rental
+    ]
+    active_trip_car_ids = {r["car_id"] for r in active_trips}
+    in_progress_car_ids = active_trip_car_ids | {r["car_id"] for r in ready_to_start}
+    trip_history = sorted(rentals_data, key=lambda r: r.get("_booking_sort_key", 0), reverse=True)
+    for rental in rentals_data:
+        rental.pop("_booking_sort_key", None)
+    for car in car_dicts:
+        car_id = car["id"]
+        car["has_active_trip"] = car_id in active_trip_car_ids
+        car["has_trip_in_progress"] = car_id in in_progress_car_ids
     pending_total_amount = sum(
         float(r.get("total_amount") or 0) for r in awaiting_payments
     )
+    return {
+        "cars": car_dicts,
+        "rentals": rentals_data,
+        "pending_payments": awaiting_payments,
+        "pending_total_amount": pending_total_amount,
+        "pending_requests": pending_requests,
+        "counter_requests": counter_requests,
+        "awaiting_payments": awaiting_payments,
+        "ready_to_start": ready_to_start,
+        "active_trips": active_trips,
+        "completed_trips": completed_trips,
+        "trip_history": trip_history,
+        "commission_rate": int(COMPANY_COMMISSION_RATE * 100),
+        "city_entries": city_entries,
+        "popular_vehicle_types": POPULAR_VEHICLE_TYPES,
+        "other_vehicle_types": other_vehicle_types,
+        "fuel_types": fuel_types,
+        "delivery_choices": DELIVERY_DISTANCE_CHOICES,
+        "cars_by_id": cars_by_id,
+    }
+
+
+@app.route("/owner/trips")
+@login_required
+@role_required("owner")
+def owner_trip_history() -> str:
+    context = build_owner_dashboard_context(g.user["id"])
+    trips = context.get("trip_history", [])
+    cars_by_id = context.get("cars_by_id", {})
     return render_template(
-        "owner_cars.html",
-        cars=car_dicts,
-        rentals=rentals_data,
-        pending_payments=awaiting_payments,
-        pending_total_amount=pending_total_amount,
-        pending_requests=pending_requests,
-        counter_requests=counter_requests,
-        awaiting_payments=awaiting_payments,
-        ready_to_start=ready_to_start,
-        active_trips=active_trips,
-        completed_trips=completed_trips,
-        commission_rate=int(COMPANY_COMMISSION_RATE * 100),
-        city_entries=city_entries,
-        popular_vehicle_types=POPULAR_VEHICLE_TYPES,
-        other_vehicle_types=other_vehicle_types,
-        fuel_types=fuel_types,
-        delivery_choices=DELIVERY_DISTANCE_CHOICES,
+        "owner_trip_history.html",
+        trips=trips,
+        cars_by_id=cars_by_id,
+        service_fee_rate=int(HOST_SERVICE_FEE_RATE * 100),
+    )
+
+
+@app.route("/owner/trips/<string:category>")
+@login_required
+@role_required("owner")
+def owner_trip_list(category: str) -> str:
+    context = build_owner_dashboard_context(g.user["id"])
+    category = category.lower()
+    trip_map = {
+        "active": context["active_trips"],
+        "pending": context["pending_requests"] + context["counter_requests"],
+        "in-progress": context["ready_to_start"] + context["active_trips"],
+    }
+    if category not in trip_map:
+        abort(404)
+    trips = []
+    for rental in trip_map[category]:
+        trip = dict(rental)
+        amount_received = float(trip.get("owner_initial_payout_amount") or 0.0)
+        trip["host_amount_received"] = round(amount_received, 2)
+        trip["host_amount_balance"] = max(
+            0.0, round(float(trip.get("host_net_take_home") or 0.0) - amount_received, 2)
+        )
+        trips.append(trip)
+    title_lookup = {
+        "active": "Trips currently in progress",
+        "pending": "Pending booking requests",
+        "in-progress": "Trips in progress",
+    }
+    status_note = {
+        "active": "These trips are currently marked as active.",
+        "pending": "Bookings awaiting your response are listed below.",
+        "in-progress": "Trips that are scheduled to start soon or already active are shown below.",
+    }
+    cars_by_id = {car["id"]: car for car in context["cars"]}
+    return render_template(
+        "owner_trip_list.html",
+        trips=trips,
+        cars_by_id=cars_by_id,
+        category=category,
+        title=title_lookup.get(category, "Trips"),
+        description=status_note.get(category, ""),
+        service_fee_rate=int(HOST_SERVICE_FEE_RATE * 100),
     )
 
 
@@ -3985,7 +4371,7 @@ def format_trip_datetime(value: str | datetime | None) -> str:
         date_value = parsed
     hour = date_value.strftime("%I").lstrip("0") or "0"
     minute = date_value.strftime("%M")
-    period = date_value.strftime("%p")
+    period = date_value.strftime("%p").lower()
     time_part = f"{hour}{period}" if minute == "00" else f"{hour}:{minute}{period}"
     day_part = ordinal_number(date_value.day)
     month_part = date_value.strftime("%b")

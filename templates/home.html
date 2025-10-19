@@ -1,4 +1,4 @@
-﻿{% extends "base.html" %}
+ï»¿{% extends "base.html" %}
 {% block title %}CarRentalNTravel | Self-Drive & Hosting{% endblock %}
 {% set is_owner = g.user and has_role('owner') %}
 {% block content %}
@@ -10,7 +10,7 @@
                 <span class="badge-zoom mb-3 text-uppercase">Grow with CarRentalNTravel</span>
                 <h1 class="display-5 fw-bold mb-3">Turn parked cars into a steady, trackable income stream.</h1>
                 <p class="fs-5 text-secondary mb-4">
-                    Publish your vehicles in minutes, screen every booking with verified renters, and let our payouts team credit 95% of every trip straight to your account.
+                    Publish your vehicles in minutes, screen every booking with verified renters, and let our payouts team settle every trip directly into your account with clear breakdowns.
                 </p>
                 <ul class="list-unstyled text-secondary mb-4">
                     <li class="mb-2"><i class="bi bi-check-circle-fill text-success"></i> Real-time dashboards for live, upcoming, and completed trips.</li>
@@ -36,12 +36,12 @@
                                 <p class="mb-0">Payouts awaiting release</p>
                             </div>
                             <div class="col-sm-6">
-                                <div class="fw-semibold text-success fs-3 mb-1">{{ 100 - commission_rate }}%</div>
-                                <p class="mb-0">Average host take-home per trip</p>
+                                <div class="fw-semibold text-success fs-3 mb-1">&#8377; {{ owner_stats.take_home_estimate if owner_stats else 0 }}</div>
+                                <p class="mb-0">Payouts ready to release</p>
                             </div>
                             <div class="col-sm-6">
                                 <div class="fw-semibold text-success fs-3 mb-1">&#8377; {{ owner_stats.take_home_estimate if owner_stats else 0 }}</div>
-                                <p class="mb-0">Approximate payout queued</p>
+                                <p class="mb-0">Average host take-home per trip</p>
                             </div>
                         </div>
                         <hr class="my-4">
@@ -62,7 +62,7 @@
             CarRentalNTravel receives each customer payment, retains a {{ commission_rate }}% service fee, and schedules the remaining balance straight to your account.
         </div>
         <div class="text-muted small">
-            Amount queued: &#8377; {{ owner_stats.awaiting_total }} · Expected take-home: &#8377; {{ owner_stats.take_home_estimate }}
+            Amount queued: &#8377; {{ owner_stats.awaiting_total }} Â· Expected take-home: &#8377; {{ owner_stats.take_home_estimate }}
         </div>
     </div>
 </div>
@@ -76,7 +76,7 @@
                 <div class="card card-zoom h-100">
                     <div class="card-body">
                         <h3 class="h5 fw-semibold">Seamless earnings</h3>
-                        <p class="text-muted mb-0">We collect payments, retain a 5% service fee, and schedule the remaining 95% straight to your verified bank account or UPI ID.</p>
+                        <p class="text-muted mb-0">We collect payments, retain the service fee, and schedule the remaining balance straight to your verified bank account or UPI ID.</p>
                     </div>
                 </div>
             </div>
