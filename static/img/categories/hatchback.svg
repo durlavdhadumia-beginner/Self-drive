@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 720 480">
+  <defs>
+    <linearGradient id="hb-bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#fef3c7"/>
+      <stop offset="100%" stop-color="#fde68a"/>
+    </linearGradient>
+    <linearGradient id="hb-body" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#fb7185"/>
+      <stop offset="100%" stop-color="#ec4899"/>
+    </linearGradient>
+  </defs>
+  <rect width="720" height="480" fill="url(#hb-bg)"/>
+  <path d="M118 320h420a30 30 0 0 0 29.2-24.6l8.3-45.6a36 36 0 0 0-9.2-30.7l-46.2-50a132 132 0 0 0-97.4-41.6h-56.4a40 40 0 0 1-25.6-9.1l-25.8-21.8A90 90 0 0 0 238 88h-8.6a94 94 0 0 0-88 58l-16 40.9a52 52 0 0 1-48.3 33.1H72a32 32 0 0 0-31.2 25l-7 31A25 25 0 0 0 58 320Z" fill="url(#hb-body)"/>
+  <path d="M196 180h140a28 28 0 0 1 21.1 9.4l34.5 38.6A20 20 0 0 1 376.6 252H164l20-48.6A32 32 0 0 1 196 180Z" fill="#fdf2f8" opacity="0.65"/>
+  <g fill="#0f172a">
+    <circle cx="210" cy="328" r="48"/>
+    <circle cx="452" cy="328" r="48"/>
+  </g>
+  <g fill="#f8fafc">
+    <circle cx="210" cy="328" r="24"/>
+    <circle cx="452" cy="328" r="24"/>
+  </g>
+  <path d="M112 268h376" stroke="#0f172a" stroke-width="12" stroke-linecap="round" opacity="0.25"/>
+</svg>

@@ -126,13 +126,9 @@
                                 <div class="col-12 mt-2">
                                     <hr class="my-4">
                                     <h2 class="h5 fw-semibold mb-2">Host requirements</h2>
-                                    <p class="text-muted small mb-3">These details help renters trust your listings and are required before you can add new vehicles.</p>
+                                    <p class="text-muted small mb-3">Let renters know whether your listed vehicles include GPS tracking for route visibility and safety.</p>
                                 </div>
-                                <div class="col-md-8">
-                                    <label class="form-label" for="vehicle_registration">Default vehicle registration reference</label>
-                                    <input type="text" class="form-control {% if 'vehicle_registration' in missing_keys %}is-invalid{% endif %}" id="vehicle_registration" name="vehicle_registration" value="{{ profile['vehicle_registration'] or '' }}" placeholder="KA01AB1234">
-                                </div>
-                                <div class="col-md-4 d-flex align-items-end">
+                                <div class="col-md-4">
                                     <div class="form-check form-switch">
                                         <input class="form-check-input" type="checkbox" role="switch" id="gps_tracking" name="gps_tracking" {% if profile['gps_tracking'] %}checked{% endif %}>
                                         <label class="form-check-label" for="gps_tracking">Fleet has GPS</label>
@@ -229,7 +225,7 @@
                         <ul class="text-muted small mb-0">
                             <li>Verified IDs help keep both hosts and renters safe.</li>
                             <li>Phone details are used for booking alerts and support.</li>
-                            <li>Hosts need a default registration reference and GPS confirmation before listing vehicles.</li>
+                            <li>Hosts confirm GPS capability for their fleet so renters can track trips securely.</li>
                             <li>Admins verify uploaded documents before enabling payouts.</li>
                         </ul>
                     </div>

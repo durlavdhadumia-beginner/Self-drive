@@ -1,6 +1,16 @@
-ï»¿{% extends "base.html" %}
+{% extends "base.html" %}
 {% block title %}CarRentalNTravel | Self-Drive & Hosting{% endblock %}
 {% set is_owner = g.user and has_role('owner') %}
+{% block head %}
+    {{ super() }}
+    <style>
+        .category-img {
+            height: 220px;
+            object-fit: cover;
+            background: linear-gradient(135deg, rgba(15, 118, 110, 0.12), rgba(37, 99, 235, 0.12));
+        }
+    </style>
+{% endblock %}
 {% block content %}
 {% if is_owner %}
 <section class="py-5" style="background:linear-gradient(120deg, rgba(13,159,92,0.18), rgba(10,92,54,0.12));">
@@ -303,7 +313,7 @@
         <div class="row row-cols-1 row-cols-md-3 g-4">
             <div class="col">
                 <div class="card card-zoom h-100">
-                    <img src="https://images.unsplash.com/photo-1549923746-c502d488b3ea?auto=format&fit=crop&w=900&q=80" class="card-img-top" alt="SUV">
+                    <img src="{{ url_for('static', filename='img/categories/suv.svg') }}" class="card-img-top category-img" alt="Adventure-ready SUV illustration">
                     <div class="card-body">
                         <h3 class="h5">Adventure-ready SUVs</h3>
                         <p class="text-muted mb-0">Spacious rides with roof carriers, perfect for getaways around Ooty, Coorg or Lonavala.</p>
@@ -312,7 +322,7 @@
             </div>
             <div class="col">
                 <div class="card card-zoom h-100">
-                    <img src="https://images.unsplash.com/photo-1517940310602-9601d0b1f13c?auto=format&fit=crop&w=900&q=80" class="card-img-top" alt="Hatchback">
+                    <img src="{{ url_for('static', filename='img/categories/hatchback.svg') }}" class="card-img-top category-img" alt="City hatchback illustration">
                     <div class="card-body">
                         <h3 class="h5">City-smart hatchbacks</h3>
                         <p class="text-muted mb-0">Easy parking, fuel efficient and weekend-friendly drives for two.</p>
@@ -321,7 +331,7 @@
             </div>
             <div class="col">
                 <div class="card card-zoom h-100">
-                    <img src="https://images.unsplash.com/photo-1605559424843-9e4c5640da3c?auto=format&fit=crop&w=900&q=80" class="card-img-top" alt="EV">
+                    <img src="{{ url_for('static', filename='img/categories/ev.svg') }}" class="card-img-top category-img" alt="Electric vehicle illustration">
                     <div class="card-body">
                         <h3 class="h5">Electric favourites</h3>
                         <p class="text-muted mb-0">Zero-emission city runs with charging support and fast-pass tolls.</p>

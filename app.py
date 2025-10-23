@@ -853,7 +853,6 @@ def profile_is_complete(profile: dict | None) -> bool:
     ]
     docs_required = 0
     if getattr(g, "user", None) and has_role("owner"):
-        required_fields.append(_value(profile, "vehicle_registration"))
         docs_required = 3
     if getattr(g, "user", None) and has_role("renter") and not has_role("owner"):
         docs_required = 3
@@ -1298,7 +1297,11 @@ def profile() -> str:
         email_contact = form.get("email_contact", "").strip()
         phone = form.get("phone", "").strip()
         address = form.get("address", "").strip()
-        vehicle_registration = form.get("vehicle_registration", "").strip()
+        vehicle_registration_raw = form.get("vehicle_registration")
+        if vehicle_registration_raw is None:
+            vehicle_registration = (profile_row.get("vehicle_registration") or "").strip()
+        else:
+            vehicle_registration = vehicle_registration_raw.strip()
         gps_tracking = 1 if form.get("gps_tracking") else 0
         account_holder = form.get("account_holder", "").strip()
         account_number = form.get("account_number", "").strip()
@@ -1315,9 +1318,6 @@ def profile() -> str:
         if not email_contact:
             missing_fields.append("email ID or account contact")
             missing_keys.append("email_contact")
-        if has_role("owner") and not vehicle_registration:
-            missing_fields.append("vehicle registration details")
-            missing_keys.append("vehicle_registration")
         if not ((account_number and ifsc_code) or upi_id):
             missing_fields.append(
                 "payout details (bank account + IFSC or UPI ID)")

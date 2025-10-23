@@ -157,6 +157,15 @@ document.addEventListener('DOMContentLoaded', () => {
     const detailModal = createModalInstance(detailModalEl);
     const editModal = createModalInstance(editModalEl);
 
+    if (editModalEl && bootstrapNamespace && typeof bootstrapNamespace.Modal === 'function') {
+        editModalEl.addEventListener('shown.bs.modal', () => {
+            const map = ensureEditMap();
+            if (map) {
+                setTimeout(() => map.invalidateSize(), 120);
+            }
+        });
+    }
+
     const detailMapEl = document.getElementById('admin-detail-map');
     let detailMap = null;
     let detailMarker = null;
@@ -225,7 +234,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!entries.length) {
             return 'Delivery: Not offered';
         }
-        const parts = entries.map(([distance, price]) => `Up to ${distance} km (\\u20b9${Math.round(price)})`);
+        const parts = entries.map(([distance, price]) => `Up to ${distance} km (₹${Math.round(price)})`);
         return `Delivery: ${parts.join(', ')}`;
     };
 
@@ -502,11 +511,11 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         const rateHourEl = cardEl.querySelector('[data-admin-role="rate-hour"]');
         if (rateHourEl) {
-            rateHourEl.textContent = `Hourly rate: \\u20b9${formatCurrency(car.rate_per_hour)}`;
+            rateHourEl.textContent = `Hourly rate: ₹${formatCurrency(car.rate_per_hour)}`;
         }
         const rateDayEl = cardEl.querySelector('[data-admin-role="rate-day"]');
         if (rateDayEl) {
-            rateDayEl.textContent = `Daily rate: \\u20b9${formatCurrency(car.daily_rate)}`;
+            rateDayEl.textContent = `Daily rate: ₹${formatCurrency(car.daily_rate)}`;
         }
         const fuelEl = cardEl.querySelector('[data-admin-role="fuel"]');
         if (fuelEl) {
@@ -567,7 +576,7 @@ document.addEventListener('DOMContentLoaded', () => {
         detailSummary.name.textContent = displayName;
         detailSummary.subtitle.textContent = `${car.brand || 'Unknown'} ${car.model || ''}`.trim();
         detailSummary.city.textContent = car.city || 'City not set';
-        detailSummary.rates.textContent = `\\u20b9${formatCurrency(car.rate_per_hour)} / hr \u2022 \\u20b9${formatCurrency(car.daily_rate)} per day`;
+        detailSummary.rates.textContent = `₹${formatCurrency(car.rate_per_hour)} / hr \u2022 ₹${formatCurrency(car.daily_rate)} per day`;
         detailSummary.vehicle.textContent = `${car.vehicle_type || 'Vehicle'} \u2022 ${car.size_category || 'Size not set'}`;
         detailSummary.fuel.textContent = `${car.fuel_type || 'Fuel N/A'} \u2022 ${car.transmission || 'Transmission N/A'}`;
         detailSummary.description.textContent = car.description || 'No highlights provided for this listing.';
@@ -584,7 +593,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 entries.forEach(([distance, price]) => {
                     const item = document.createElement('li');
                     item.className = 'list-group-item d-flex justify-content-between align-items-center small';
-                    item.innerHTML = `<span>Up to ${distance} km</span><span class="text-muted">\\u20b9${formatCurrency(price)}</span>`;
+                    item.innerHTML = `<span>Up to ${distance} km</span><span class="text-muted">₹${formatCurrency(price)}</span>`;
                     detailSummary.delivery.appendChild(item);
                 });
             }
