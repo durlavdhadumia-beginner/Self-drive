@@ -75,14 +75,19 @@
                                             {% endif %}
                                         </div>
                                         <div class="col-md-6">
-                                            {% set base_amount = rental['rental_amount'] if rental['rental_amount'] else (rental['total_amount'] or 0) - (rental['delivery_fee'] or 0) %}
-                                            {% set delivery_fee = rental['delivery_fee'] or 0 %}
+                                            {% set base_amount = rental['display_rental_amount'] %}
+                                            {% set delivery_fee = rental['display_delivery_fee'] %}
                                             {% set delivery_label = rental['delivery_address'] or 'Pinned delivery location' %}
                                             <div class="bg-light rounded-4 px-3 py-3 h-100">
                                                 {% if rental['owner_response'] == 'counter' %}
                                                     <div class="alert border-0 shadow-sm mb-3 fw-bold text-uppercase text-center" style="background-color:#f3e8ff;color:#5b21b6;font-size:1.1rem;">
                                                         Owner has made a revised price offer as below.
                                                     </div>
+                                                    {% if rental['counter_take_home_display'] %}
+                                                        <div class="text-muted small text-center mb-2">
+                                                            Host receives approximately Rs {{ rental['counter_take_home_display']|round(2) }} after platform fees.
+                                                        </div>
+                                                    {% endif %}
                                                 {% endif %}
                                                 <div>Rental: Rs {{ (base_amount or 0)|round(2) }}</div>
                                                 <div>
@@ -92,7 +97,7 @@
                                                         Delivery: Pickup at host location
                                                     {% endif %}
                                                 </div>
-                                                <div class="fw-semibold text-success fs-4">Total: Rs {{ (rental['total_amount'] or 0)|round(2) }}</div>
+                                                <div class="fw-semibold text-success fs-4">Total: Rs {{ (rental['display_total_amount'] or 0)|round(2) }}</div>
                                                 {% if rental['delivery_type'] == 'delivery' %}
                                                     <div class="text-muted">
                                                         Delivery {{ delivery_label }}

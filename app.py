@@ -2755,6 +2755,28 @@ def rentals() -> str:
             )
         except (TypeError, json.JSONDecodeError):
             rental["trip_destinations_list"] = []
+        total_amount = float(rental.get("total_amount") or 0.0)
+        delivery_fee_value = float(rental.get("delivery_fee") or 0.0)
+        base_rental_amount = float(rental.get("rental_amount") or 0.0)
+        if base_rental_amount <= 0 or abs((base_rental_amount + delivery_fee_value) - total_amount) > 0.01:
+            base_rental_amount = max(0.0, round(total_amount - delivery_fee_value, 2))
+        else:
+            base_rental_amount = round(base_rental_amount, 2)
+        display_total = round(total_amount, 2)
+        display_base = base_rental_amount
+        display_delivery = round(delivery_fee_value, 2)
+        counter_take_home = None
+        if rental.get("owner_response") == "counter" and rental.get("counter_amount"):
+            counter_total = float(rental["counter_amount"] or 0.0)
+            if counter_total > 0:
+                counter_total = round(counter_total, 2)
+                display_total = counter_total
+                display_base = max(0.0, round(counter_total - display_delivery, 2))
+                counter_take_home = max(0.0, round(counter_total * (1 - HOST_SERVICE_FEE_RATE), 2))
+        rental["display_total_amount"] = display_total
+        rental["display_rental_amount"] = display_base
+        rental["display_delivery_fee"] = display_delivery
+        rental["counter_take_home_display"] = counter_take_home
         rentals_list.append(rental)
 
     rental_ids = [rental["id"] for rental in rentals_list if rental.get("id") is not None]
@@ -3581,6 +3603,16 @@ def build_owner_dashboard_context(owner_id: int) -> Dict[str, object]:
         rental["host_service_fee"] = service_fee_amount
         rental["host_service_fee_rate"] = int(HOST_SERVICE_FEE_RATE * 100)
         rental["host_net_take_home"] = max(0.0, round(total_amount - service_fee_amount, 2))
+        counter_total = float(rental.get("counter_amount") or 0.0)
+        if counter_total > 0:
+            counter_total = round(counter_total, 2)
+            rental["counter_total_amount"] = counter_total
+            rental["counter_net_take_home"] = max(0.0, round(counter_total * (1 - HOST_SERVICE_FEE_RATE), 2))
+            rental["counter_base_amount"] = max(0.0, round(counter_total - delivery_fee_value, 2))
+        else:
+            rental["counter_total_amount"] = None
+            rental["counter_net_take_home"] = None
+            rental["counter_base_amount"] = None
         initial_status = (rental.get("owner_initial_payout_status") or "").lower()
         final_status = (rental.get("owner_final_payout_status") or "").lower()
         owner_status = (rental.get("owner_payout_status") or "").lower()
@@ -4587,18 +4619,29 @@ def owner_respond_rental(rental_id: int) -> str:
         )
     elif action == "counter" and rental["owner_response"] == "pending" and rental["counter_used"] == 0:
         try:
-            counter_amount = float(request.form.get("counter_amount", "0"))
+            desired_take_home = float(request.form.get("counter_amount", "0"))
         except ValueError:
             return redirect(url_for("owner_cars"))
         note = request.form.get("counter_comment", "").strip()
+        if desired_take_home <= 0:
+            return redirect(url_for("owner_cars"))
+        delivery_fee_existing = float(rental.get("delivery_fee") or 0.0)
+        service_rate = HOST_SERVICE_FEE_RATE
+        effective_rate = min(max(service_rate, 0.0), 0.95)
+        if effective_rate >= 1:
+            effective_rate = 0.95
+        counter_total = desired_take_home / max(0.01, (1 - effective_rate))
+        counter_total = max(counter_total, delivery_fee_existing)
+        counter_total = round(counter_total, 2)
+        desired_take_home = round(counter_total * (1 - effective_rate), 2)
         db.execute(
             "UPDATE rentals SET owner_response = 'counter', owner_response_at = ?, counter_amount = ?, counter_comment = ?, counter_used = 1 WHERE id = ?",
-            (now.isoformat(), counter_amount, note, rental_id),
+            (now.isoformat(), counter_total, note, rental_id),
         )
         db.commit()
         create_notification(
             rental["renter_id"],
-            f"{g.user['username']} suggested a new price of Rs {counter_amount:.0f} for {car_label}. Review and confirm.",
+            f"{g.user['username']} suggested a new price of Rs {counter_total:.0f} for {car_label}. Review and confirm.",
             url_for("rentals"),
         )
     else:

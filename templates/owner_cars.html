@@ -197,7 +197,14 @@
                                         {% endif %}
                                     </div>
                                     <div class="text-muted small text-danger">Service fee ({{ rental['host_service_fee_rate'] }}%): -Rs {{ rental['host_service_fee']|round(2) }}</div>
-                                    <div class="fw-semibold text-success">Net take-home: Rs {{ rental['host_net_take_home']|round(2) }}</div>
+                                    {% if rental['counter_total_amount'] %}
+                                        <div class="fw-semibold text-warning">
+                                            Requested take-home if accepted: ~Rs {{ rental['counter_net_take_home']|round(2) }}
+                                        </div>
+                                        <div class="text-muted small">Renter will see Rs {{ rental['counter_total_amount']|round(2) }} (includes delivery and platform fee).</div>
+                                    {% else %}
+                                        <div class="fw-semibold text-success">Net take-home: Rs {{ rental['host_net_take_home']|round(2) }}</div>
+                                    {% endif %}
                                     {% if rental['delivery_type'] == 'delivery' %}
                                         <div class="text-muted small">Delivery to {{ delivery_label }}{% if rental['delivery_distance_km'] %} &bull; ~{{ rental['delivery_distance_km']|round(1) }} km{% endif %}</div>
                                     {% endif %}
@@ -222,12 +229,18 @@
                                             <input type="text" class="form-control form-control-sm" name="reason" placeholder="Reason" required>
                                             <button type="submit" class="btn btn-sm btn-outline-danger">Reject</button>
                                         </form>
-                                        <form method="post" action="{{ url_for('owner_respond_rental', rental_id=rental['id']) }}" class="d-flex gap-2">
+                                        <form method="post" action="{{ url_for('owner_respond_rental', rental_id=rental['id']) }}" class="d-flex flex-column flex-lg-row gap-2">
                                             <input type="hidden" name="action" value="counter">
-                                            <input type="number" class="form-control form-control-sm" name="counter_amount" placeholder="New total" min="0" step="50" required>
-                                            <input type="text" class="form-control form-control-sm" name="counter_comment" placeholder="Note (optional)">
-                                            <button type="submit" class="btn btn-sm btn-outline-secondary">Counter once</button>
+                                            <div class="flex-grow-1 d-flex gap-2">
+                                                <input type="number" class="form-control form-control-sm" name="counter_amount" placeholder="Desired take-home (Rs)" min="0" step="50" required>
+                                                <input type="text" class="form-control form-control-sm" name="counter_comment" placeholder="Note (optional)">
+                                            </div>
+                                            <button type="submit" class="btn btn-sm btn-outline-secondary align-self-start">Counter once</button>
                                         </form>
+                                        <div class="form-text text-muted small">
+                                            Current net take-home: Rs {{ rental['host_net_take_home']|round(2) }}.
+                                            Enter the amount you want to receive after the {{ rental['host_service_fee_rate'] }}% service fee &mdash; we will add fees and show the renter the adjusted price.
+                                        </div>
                                     </div>
                                 </div>
                             {% endfor %}
@@ -236,7 +249,15 @@
                                     <div class="fw-semibold">{{ rental['car_name'] }} - {{ rental['renter_public_name'] }}</div>
                                     <div class="text-muted small">Trip start: {{ rental['start_time']|trip_datetime }}</div>
                                     <div class="text-muted small">Trip end: {{ rental['end_time']|trip_datetime }}</div>
-                                    <div class="text-muted small">Waiting for renter to respond to your counter offer of Rs {{ rental['counter_amount']|round|int }}.</div>
+                                    {% set counter_total = rental['counter_total_amount'] or rental['counter_amount'] %}
+                                    {% set counter_take_home = rental['counter_net_take_home'] %}
+                                    <div class="text-muted small">
+                                        Waiting for renter to respond to your counter offer:
+                                        Total Rs {{ counter_total|round(2) }}
+                                        {% if counter_take_home %}
+                                            (You receive ~Rs {{ counter_take_home|round(2) }} after fees)
+                                        {% endif %}.
+                                    </div>
                                     {% if rental['trip_destinations_list'] %}
                                         <div class="text-muted small mt-1">Destinations: {{ rental['trip_destinations_list']|join(', ') }}</div>
                                     {% endif %}
