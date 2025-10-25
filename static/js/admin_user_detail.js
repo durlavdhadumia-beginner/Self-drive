@@ -6,9 +6,10 @@ document.addEventListener('DOMContentLoaded', () => {
     const formatCurrency = (value) => {
         const numeric = Number(value);
         if (!Number.isFinite(numeric)) {
-            return '0';
+            return '\u20B90';
         }
-        return Math.round(numeric).toLocaleString('en-IN');
+        const formatted = Math.round(numeric).toLocaleString('en-IN');
+        return `\u20B9${formatted}`;
     };
 
     const buildCityLabel = (entry) => {
@@ -173,6 +174,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const editMapEl = document.getElementById('admin-edit-location-map');
     let editMap = null;
     let editMarker = null;
+    let editMapHasDefaultView = false;
 
     const detailSummary = {
         name: detailModalEl ? detailModalEl.querySelector('[data-admin-detail="name"]') : null,
@@ -234,7 +236,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!entries.length) {
             return 'Delivery: Not offered';
         }
-        const parts = entries.map(([distance, price]) => `Up to ${distance} km (₹${Math.round(price)})`);
+        const parts = entries.map(([distance, price]) => `Up to ${distance} km (${formatCurrency(price)})`);
         return `Delivery: ${parts.join(', ')}`;
     };
 
@@ -427,6 +429,9 @@ document.addEventListener('DOMContentLoaded', () => {
             maxZoom: 18,
             attribution: '&copy; <a href="https://www.openstreetmap.org">OpenStreetMap</a> contributors',
         }).addTo(editMap);
+        const defaultZoom = Number.isFinite(DEFAULT_MAP_VIEW.zoom) ? DEFAULT_MAP_VIEW.zoom : 5;
+        editMap.setView([DEFAULT_MAP_VIEW.lat, DEFAULT_MAP_VIEW.lng], defaultZoom);
+        editMapHasDefaultView = true;
         editMap.on('click', (event) => {
             const { lat, lng } = event.latlng;
             setEditLocation(lat, lng);
@@ -456,6 +461,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         const map = ensureEditMap();
         if (map) {
+            const hadMarker = Boolean(editMarker);
             if (!editMarker) {
                 editMarker = L.marker([lat, lng], { draggable: true, icon: carIcon || undefined }).addTo(map);
                 editMarker.on('dragend', () => {
@@ -465,8 +471,11 @@ document.addEventListener('DOMContentLoaded', () => {
             } else {
                 editMarker.setLatLng([lat, lng]);
             }
-            if (pan) {
-                map.setView([lat, lng], Math.max(map.getZoom(), 13));
+            const currentZoom = map.getZoom();
+            const zoom = Number.isFinite(currentZoom) ? Math.max(currentZoom, 13) : 13;
+            if (pan || !hadMarker || !Number.isFinite(currentZoom) || editMapHasDefaultView) {
+                map.setView([lat, lng], zoom);
+                editMapHasDefaultView = false;
             }
             setTimeout(() => map.invalidateSize(), 150);
         }
@@ -511,11 +520,11 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         const rateHourEl = cardEl.querySelector('[data-admin-role="rate-hour"]');
         if (rateHourEl) {
-            rateHourEl.textContent = `Hourly rate: ₹${formatCurrency(car.rate_per_hour)}`;
+            rateHourEl.textContent = `Hourly rate: ${formatCurrency(car.rate_per_hour)}`;
         }
         const rateDayEl = cardEl.querySelector('[data-admin-role="rate-day"]');
         if (rateDayEl) {
-            rateDayEl.textContent = `Daily rate: ₹${formatCurrency(car.daily_rate)}`;
+            rateDayEl.textContent = `Daily rate: ${formatCurrency(car.daily_rate)}`;
         }
         const fuelEl = cardEl.querySelector('[data-admin-role="fuel"]');
         if (fuelEl) {
@@ -576,7 +585,7 @@ document.addEventListener('DOMContentLoaded', () => {
         detailSummary.name.textContent = displayName;
         detailSummary.subtitle.textContent = `${car.brand || 'Unknown'} ${car.model || ''}`.trim();
         detailSummary.city.textContent = car.city || 'City not set';
-        detailSummary.rates.textContent = `₹${formatCurrency(car.rate_per_hour)} / hr \u2022 ₹${formatCurrency(car.daily_rate)} per day`;
+        detailSummary.rates.textContent = `${formatCurrency(car.rate_per_hour)} / hr \u2022 ${formatCurrency(car.daily_rate)} per day`;
         detailSummary.vehicle.textContent = `${car.vehicle_type || 'Vehicle'} \u2022 ${car.size_category || 'Size not set'}`;
         detailSummary.fuel.textContent = `${car.fuel_type || 'Fuel N/A'} \u2022 ${car.transmission || 'Transmission N/A'}`;
         detailSummary.description.textContent = car.description || 'No highlights provided for this listing.';
@@ -593,7 +602,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 entries.forEach(([distance, price]) => {
                     const item = document.createElement('li');
                     item.className = 'list-group-item d-flex justify-content-between align-items-center small';
-                    item.innerHTML = `<span>Up to ${distance} km</span><span class="text-muted">₹${formatCurrency(price)}</span>`;
+                    item.innerHTML = `<span>Up to ${distance} km</span><span class="text-muted">${formatCurrency(price)}</span>`;
                     detailSummary.delivery.appendChild(item);
                 });
             }

@@ -289,7 +289,9 @@ def init_db() -> None:
             password_hash TEXT NOT NULL,
             role TEXT NOT NULL CHECK(role IN ('owner', 'renter', 'both')),
             is_admin INTEGER NOT NULL DEFAULT 0,
-            account_name TEXT NOT NULL DEFAULT ''
+            account_name TEXT NOT NULL DEFAULT '',
+            is_active INTEGER NOT NULL DEFAULT 1,
+            deleted_at TEXT
         );
 
         CREATE TABLE IF NOT EXISTS user_profiles (
@@ -507,6 +509,8 @@ def init_db() -> None:
     alter_statements = [
         "ALTER TABLE users ADD COLUMN is_admin INTEGER NOT NULL DEFAULT 0",
         "ALTER TABLE users ADD COLUMN account_name TEXT NOT NULL DEFAULT ''",
+        "ALTER TABLE users ADD COLUMN is_active INTEGER NOT NULL DEFAULT 1",
+        "ALTER TABLE users ADD COLUMN deleted_at TEXT",
         "ALTER TABLE cars ADD COLUMN city TEXT DEFAULT ''",
         "ALTER TABLE cars ADD COLUMN image_url TEXT DEFAULT ''",
         "ALTER TABLE cars ADD COLUMN fuel_type TEXT DEFAULT ''",
@@ -706,6 +710,50 @@ def save_car_delivery_options(car_id: int, options: Dict[int, float]) -> None:
             """,
             (car_id, distance, price, now_iso, now_iso),
         )
+
+
+def anonymize_user_account(db: sqlite3.Connection, user_id: int, *, release_username: bool = True) -> None:
+    """Soft-delete a user by revoking access and scrubbing profile details."""
+    user_row = db.execute(
+        "SELECT username FROM users WHERE id = ?", (user_id,)
+    ).fetchone()
+    if user_row is None:
+        return
+    now_iso = naive_utcnow_iso()
+    anonymised_username = user_row["username"]
+    if release_username:
+        anonymised_username = f"deleted_{user_id}_{int(datetime.utcnow().timestamp())}"
+    random_secret = generate_password_hash(os.urandom(16).hex())
+    db.execute(
+        """
+        UPDATE users
+        SET username = ?, password_hash = ?, is_active = 0, deleted_at = ?, account_name = ''
+        WHERE id = ?
+        """,
+        (anonymised_username, random_secret, now_iso, user_id),
+    )
+    db.execute(
+        """
+        UPDATE user_profiles
+        SET full_name = '', date_of_birth = NULL, phone = NULL, address = '',
+            vehicle_registration = '', gps_tracking = 0, profile_completed = 0,
+            email_contact = ''
+        WHERE user_id = ?
+        """,
+        (user_id,),
+    )
+    db.execute(
+        """
+        UPDATE user_payout_details
+        SET account_holder = '', account_number = '', ifsc_code = '', upi_id = '', updated_at = ?
+        WHERE user_id = ?
+        """,
+        (now_iso, user_id),
+    )
+    db.execute(
+        "UPDATE cars SET is_active = 0, is_available = 0, updated_at = ? WHERE owner_id = ?",
+        (now_iso, user_id),
+    )
 
 
 def ensure_user_profile(user_id: int) -> dict:
@@ -1239,10 +1287,11 @@ def load_logged_in_user() -> None:
         return
     db = get_db()
     user_row = db.execute(
-        "SELECT id, username, role, is_admin, account_name FROM users WHERE id = ?",
+        "SELECT id, username, role, is_admin, account_name, is_active FROM users WHERE id = ?",
         (user_id,),
     ).fetchone()
-    if user_row is None:
+    if user_row is None or not user_row["is_active"]:
+        session.clear()
         g.user = None
         g.profile = None
         g.unread_notifications = 0
@@ -1965,6 +2014,199 @@ def home() -> str:
             "awaiting_total": round(awaiting_total, 2),
             "take_home_estimate": round(awaiting_total * (1 - COMPANY_COMMISSION_RATE), 2),
         }
+    category_definitions = [
+        {
+            "title": "Adventure-ready SUVs",
+            "description": "Spacious rides with roof carriers, perfect for getaways around Ooty, Coorg or Lonavala.",
+            "vehicle_types": ["suv"],
+        },
+        {
+            "title": "City-smart hatchbacks",
+            "description": "Easy parking, fuel efficient and weekend-friendly drives for two.",
+            "vehicle_types": ["hatchback", "hatchbacks"],
+        },
+        {
+            "title": "Electric favourites",
+            "description": "Zero-emission city runs with charging support and fast-pass tolls.",
+            "vehicle_types": ["electric", "ev"],
+        },
+    ]
+    image_rows = [
+        dict(row)
+        for row in db.execute(
+            """
+            SELECT car_images.car_id AS car_id,
+                   car_images.filename AS filename,
+                   car_images.created_at AS created_at,
+                   cars.vehicle_type AS vehicle_type,
+                   cars.name AS name,
+                   cars.brand AS brand,
+                   cars.model AS model
+            FROM car_images
+            JOIN cars ON cars.id = car_images.car_id
+            ORDER BY car_images.created_at DESC
+            """
+        ).fetchall()
+    ]
+    remote_rows = [
+        dict(row)
+        for row in db.execute(
+            """
+            SELECT cars.id AS car_id,
+                   cars.image_url AS image_url,
+                   cars.vehicle_type AS vehicle_type,
+                   cars.name AS name,
+                   cars.brand AS brand,
+                   cars.model AS model,
+                   cars.updated_at AS updated_at
+            FROM cars
+            WHERE cars.image_url IS NOT NULL AND cars.image_url != ''
+            ORDER BY cars.updated_at DESC
+            """
+        ).fetchall()
+    ]
+    used_car_ids: set[int] = set()
+    stock_image_pool = [
+        {
+            "url": "https://images.unsplash.com/photo-1605557516417-05f9c13a7bcc?auto=format&fit=crop&w=1200&q=80",
+            "alt": "SUV parked against scenic hills",
+        },
+        {
+            "url": "https://images.unsplash.com/photo-1525609004556-c46c7d6cf023?auto=format&fit=crop&w=1200&q=80",
+            "alt": "Compact hatchback in the city",
+        },
+        {
+            "url": "https://images.unsplash.com/photo-1617813489478-7f2d9965e5a2?auto=format&fit=crop&w=1200&q=80",
+            "alt": "Electric car charging outdoors",
+        },
+    ]
+    stock_index = 0
+
+    def normalise_type(value: Optional[str]) -> str:
+        return (value or "").strip().lower()
+
+    def build_alt_text(row_data: dict[str, object], fallback: str) -> str:
+        brand = str(row_data.get("brand") or "").strip()
+        model = str(row_data.get("model") or "").strip()
+        name = str(row_data.get("name") or "").strip()
+        parts = [part for part in (brand, model) if part]
+        if parts:
+            label = " ".join(parts)
+        elif name:
+            label = name
+        else:
+            vehicle_type_label = str(row_data.get("vehicle_type") or "").strip().title()
+            label = vehicle_type_label or fallback
+        return label
+
+    def pick_from_upload(filter_types: Optional[set[str]] = None) -> Optional[Tuple[dict[str, object], str]]:
+        for row in image_rows:
+            car_id = row.get("car_id")
+            if car_id is None:
+                continue
+            try:
+                car_id_int = int(car_id)
+            except (TypeError, ValueError):
+                continue
+            if car_id_int in used_car_ids:
+                continue
+            vehicle_type_value = normalise_type(row.get("vehicle_type")) or None
+            if filter_types and vehicle_type_value not in filter_types:
+                continue
+            filename = row.get("filename")
+            if not filename:
+                continue
+            used_car_ids.add(car_id_int)
+            row_data: dict[str, object] = dict(row)
+            row_data["_normalized_vehicle_type"] = vehicle_type_value
+            return row_data, url_for("serve_upload", filename=filename)
+        return None
+
+    def pick_from_remote(filter_types: Optional[set[str]] = None) -> Optional[Tuple[dict[str, object], str]]:
+        for row in remote_rows:
+            car_id = row.get("car_id")
+            if car_id is None:
+                continue
+            try:
+                car_id_int = int(car_id)
+            except (TypeError, ValueError):
+                continue
+            if car_id_int in used_car_ids:
+                continue
+            vehicle_type_value = normalise_type(row.get("vehicle_type")) or None
+            if filter_types and vehicle_type_value not in filter_types:
+                continue
+            image_url = row.get("image_url")
+            if not image_url:
+                continue
+            used_car_ids.add(car_id_int)
+            row_data: dict[str, object] = dict(row)
+            row_data["_normalized_vehicle_type"] = vehicle_type_value
+            return row_data, image_url
+        return None
+
+    def convert_candidate(candidate: Optional[Tuple[dict[str, object], str]], fallback_title: str) -> Optional[dict[str, str]]:
+        if candidate is None:
+            return None
+        row_data, image_url = candidate
+        alt_text = build_alt_text(row_data, fallback_title)
+        vehicle_type_value = row_data.get("_normalized_vehicle_type")
+        if vehicle_type_value is None:
+            vehicle_type_value = normalise_type(row_data.get("vehicle_type"))
+        return {
+            "url": image_url,
+            "alt": alt_text,
+            "vehicle_type": vehicle_type_value or None,
+        }
+
+    def next_stock_image(fallback_title: str) -> dict[str, str]:
+        nonlocal stock_index
+        if stock_image_pool:
+            image = stock_image_pool[stock_index % len(stock_image_pool)]
+            stock_index += 1
+            return {
+                "url": image["url"],
+                "alt": image.get("alt", fallback_title),
+                "vehicle_type": None,
+            }
+        return {
+            "url": "https://images.unsplash.com/photo-1605557516417-05f9c13a7bcc?auto=format&fit=crop&w=1200&q=80",
+            "alt": fallback_title,
+            "vehicle_type": None,
+        }
+
+    def pick_image(vehicle_types: List[str], fallback_title: str) -> dict[str, str]:
+        target_types: set[str] = set()
+        for value in vehicle_types:
+            normalised = normalise_type(value)
+            if normalised:
+                target_types.add(normalised)
+        candidate = convert_candidate(
+            pick_from_upload(target_types if target_types else None), fallback_title
+        )
+        if candidate is None:
+            candidate = convert_candidate(
+                pick_from_remote(target_types if target_types else None), fallback_title
+            )
+        if candidate is None:
+            candidate = convert_candidate(pick_from_upload(None), fallback_title)
+        if candidate is None:
+            candidate = convert_candidate(pick_from_remote(None), fallback_title)
+        if candidate is None:
+            candidate = next_stock_image(fallback_title)
+        return candidate
+
+    popular_category_cards = []
+    for config in category_definitions:
+        image_info = pick_image(config["vehicle_types"], config["title"])
+        popular_category_cards.append(
+            {
+                "title": config["title"],
+                "description": config["description"],
+                "image_url": image_info["url"],
+                "image_alt": image_info.get("alt", config["title"]),
+            }
+        )
     return render_template(
         "home.html",
         cities=cities,
@@ -1974,6 +2216,7 @@ def home() -> str:
         requested_destinations=requested_destinations,
         owner_stats=owner_stats,
         commission_rate=commission_rate_pct,
+        popular_category_cards=popular_category_cards,
     )
 
 

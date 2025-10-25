@@ -311,33 +311,27 @@
     <div class="container">
         <h2 class="section-title">Popular categories</h2>
         <div class="row row-cols-1 row-cols-md-3 g-4">
-            <div class="col">
-                <div class="card card-zoom h-100">
-                    <img src="{{ url_for('static', filename='img/categories/suv.svg') }}" class="card-img-top category-img" alt="Adventure-ready SUV illustration">
-                    <div class="card-body">
-                        <h3 class="h5">Adventure-ready SUVs</h3>
-                        <p class="text-muted mb-0">Spacious rides with roof carriers, perfect for getaways around Ooty, Coorg or Lonavala.</p>
+            {% for card in popular_category_cards %}
+                <div class="col">
+                    <div class="card card-zoom h-100">
+                        <img src="{{ card.image_url }}" class="card-img-top category-img" alt="{{ card.image_alt }}">
+                        <div class="card-body">
+                            <h3 class="h5">{{ card.title }}</h3>
+                            <p class="text-muted mb-0">{{ card.description }}</p>
+                        </div>
                     </div>
                 </div>
-            </div>
-            <div class="col">
-                <div class="card card-zoom h-100">
-                    <img src="{{ url_for('static', filename='img/categories/hatchback.svg') }}" class="card-img-top category-img" alt="City hatchback illustration">
-                    <div class="card-body">
-                        <h3 class="h5">City-smart hatchbacks</h3>
-                        <p class="text-muted mb-0">Easy parking, fuel efficient and weekend-friendly drives for two.</p>
+            {% else %}
+                <div class="col">
+                    <div class="card card-zoom h-100">
+                        <img src="{{ url_for('static', filename='img/categories/suv.svg') }}" class="card-img-top category-img" alt="Self-drive vehicle illustration">
+                        <div class="card-body">
+                            <h3 class="h5">List your first vehicle</h3>
+                            <p class="text-muted mb-0">Upload real photos to highlight your listing on the homepage.</p>
+                        </div>
                     </div>
                 </div>
-            </div>
-            <div class="col">
-                <div class="card card-zoom h-100">
-                    <img src="{{ url_for('static', filename='img/categories/ev.svg') }}" class="card-img-top category-img" alt="Electric vehicle illustration">
-                    <div class="card-body">
-                        <h3 class="h5">Electric favourites</h3>
-                        <p class="text-muted mb-0">Zero-emission city runs with charging support and fast-pass tolls.</p>
-                    </div>
-                </div>
-            </div>
+            {% endfor %}
         </div>
     </div>
 </section>
