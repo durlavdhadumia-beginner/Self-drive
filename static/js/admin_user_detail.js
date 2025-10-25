@@ -160,10 +160,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     if (editModalEl && bootstrapNamespace && typeof bootstrapNamespace.Modal === 'function') {
         editModalEl.addEventListener('shown.bs.modal', () => {
-            const map = ensureEditMap();
-            if (map) {
-                setTimeout(() => map.invalidateSize(), 120);
-            }
+            refreshEditMapView({ force: true });
         });
     }
 
@@ -175,6 +172,7 @@ document.addEventListener('DOMContentLoaded', () => {
     let editMap = null;
     let editMarker = null;
     let editMapHasDefaultView = false;
+    let editMapResizeTimer = null;
 
     const detailSummary = {
         name: detailModalEl ? detailModalEl.querySelector('[data-admin-detail="name"]') : null,
@@ -436,7 +434,43 @@ document.addEventListener('DOMContentLoaded', () => {
             const { lat, lng } = event.latlng;
             setEditLocation(lat, lng);
         });
+        scheduleEditMapResize(90);
         return editMap;
+    };
+
+    const scheduleEditMapResize = (delay = 160) => {
+        if (!editMapEl) {
+            return;
+        }
+        if (editMapResizeTimer) {
+            clearTimeout(editMapResizeTimer);
+        }
+        editMapResizeTimer = setTimeout(() => {
+            const map = ensureEditMap();
+            if (map) {
+                map.invalidateSize(true);
+            }
+        }, delay);
+    };
+
+    const refreshEditMapView = ({ force = false } = {}) => {
+        const map = ensureEditMap();
+        if (!map) {
+            return;
+        }
+        const lat = editLatInput ? Number(editLatInput.value) : NaN;
+        const lng = editLngInput ? Number(editLngInput.value) : NaN;
+        if (Number.isFinite(lat) && Number.isFinite(lng)) {
+            const currentZoom = map.getZoom();
+            const zoom = Number.isFinite(currentZoom) ? Math.max(currentZoom, 13) : 13;
+            map.setView([lat, lng], zoom, { animate: false });
+            editMapHasDefaultView = false;
+        } else if (force) {
+            const fallbackZoom = Number.isFinite(DEFAULT_MAP_VIEW.zoom) ? DEFAULT_MAP_VIEW.zoom : 5;
+            map.setView([DEFAULT_MAP_VIEW.lat, DEFAULT_MAP_VIEW.lng], fallbackZoom, { animate: false });
+            editMapHasDefaultView = true;
+        }
+        scheduleEditMapResize(60);
     };
 
     const updateLocationSummary = () => {
@@ -477,7 +511,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 map.setView([lat, lng], zoom);
                 editMapHasDefaultView = false;
             }
-            setTimeout(() => map.invalidateSize(), 150);
+            scheduleEditMapResize();
         }
         updateLocationSummary();
     };
