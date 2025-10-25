@@ -425,10 +425,13 @@ document.addEventListener('DOMContentLoaded', () => {
             return editMap;
         }
         editMap = L.map(editMapEl, { attributionControl: false });
-        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        const baseLayer = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
             maxZoom: 18,
             attribution: '&copy; <a href="https://www.openstreetmap.org">OpenStreetMap</a> contributors',
         }).addTo(editMap);
+        if (baseLayer && typeof baseLayer.on === 'function') {
+            baseLayer.on('load', () => scheduleEditMapResize([60, 220, 480]));
+        }
         const defaultZoom = Number.isFinite(DEFAULT_MAP_VIEW.zoom) ? DEFAULT_MAP_VIEW.zoom : 5;
         editMap.setView([DEFAULT_MAP_VIEW.lat, DEFAULT_MAP_VIEW.lng], defaultZoom);
         editMapHasDefaultView = true;
@@ -436,23 +439,32 @@ document.addEventListener('DOMContentLoaded', () => {
             const { lat, lng } = event.latlng;
             setEditLocation(lat, lng);
         });
-        scheduleEditMapResize(90);
+        scheduleEditMapResize([90, 260]);
         return editMap;
     };
 
-    const scheduleEditMapResize = (delay = 160) => {
+    const scheduleEditMapResize = (delays = 160) => {
         if (!editMapEl) {
             return;
         }
+        const delayList = Array.isArray(delays) ? delays : [delays];
         if (editMapResizeTimer) {
             clearTimeout(editMapResizeTimer);
         }
         editMapResizeTimer = setTimeout(() => {
-            const map = ensureEditMap();
-            if (map) {
-                map.invalidateSize(true);
-            }
-        }, delay);
+            const resizeMap = () => {
+                const mapInstance = ensureEditMap();
+                if (mapInstance) {
+                    mapInstance.invalidateSize(true);
+                }
+            };
+            let cumulativeDelay = 0;
+            delayList.forEach((value) => {
+                cumulativeDelay += Number(value) || 0;
+                setTimeout(resizeMap, cumulativeDelay);
+            });
+            requestAnimationFrame(resizeMap);
+        }, 0);
     };
 
     const refreshEditMapView = ({ force = false } = {}) => {
@@ -472,7 +484,7 @@ document.addEventListener('DOMContentLoaded', () => {
             map.setView([DEFAULT_MAP_VIEW.lat, DEFAULT_MAP_VIEW.lng], fallbackZoom, { animate: false });
             editMapHasDefaultView = true;
         }
-        scheduleEditMapResize(60);
+        scheduleEditMapResize([60, 200]);
     };
 
     const flushPendingEditLocation = () => {
@@ -517,7 +529,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 map.setView([lat, lng], zoom);
                 editMapHasDefaultView = false;
             }
-            scheduleEditMapResize();
+            scheduleEditMapResize([80, 240]);
         }
         updateLocationSummary();
     };
