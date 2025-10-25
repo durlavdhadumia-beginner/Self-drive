@@ -1,4 +1,4 @@
-"""Self-drive car rental platform with geolocation search and owner management."""
+﻿"""Self-drive car rental platform with geolocation search and owner management."""
 
 from __future__ import annotations
 
@@ -4618,9 +4618,10 @@ def owner_respond_rental(rental_id: int) -> str:
             url_for("rentals"),
         )
     elif action == "counter" and rental["owner_response"] == "pending" and rental["counter_used"] == 0:
-        try:
-            counter_total = float(request.form.get("counter_amount", "0"))
-        except ValueError:
+        raw_amount = (request.form.get("counter_amount") or "").strip()
+        normalised = raw_amount.replace("₹", "").replace(",", "").strip()
+        counter_total = parse_float(normalised)
+        if counter_total is None:
             return redirect(url_for("owner_cars"))
         note = request.form.get("counter_comment", "").strip()
         if counter_total <= 0:
