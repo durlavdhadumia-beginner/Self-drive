@@ -161,6 +161,7 @@ document.addEventListener('DOMContentLoaded', () => {
     if (editModalEl && bootstrapNamespace && typeof bootstrapNamespace.Modal === 'function') {
         editModalEl.addEventListener('shown.bs.modal', () => {
             refreshEditMapView({ force: true });
+            flushPendingEditLocation();
         });
     }
 
@@ -173,6 +174,7 @@ document.addEventListener('DOMContentLoaded', () => {
     let editMarker = null;
     let editMapHasDefaultView = false;
     let editMapResizeTimer = null;
+    let pendingEditLocation = null;
 
     const detailSummary = {
         name: detailModalEl ? detailModalEl.querySelector('[data-admin-detail="name"]') : null,
@@ -473,6 +475,16 @@ document.addEventListener('DOMContentLoaded', () => {
         scheduleEditMapResize(60);
     };
 
+    const flushPendingEditLocation = () => {
+        if (!pendingEditLocation) {
+            scheduleEditMapResize();
+            return;
+        }
+        const { lat, lng, options } = pendingEditLocation;
+        pendingEditLocation = null;
+        applyEditLocation(lat, lng, options);
+    };
+
     const updateLocationSummary = () => {
         if (!locationSummary || !editLatInput || !editLngInput) {
             return;
@@ -486,13 +498,7 @@ document.addEventListener('DOMContentLoaded', () => {
         locationSummary.textContent = `Current pin: ${lat.toFixed(4)}, ${lng.toFixed(4)}`;
     };
 
-    const setEditLocation = (lat, lng, { pan = true } = {}) => {
-        if (editLatInput) {
-            editLatInput.value = Number(lat).toFixed(6);
-        }
-        if (editLngInput) {
-            editLngInput.value = Number(lng).toFixed(6);
-        }
+    const applyEditLocation = (lat, lng, { pan = true } = {}) => {
         const map = ensureEditMap();
         if (map) {
             const hadMarker = Boolean(editMarker);
@@ -512,6 +518,30 @@ document.addEventListener('DOMContentLoaded', () => {
                 editMapHasDefaultView = false;
             }
             scheduleEditMapResize();
+        }
+        updateLocationSummary();
+    };
+
+    const setEditLocation = (lat, lng, options = {}) => {
+        const numericLat = Number(lat);
+        const numericLng = Number(lng);
+        if (editLatInput) {
+            editLatInput.value = Number.isFinite(numericLat) ? numericLat.toFixed(6) : '';
+        }
+        if (editLngInput) {
+            editLngInput.value = Number.isFinite(numericLng) ? numericLng.toFixed(6) : '';
+        }
+        if (!Number.isFinite(numericLat) || !Number.isFinite(numericLng)) {
+            pendingEditLocation = null;
+            refreshEditMapView({ force: true });
+            updateLocationSummary();
+            return;
+        }
+        if (editModalEl && editModalEl.classList.contains('show')) {
+            pendingEditLocation = null;
+            applyEditLocation(numericLat, numericLng, options);
+        } else {
+            pendingEditLocation = { lat: numericLat, lng: numericLng, options };
         }
         updateLocationSummary();
     };
