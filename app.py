@@ -212,6 +212,33 @@ def normalize_contact(username: str) -> Tuple[str, str]:
     return ("phone", normalized)
 
 
+def validate_password_strength(password: str) -> Optional[str]:
+    if len(password) < 8:
+        return "Password must be at least 8 characters long."
+    if not re.search(r"[A-Za-z]", password):
+        return "Password must include at least one letter."
+    if not re.search(r"[0-9]", password):
+        return "Password must include at least one number."
+    if not re.search(r"[^A-Za-z0-9]", password):
+        return "Password must include at least one special character."
+    return None
+
+
+def purge_user_documents(db: sqlite3.Connection, user_id: int) -> None:
+    doc_rows = db.execute(
+        "SELECT id, filename FROM user_documents WHERE user_id = ?",
+        (user_id,),
+    ).fetchall()
+    for row in doc_rows:
+        file_path = USER_DOC_ROOT.joinpath(row["filename"])
+        try:
+            file_path.unlink()
+        except FileNotFoundError:
+            pass
+    if doc_rows:
+        db.execute("DELETE FROM user_documents WHERE user_id = ?", (user_id,))
+
+
 def first_non_empty(*values: Optional[str]) -> str:
     """Return the first truthy string value (trimmed) from the inputs."""
     for value in values:
@@ -1392,6 +1419,10 @@ def profile() -> str:
             "phone", "")
     g.profile = profile_row
     message = request.args.get("message")
+    password_message = request.args.get("password_message")
+    password_error = request.args.get("password_error")
+    delete_message = request.args.get("delete_message")
+    delete_error = request.args.get("delete_error")
     error = None
     documents = fetch_user_documents(g.user["id"])
     missing_fields: List[str] = []
@@ -1492,11 +1523,67 @@ def profile() -> str:
         payout=payout_row,
         message=message,
         error=error,
+        password_message=password_message,
+        password_error=password_error,
+        delete_message=delete_message,
+        delete_error=delete_error,
         is_owner=has_role("owner"),
         documents=documents,
         missing_fields=missing_fields,
         missing_keys=missing_keys,
     )
+
+
+@app.post("/profile/change-password")
+@login_required
+def profile_change_password() -> str:
+    current_password = request.form.get("current_password", "")
+    new_password = request.form.get("new_password", "")
+    confirm_password = request.form.get("confirm_password", "")
+    if not current_password or not new_password or not confirm_password:
+        return redirect(url_for("profile", password_error="All password fields are required."))
+    db = get_db()
+    row = db.execute(
+        "SELECT password_hash FROM users WHERE id = ?",
+        (g.user["id"],),
+    ).fetchone()
+    if row is None or not check_password_hash(row["password_hash"], current_password):
+        return redirect(url_for("profile", password_error="Current password is incorrect."))
+    if new_password != confirm_password:
+        return redirect(url_for("profile", password_error="New passwords do not match."))
+    strength_error = validate_password_strength(new_password)
+    if strength_error:
+        return redirect(url_for("profile", password_error=strength_error))
+    db.execute(
+        "UPDATE users SET password_hash = ? WHERE id = ?",
+        (generate_password_hash(new_password), g.user["id"]),
+    )
+    db.commit()
+    create_notification(g.user["id"], "Your password was changed successfully.")
+    return redirect(url_for("profile", password_message="Password updated successfully."))
+
+
+@app.post("/profile/delete-account")
+@login_required
+def profile_delete_account() -> str:
+    confirm_text = request.form.get("confirm_text", "").strip().upper()
+    password = request.form.get("current_password", "")
+    if confirm_text != "DELETE":
+        return redirect(url_for("profile", delete_error='Type "DELETE" to confirm account removal.'))
+    if not password:
+        return redirect(url_for("profile", delete_error="Password is required to delete your account."))
+    db = get_db()
+    row = db.execute(
+        "SELECT password_hash FROM users WHERE id = ?",
+        (g.user["id"],),
+    ).fetchone()
+    if row is None or not check_password_hash(row["password_hash"], password):
+        return redirect(url_for("profile", delete_error="Password verification failed."))
+    purge_user_documents(db, g.user["id"])
+    anonymize_user_account(db, g.user["id"])
+    db.commit()
+    session.clear()
+    return redirect(url_for("login", message="Your account has been deleted. We're sorry to see you go."))
 
 
 @app.post("/profile/documents/<int:doc_id>/delete")
@@ -1709,6 +1796,8 @@ def admin_user_detail(user_id: int) -> str:
         (user_id,),
     ).fetchone()
     payout = dict(payout_row) if payout_row else {}
+    admin_message = request.args.get("admin_message")
+    admin_error = request.args.get("admin_error")
     return render_template(
         "admin_user_detail.html",
         user=account,
@@ -1719,6 +1808,8 @@ def admin_user_detail(user_id: int) -> str:
         cars=cars,
         city_entries=city_entries,
         delivery_choices=DELIVERY_DISTANCE_CHOICES,
+        admin_message=admin_message,
+        admin_error=admin_error,
     )
 
 
@@ -1742,6 +1833,51 @@ def admin_download_user_document(user_id: int, doc_id: int):
     if not str(resolved).startswith(str(upload_root)):
         abort(403)
     return send_from_directory(resolved.parent, resolved.name, as_attachment=True)
+
+
+@app.post("/admin/users/<int:user_id>/reset-password")
+@login_required
+@admin_required
+def admin_reset_user_password(user_id: int) -> str:
+    new_password = request.form.get("new_password", "")
+    confirm_password = request.form.get("confirm_password", "")
+    if not new_password or not confirm_password:
+        return redirect(url_for("admin_user_detail", user_id=user_id, admin_error="Enter and confirm the new password."))
+    if new_password != confirm_password:
+        return redirect(url_for("admin_user_detail", user_id=user_id, admin_error="New passwords do not match."))
+    strength_error = validate_password_strength(new_password)
+    if strength_error:
+        return redirect(url_for("admin_user_detail", user_id=user_id, admin_error=strength_error))
+    db = get_db()
+    target = db.execute("SELECT id FROM users WHERE id = ?", (user_id,)).fetchone()
+    if target is None:
+        abort(404)
+    db.execute(
+        "UPDATE users SET password_hash = ? WHERE id = ?",
+        (generate_password_hash(new_password), user_id),
+    )
+    db.commit()
+    create_notification(user_id, "An administrator reset your password. Sign in with the new credentials shared with you.")
+    return redirect(url_for("admin_user_detail", user_id=user_id, admin_message="Password updated for this account."))
+
+
+@app.post("/admin/users/<int:user_id>/delete")
+@login_required
+@admin_required
+def admin_delete_user(user_id: int) -> str:
+    confirm_text = request.form.get("confirm_text", "").strip().upper()
+    if confirm_text != "DELETE":
+        return redirect(url_for("admin_user_detail", user_id=user_id, admin_error='Type "DELETE" to confirm account removal.'))
+    if user_id == g.user["id"]:
+        return redirect(url_for("admin_user_detail", user_id=user_id, admin_error="You cannot delete your own admin account while signed in."))
+    db = get_db()
+    target = db.execute("SELECT id FROM users WHERE id = ?", (user_id,)).fetchone()
+    if target is None:
+        abort(404)
+    purge_user_documents(db, user_id)
+    anonymize_user_account(db, user_id)
+    db.commit()
+    return redirect(url_for("admin_user_detail", user_id=user_id, admin_message="Account archived and access revoked."))
 
 
 @app.post("/admin/users/<int:user_id>/verify")
@@ -4485,6 +4621,10 @@ def forgot_password() -> str:
         elif new_password != confirm_password:
             error = "Passwords do not match."
         else:
+            strength_error = validate_password_strength(new_password)
+            if strength_error:
+                error = strength_error
+        if error is None:
             db = get_db()
             user = db.execute(
                 """
@@ -4551,8 +4691,10 @@ def register() -> str:
         if error is None:
             if password != confirm_password:
                 error = "Passwords do not match."
-            elif len(password) < 8 or not re.search(r"[A-Za-z]", password) or not re.search(r"[0-9]", password) or not re.search(r"[^A-Za-z0-9]", password):
-                error = "Password must include letters, numbers, and a special character."
+            else:
+                strength_error = validate_password_strength(password)
+                if strength_error:
+                    error = strength_error
         is_admin = 0
         admin_required = form_data["admin_request"]
         if error is None and admin_required:
@@ -4600,19 +4742,51 @@ def login() -> str:
     error = None
     message = request.args.get("message")
     if request.method == "POST":
-        username = request.form.get("username", "").strip()
+        identifier = request.form.get("username", "").strip()
         password = request.form.get("password", "")
-        db = get_db()
-        user = db.execute(
-            "SELECT id, username, password_hash, role FROM users WHERE username = ?",
-            (username,),
-        ).fetchone()
-        if user is None or not check_password_hash(user["password_hash"], password):
-            error = "Invalid username or password."
+        if not identifier:
+            error = "Username or email is required."
         else:
-            session.clear()
-            session["user_id"] = user["id"]
-            return redirect(url_for("home"))
+            db = get_db()
+            identifier_lower = identifier.lower()
+            contact_type, normalized_value = normalize_contact(identifier)
+            candidates: List[str] = []
+            for candidate in (
+                identifier,
+                normalized_value if normalized_value else None,
+                identifier_lower if identifier_lower != identifier else None,
+            ):
+                if candidate and candidate not in candidates:
+                    candidates.append(candidate)
+            user_row = None
+            if candidates:
+                placeholders = ",".join("?" for _ in candidates)
+                user_row = db.execute(
+                    f"""
+                    SELECT id, username, password_hash, role
+                    FROM users
+                    WHERE username IN ({placeholders})
+                    LIMIT 1
+                    """,
+                    candidates,
+                ).fetchone()
+            if user_row is None and "@" in identifier_lower:
+                user_row = db.execute(
+                    """
+                    SELECT users.id, users.username, users.password_hash, users.role
+                    FROM users
+                    JOIN user_profiles ON user_profiles.user_id = users.id
+                    WHERE LOWER(user_profiles.email_contact) = ?
+                    LIMIT 1
+                    """,
+                    (identifier_lower,),
+                ).fetchone()
+            if user_row is None or not check_password_hash(user_row["password_hash"], password):
+                error = "Invalid username/email or password."
+            else:
+                session.clear()
+                session["user_id"] = user_row["id"]
+                return redirect(url_for("home"))
     return render_template("login.html", error=error, message=message)
 
 

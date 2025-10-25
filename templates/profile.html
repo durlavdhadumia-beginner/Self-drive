@@ -230,6 +230,61 @@
                         </ul>
                     </div>
                 </div>
+                <div class="card card-zoom mt-4">
+                    <div class="card-body">
+                        <h2 class="h5 fw-semibold mb-3">Change password</h2>
+                        <p class="text-muted small">Update your password regularly to protect your bookings and payout details.</p>
+                        {% if password_error %}
+                            <div class="alert alert-danger" role="alert">{{ password_error }}</div>
+                        {% endif %}
+                        {% if password_message %}
+                            <div class="alert alert-success" role="alert">{{ password_message }}</div>
+                        {% endif %}
+                        <form method="post" action="{{ url_for('profile_change_password') }}" class="row g-3">
+                            <div class="col-md-6">
+                                <label class="form-label" for="current_password">Current password</label>
+                                <input type="password" class="form-control" id="current_password" name="current_password" required autocomplete="current-password">
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label" for="new_password">New password</label>
+                                <input type="password" class="form-control" id="new_password" name="new_password" required autocomplete="new-password">
+                                <div class="form-text">Use at least 8 characters with letters, numbers, and a special symbol.</div>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label" for="confirm_password">Confirm new password</label>
+                                <input type="password" class="form-control" id="confirm_password" name="confirm_password" required autocomplete="new-password">
+                            </div>
+                            <div class="col-12 d-grid">
+                                <button type="submit" class="btn btn-outline-success">Update password</button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+                <div class="card card-zoom mt-4 border border-danger-subtle">
+                    <div class="card-body">
+                        <h2 class="h5 fw-semibold text-danger mb-3">Delete this account</h2>
+                        <p class="text-muted small mb-3">Removing your account will archive listings, cancel active availability, and delete personal details. This action cannot be undone.</p>
+                        {% if delete_error %}
+                            <div class="alert alert-danger" role="alert">{{ delete_error }}</div>
+                        {% endif %}
+                        {% if delete_message %}
+                            <div class="alert alert-success" role="alert">{{ delete_message }}</div>
+                        {% endif %}
+                        <form method="post" action="{{ url_for('profile_delete_account') }}" class="row g-3">
+                            <div class="col-md-6">
+                                <label class="form-label" for="delete_password">Confirm with password</label>
+                                <input type="password" class="form-control" id="delete_password" name="current_password" required autocomplete="current-password">
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label" for="delete_confirm">Type DELETE to confirm</label>
+                                <input type="text" class="form-control text-uppercase" id="delete_confirm" name="confirm_text" placeholder="DELETE" required>
+                            </div>
+                            <div class="col-12 d-flex justify-content-end gap-2">
+                                <button type="submit" class="btn btn-outline-danger">Delete my account</button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
             </div>
         </div>
     </div>

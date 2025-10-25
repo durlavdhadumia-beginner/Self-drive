@@ -282,7 +282,12 @@
                 </div>
             </div>
             <div class="col-lg-5">
-                <div class="card card-zoom h-100">
+                {% if admin_message %}
+                    <div class="alert alert-success" role="alert">{{ admin_message }}</div>
+                {% elif admin_error %}
+                    <div class="alert alert-danger" role="alert">{{ admin_error }}</div>
+                {% endif %}
+                <div class="card card-zoom mb-4">
                     <div class="card-body">
                         <h2 class="h5 fw-bold mb-3">Documents</h2>
                         {% if documents %}
@@ -305,6 +310,40 @@
                         {% else %}
                             <div class="text-muted small">No documents uploaded yet.</div>
                         {% endif %}
+                    </div>
+                </div>
+                <div class="card card-zoom mb-4">
+                    <div class="card-body">
+                        <h2 class="h6 fw-semibold mb-3">Reset password</h2>
+                        <p class="text-muted small mb-3">Set a temporary password when a user reaches out to the admin desk for help.</p>
+                        <form method="post" action="{{ url_for('admin_reset_user_password', user_id=user['id']) }}" class="row g-3">
+                            <div class="col-12">
+                                <label class="form-label small" for="admin-new-password">New password</label>
+                                <input type="password" class="form-control" id="admin-new-password" name="new_password" required>
+                            </div>
+                            <div class="col-12">
+                                <label class="form-label small" for="admin-confirm-password">Confirm new password</label>
+                                <input type="password" class="form-control" id="admin-confirm-password" name="confirm_password" required>
+                            </div>
+                            <div class="col-12 d-grid">
+                                <button type="submit" class="btn btn-outline-primary btn-sm">Update password</button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+                <div class="card card-zoom border border-danger-subtle">
+                    <div class="card-body">
+                        <h2 class="h6 fw-semibold text-danger mb-3">Archive account</h2>
+                        <p class="text-muted small mb-3">This action revokes access, hides listings, and clears personal data from support documents.</p>
+                        <form method="post" action="{{ url_for('admin_delete_user', user_id=user['id']) }}" class="row g-3">
+                            <div class="col-12">
+                                <label class="form-label small" for="admin-delete-confirm">Type DELETE to confirm</label>
+                                <input type="text" class="form-control text-uppercase" id="admin-delete-confirm" name="confirm_text" placeholder="DELETE" required>
+                            </div>
+                            <div class="col-12 d-grid">
+                                <button type="submit" class="btn btn-outline-danger btn-sm">Archive this account</button>
+                            </div>
+                        </form>
                     </div>
                 </div>
             </div>
