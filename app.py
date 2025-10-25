@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import base64
 import json
 import os
 import re
@@ -11,12 +12,15 @@ from datetime import datetime, timedelta, timezone
 from math import asin, ceil, cos, radians, sin, sqrt
 from pathlib import Path
 from typing import Callable, Dict, List, Optional, Tuple
+from urllib.error import HTTPError, URLError
+from urllib.request import Request, urlopen
 
 from flask import (
     Flask,
     abort,
     g,
     jsonify,
+    make_response,
     redirect,
     render_template,
     request,
@@ -31,6 +35,7 @@ from werkzeug.utils import secure_filename
 DATABASE = Path(__file__).with_name("car_rental.db")
 UPLOAD_ROOT = Path(__file__).with_name("static").joinpath("uploads")
 USER_DOC_ROOT = UPLOAD_ROOT.joinpath("user_docs")
+TILE_CACHE_ROOT = Path(__file__).with_name("tile_cache")
 ALLOWED_EXTENSIONS = {"png", "jpg", "jpeg", "gif", "webp"}
 DOCUMENT_EXTENSIONS = {"png", "jpg", "jpeg", "pdf"}
 PROMO_CODES: Dict[str, float] = {
@@ -62,9 +67,16 @@ DEFAULT_FUEL_TYPES: List[str] = [
     "LPG",
 ]
 DELIVERY_DISTANCE_CHOICES: List[int] = [25, 50, 100, 200]
+MAX_TILE_ZOOM = 19
+OSM_TILE_TEMPLATE = "https://tile.openstreetmap.org/{z}/{x}/{y}.png"
+OSM_TILE_USER_AGENT = "CarRentalNTravel/1.0 (support@carrentalntravel.com)"
+EMPTY_TILE_BYTES = base64.b64decode(
+    "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR4nGMAAQAABQABDQottAAAAABJRU5ErkJggg=="
+)
 
 UPLOAD_ROOT.mkdir(parents=True, exist_ok=True)
 USER_DOC_ROOT.mkdir(parents=True, exist_ok=True)
+TILE_CACHE_ROOT.mkdir(parents=True, exist_ok=True)
 
 COMPANY_SUPPORT_EMAIL = "support@carrentalntravel.com"
 COMPANY_SUPPORT_PHONE = "+91 98540 50567"
@@ -85,6 +97,51 @@ app.config.update(
     MAX_CONTENT_LENGTH=32 * 1024 * 1024,  # 32 MB per request
 )
 app.logger.setLevel("INFO")
+
+
+def get_tile_cache_path(z: int, x: int, y: int) -> Path:
+    return TILE_CACHE_ROOT.joinpath(str(z), str(x), f"{y}.png")
+
+
+def fetch_osm_tile(z: int, x: int, y: int) -> Optional[bytes]:
+    if z < 0 or z > MAX_TILE_ZOOM:
+        return None
+    limit = 2 ** z
+    if not (0 <= x < limit and 0 <= y < limit):
+        return None
+    cache_path = get_tile_cache_path(z, x, y)
+    if cache_path.exists():
+        try:
+            return cache_path.read_bytes()
+        except OSError:
+            pass
+    url = OSM_TILE_TEMPLATE.format(z=z, x=x, y=y)
+    request = Request(url, headers={"User-Agent": OSM_TILE_USER_AGENT})
+    try:
+        with urlopen(request, timeout=8) as response:
+            if getattr(response, "status", 200) != 200:
+                return None
+            data = response.read()
+    except (HTTPError, URLError, TimeoutError):
+        if cache_path.exists():
+            try:
+                return cache_path.read_bytes()
+            except OSError:
+                return None
+        return None
+    try:
+        cache_path.parent.mkdir(parents=True, exist_ok=True)
+        cache_path.write_bytes(data)
+    except OSError:
+        pass
+    return data
+
+
+def make_png_response(payload: bytes, max_age: int = 86400):
+    response = make_response(payload)
+    response.headers["Content-Type"] = "image/png"
+    response.headers["Cache-Control"] = f"public, max-age={max_age}"
+    return response
 
 
 def naive_utcnow() -> datetime:
@@ -4567,6 +4624,14 @@ def logout() -> str:
 
 with app.app_context():
     init_db()
+
+
+@app.route("/map/tiles/<int:z>/<int:x>/<int:y>.png")
+def serve_osm_tile(z: int, x: int, y: int):
+    tile_bytes = fetch_osm_tile(z, x, y)
+    if tile_bytes is None:
+        return make_png_response(EMPTY_TILE_BYTES, max_age=300)
+    return make_png_response(tile_bytes)
 
 
 @app.route("/uploads/<path:filename>")

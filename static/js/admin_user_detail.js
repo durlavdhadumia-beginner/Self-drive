@@ -380,7 +380,7 @@ document.addEventListener('DOMContentLoaded', () => {
             return detailMap;
         }
         detailMap = L.map(detailMapEl, { zoomControl: false, attributionControl: false });
-        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        L.tileLayer('/map/tiles/{z}/{x}/{y}.png', {
             maxZoom: 18,
             attribution: '&copy; <a href="https://www.openstreetmap.org">OpenStreetMap</a> contributors',
         }).addTo(detailMap);
@@ -425,7 +425,7 @@ document.addEventListener('DOMContentLoaded', () => {
             return editMap;
         }
         editMap = L.map(editMapEl, { attributionControl: false });
-        const baseLayer = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        const baseLayer = L.tileLayer('/map/tiles/{z}/{x}/{y}.png', {
             maxZoom: 18,
             attribution: '&copy; <a href="https://www.openstreetmap.org">OpenStreetMap</a> contributors',
         }).addTo(editMap);
