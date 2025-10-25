@@ -232,14 +232,14 @@
                                         <form method="post" action="{{ url_for('owner_respond_rental', rental_id=rental['id']) }}" class="d-flex flex-column flex-lg-row gap-2">
                                             <input type="hidden" name="action" value="counter">
                                             <div class="flex-grow-1 d-flex gap-2">
-                                                <input type="number" class="form-control form-control-sm" name="counter_amount" placeholder="Desired take-home (Rs)" min="0" step="50" required>
+                                                <input type="number" class="form-control form-control-sm" name="counter_amount" placeholder="Total price for renter (Rs)" min="0" step="50" required>
                                                 <input type="text" class="form-control form-control-sm" name="counter_comment" placeholder="Note (optional)">
                                             </div>
                                             <button type="submit" class="btn btn-sm btn-outline-secondary align-self-start">Counter once</button>
                                         </form>
                                         <div class="form-text text-muted small">
-                                            Current net take-home: Rs {{ rental['host_net_take_home']|round(2) }}.
-                                            Enter the amount you want to receive after the {{ rental['host_service_fee_rate'] }}% service fee &mdash; we will add fees and show the renter the adjusted price.
+                                            Current net take-home at the listed price: Rs {{ rental['host_net_take_home']|round(2) }}.
+                                            Enter the total amount you want the renter to pay. We will calculate the expected take-home after the {{ rental['host_service_fee_rate'] }}% service fee.
                                         </div>
                                     </div>
                                 </div>

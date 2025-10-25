@@ -4619,21 +4619,15 @@ def owner_respond_rental(rental_id: int) -> str:
         )
     elif action == "counter" and rental["owner_response"] == "pending" and rental["counter_used"] == 0:
         try:
-            desired_take_home = float(request.form.get("counter_amount", "0"))
+            counter_total = float(request.form.get("counter_amount", "0"))
         except ValueError:
             return redirect(url_for("owner_cars"))
         note = request.form.get("counter_comment", "").strip()
-        if desired_take_home <= 0:
+        if counter_total <= 0:
             return redirect(url_for("owner_cars"))
         delivery_fee_existing = float(rental.get("delivery_fee") or 0.0)
-        service_rate = HOST_SERVICE_FEE_RATE
-        effective_rate = min(max(service_rate, 0.0), 0.95)
-        if effective_rate >= 1:
-            effective_rate = 0.95
-        counter_total = desired_take_home / max(0.01, (1 - effective_rate))
         counter_total = max(counter_total, delivery_fee_existing)
         counter_total = round(counter_total, 2)
-        desired_take_home = round(counter_total * (1 - effective_rate), 2)
         db.execute(
             "UPDATE rentals SET owner_response = 'counter', owner_response_at = ?, counter_amount = ?, counter_comment = ?, counter_used = 1 WHERE id = ?",
             (now.isoformat(), counter_total, note, rental_id),
