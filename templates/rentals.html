@@ -146,7 +146,7 @@
 
                                     <div class="mt-auto">
                                         <div class="d-flex flex-column flex-lg-row flex-wrap gap-2 mb-3">
-                                            {% if rental['owner_response'] == 'counter' %}
+                                            {% if rental['status'] != 'cancelled' and rental['owner_response'] == 'counter' %}
                                                 <form method="post" action="{{ url_for('renter_respond_rental', rental_id=rental['id']) }}" class="d-flex gap-2">
                                                     <input type="hidden" name="action" value="accept_counter">
                                                     <button type="submit" class="btn btn-sm btn-success">Accept counter offer</button>
@@ -157,7 +157,7 @@
                                                 </form>
                                             {% endif %}
 
-                        {% if rental['owner_response'] == 'accepted' and rental['payment_status'] == 'awaiting_payment' %}
+                        {% if rental['status'] != 'cancelled' and rental['owner_response'] == 'accepted' and rental['payment_status'] == 'awaiting_payment' %}
                                             <div class="d-flex flex-column flex-sm-row align-items-sm-center gap-2">
                                                 <form method="post" action="{{ url_for('renter_payment_instructions', rental_id=rental['id']) }}">
                                                     <input type="hidden" name="payment_channel" value="upi/netbanking">
