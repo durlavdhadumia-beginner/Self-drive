@@ -27,7 +27,12 @@
                         <ul class="list-unstyled text-muted mb-0">
                             <li class="mb-2"><strong>Email:</strong> <a href="mailto:{{ support_email }}">{{ support_email }}</a></li>
                             <li class="mb-2"><strong>Phone:</strong> <a href="tel:{{ support_phone }}">{{ support_phone }}</a></li>
-                            <li class="mb-2"><strong>WhatsApp:</strong> <a href="https://wa.me/{{ support_whatsapp.lstrip('+') }}" target="_blank" rel="noopener">{{ support_phone }}</a></li>
+                            <li class="mb-2">
+                                <strong>WhatsApp:</strong>
+                                <a href="https://wa.me/{{ support_whatsapp.lstrip('+') }}" target="_blank" rel="noopener" class="text-success ms-1" aria-label="Chat with us on WhatsApp">
+                                    <i class="bi bi-whatsapp fs-4"></i>
+                                </a>
+                            </li>
                             <li class="mb-0"><strong>Registered address:</strong><br>
                                 #2, Ground Floor, Shantaram Complex, near UCO Bank,<br>
                                 Sonapur New Market, Sonapur, Kamrup Metro,<br>

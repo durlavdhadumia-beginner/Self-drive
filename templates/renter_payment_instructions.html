@@ -61,7 +61,7 @@
                         <div class="row g-4">
                             <div class="col-md-6">
                                 <div class="border rounded-4 p-3 h-100">
-                                    <h2 class="h6 fw-semibold mb-3">Bank transfer</h2>
+                                    <h2 class="h6 fw-semibold mb-3">Bank transfer <span class="text-danger text-uppercase small fw-semibold">(IMPS Only)</span></h2>
                                     <ul class="list-unstyled text-muted small mb-0">
                                         {% if payment_account.bank_name %}<li><strong>Bank:</strong> {{ payment_account.bank_name }}</li>{% endif %}
                                         {% if payment_account.account_holder %}<li><strong>Account holder:</strong> {{ payment_account.account_holder }}</li>{% endif %}
@@ -89,12 +89,15 @@
                                 <p class="text-muted small mb-2">
                                     Call us on <a href="tel:{{ support_phone }}">{{ support_phone }}</a><br>
                                     Email <a href="mailto:{{ support_email }}">{{ support_email }}</a><br>
-                                    Chat via <a href="{{ whatsapp_link }}" target="_blank" rel="noopener">WhatsApp ({{ support_phone }})</a>
+                                    Chat via <a href="{{ whatsapp_link }}" target="_blank" rel="noopener" class="text-success ms-1" aria-label="Chat with support on WhatsApp"><i class="bi bi-whatsapp fs-5"></i></a>
                                 </p>
                             </div>
                         </div>
 
                         <form method="post" action="{{ url_for('renter_confirm_payment', rental_id=rental.id) }}" class="mt-4">
+                            <div class="alert alert-danger text-center fw-semibold mb-3" role="alert">
+                                Please click the payment completed button below only after making the payment.
+                            </div>
                             <input type="hidden" name="payment_channel" value="{{ payment_channel }}">
                             <button type="submit" class="btn btn-success w-100">I've completed the payment</button>
                         </form>
