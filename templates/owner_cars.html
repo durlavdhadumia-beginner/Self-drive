@@ -708,6 +708,59 @@
     <script>window.OWNER_CITY_ENTRIES = {{ city_entries|tojson|safe }};</script>
     <script src="{{ url_for('static', filename='vendor/leaflet/leaflet.js') }}"></script>
     <script src="{{ url_for('static', filename='js/owner_dashboard.js') }}"></script>
+    <script>
+        (function () {
+            const ensureInlineCounterConfirm = () => {
+                if (typeof window.confirmCounter !== 'function') {
+                    window.confirmCounter = (form) => {
+                        if (!form) {
+                            return true;
+                        }
+                        const actionInput = form.querySelector('input[name="action"]');
+                        if (!actionInput || actionInput.value !== 'counter') {
+                            return true;
+                        }
+                        const amountInput = form.querySelector('input[name="counter_amount"]');
+                        if (!amountInput) {
+                            return true;
+                        }
+                        const originalAttr = form.getAttribute('data-original-total');
+                        const originalTotal = parseFloat(originalAttr);
+                        if (!Number.isFinite(originalTotal)) {
+                            return true;
+                        }
+                        const enteredRaw = (amountInput.value || '').replace(/[\u20B9,]/g, '').trim();
+                        const enteredAmount = parseFloat(enteredRaw);
+                        if (!Number.isFinite(enteredAmount)) {
+                            return true;
+                        }
+                        if (enteredAmount < originalTotal) {
+                            const message = `Do you want to make the revised offer less than the original total amount of Rs ${originalTotal.toFixed(2)}?`;
+                            return window.confirm(message);
+                        }
+                        return true;
+                    };
+                }
+                document.querySelectorAll('form[data-counter-form]').forEach((form) => {
+                    if (form.dataset.counterConfirmInline === '1') {
+                        return;
+                    }
+                    form.addEventListener('submit', (event) => {
+                        if (!window.confirmCounter(form)) {
+                            event.preventDefault();
+                            event.stopImmediatePropagation();
+                        }
+                    }, true);
+                    form.dataset.counterConfirmInline = '1';
+                });
+            };
+            if (document.readyState === 'complete' || document.readyState === 'interactive') {
+                ensureInlineCounterConfirm();
+            } else {
+                document.addEventListener('DOMContentLoaded', ensureInlineCounterConfirm);
+            }
+        })();
+    </script>
 {% endblock %}
 
 
