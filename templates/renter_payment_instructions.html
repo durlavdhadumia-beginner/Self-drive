@@ -94,7 +94,17 @@
                             </div>
                         </div>
 
-                        <form method="post" action="{{ url_for('renter_confirm_payment', rental_id=rental.id) }}" class="mt-4">
+                        <form method="post" action="{{ url_for('renter_confirm_payment', rental_id=rental.id) }}" class="mt-4" data-payment-confirm
+                              data-whatsapp-base="{{ whatsapp_link }}"
+                              data-booking-id="{{ rental.id }}"
+                              data-vehicle="{{ rental.car_label }}{% if rental.licence_plate %} ({{ rental.licence_plate }}){% endif %}"
+                              data-trip-start="{{ rental.start_time|trip_datetime }}"
+                              data-trip-end="{{ rental.end_time|trip_datetime }}"
+                              data-destinations="{{ rental.trip_destinations_text or 'Not shared' }}"
+                              data-rental-amount="{{ payment_summary.rental_amount|round(2) }}"
+                              data-delivery-amount="{{ payment_summary.delivery_fee|round(2) }}"
+                              data-total-amount="{{ payment_summary.total_amount|round(2) }}"
+                              data-payment-channel="{{ payment_channel }}">
                             <div class="alert alert-danger text-center fw-semibold mb-3" role="alert">
                                 Please click the payment completed button below only after making the payment.
                             </div>
@@ -111,4 +121,51 @@
         </div>
     </div>
 </section>
+{% block scripts %}
+{{ super() }}
+<script>
+    (function () {
+        const form = document.querySelector('form[data-payment-confirm]');
+        if (!form) {
+            return;
+        }
+        const buildMessage = () => {
+            const bookingId = form.dataset.bookingId || 'N/A';
+            const vehicle = form.dataset.vehicle || 'Vehicle';
+            const tripStart = form.dataset.tripStart || '';
+            const tripEnd = form.dataset.tripEnd || '';
+            const destinations = form.dataset.destinations || 'Not shared';
+            const rentalAmount = form.dataset.rentalAmount || '0.00';
+            const deliveryAmount = form.dataset.deliveryAmount || '0.00';
+            const totalAmount = form.dataset.totalAmount || '0.00';
+            const paymentChannel = form.dataset.paymentChannel || 'UPI/Netbanking';
+            return [
+                `Payment confirmation for booking #${bookingId}`,
+                ``,
+                `Vehicle: ${vehicle}`,
+                `Trip: ${tripStart} to ${tripEnd}`,
+                `Destinations: ${destinations}`,
+                ``,
+                `Charges:`,
+                `- Rental: Rs ${rentalAmount}`,
+                `- Delivery: Rs ${deliveryAmount}`,
+                `- Total paid: Rs ${totalAmount}`,
+                ``,
+                `Payment channel: ${paymentChannel}`,
+                `Kindly verify and mark the payment received.`
+            ].join('\n');
+        };
+        form.addEventListener('submit', () => {
+            const base = form.dataset.whatsappBase;
+            if (!base) {
+                return;
+            }
+            const message = buildMessage();
+            const encoded = encodeURIComponent(message);
+            const whatsappUrl = `${base}?text=${encoded}`;
+            window.open(whatsappUrl, '_blank', 'noopener');
+        }, { capture: true });
+    })();
+</script>
+{% endblock %}
 {% endblock %}

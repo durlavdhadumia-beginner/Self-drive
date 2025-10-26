@@ -3326,6 +3326,20 @@ def renter_payment_page(rental_id: int) -> str:
 
 def build_renter_payment_context(rental_row: sqlite3.Row) -> Tuple[Dict[str, object], Dict[str, float]]:
     rental_dict = dict(rental_row)
+    try:
+        destinations = json.loads(rental_dict.get("trip_destinations") or "[]")
+        if isinstance(destinations, list):
+            cleaned_destinations = [
+                str(destination).strip()
+                for destination in destinations
+                if isinstance(destination, (str, int, float)) and str(destination).strip()
+            ]
+        else:
+            cleaned_destinations = []
+    except (TypeError, ValueError, json.JSONDecodeError):
+        cleaned_destinations = []
+    rental_dict["trip_destinations_list"] = cleaned_destinations
+    rental_dict["trip_destinations_text"] = ", ".join(cleaned_destinations)
     car_label = rental_dict.get("car_name") or f"{rental_dict.get('brand', '')} {rental_dict.get('model', '')}".strip()
     rental_dict["car_label"] = car_label.strip() or "Vehicle"
     rental_dict["owner_public_name"] = build_public_label(
