@@ -16,21 +16,24 @@
                     <table class="table align-middle">
                         <thead>
                             <tr>
-                                <th>ID</th>
+                                <th>Booking ID</th>
                                 <th>Vehicle</th>
                                 <th>Renter</th>
                                 <th>Owner</th>
                                 <th>Schedule</th>
                                 <th>Status</th>
-                                <th>Payment</th>
-                                <th>Payout</th>
+                                <th>Payment by renter</th>
+                                <th>Payout to host</th>
                                 <th class="text-end">Actions</th>
                             </tr>
                         </thead>
                         <tbody>
                             {% for rental in rentals %}
                                 <tr>
-                                    <td>{{ rental['id'] }}</td>
+                                    <td>
+                                        <div class="fw-semibold">{{ rental['booking_identifier'] }}</div>
+                                        <div class="text-muted small">#{{ rental['id'] }}</div>
+                                    </td>
                                     <td>{{ rental['car_name'] }}<br><span class="text-muted small">{{ rental['brand'] }} {{ rental['model'] }}</span>
                                         {% if rental['images'] %}
                                             <div class="d-flex flex-wrap gap-1 mt-2">
@@ -57,8 +60,9 @@
                                     <td>{{ rental['status']|capitalize }}</td>
                                     <td>{{ rental['payment_status']|replace('_', ' ')|capitalize }}<br><span class="text-muted small">Due: {{ rental['payment_due_at'] or '-' }}</span><br><span class="text-muted small">Total: Rs {{ rental['total_amount']|round|int }}</span></td>
                                     <td>
-                                        <div class="fw-semibold">Owner share: Rs {{ rental['owner_payout_amount']|round(2) }}</div>
-                                        <div class="text-muted small">Commission: Rs {{ rental['company_commission_amount']|round(2) }} ({{ commission_rate }}%)</div>
+                                        <div class="fw-semibold">Owner share (Net take-home): Rs {{ rental['owner_share_amount']|round(2) }}</div>
+                                        <div class="text-muted small">Advance amount paid (10%): Rs {{ rental['owner_advance_amount']|round(2) }}</div>
+                                        <div class="text-muted small">Balance pending: Rs {{ rental['owner_balance_amount']|round(2) }}</div>
                                         <div class="text-muted small">Status: {{ rental['owner_payout_status']|capitalize }}</div>
                                         {% if rental['owner_payout_released_at'] %}
                                             <div class="text-muted small">Released: {{ rental['owner_payout_released_at'] }}</div>

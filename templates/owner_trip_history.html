@@ -28,6 +28,42 @@
             color: #64748b;
             font-style: italic;
         }
+        .map-pin {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 28px;
+            height: 28px;
+            border-radius: 50%;
+            border: 2px solid #fff;
+            font-weight: 600;
+            color: #fff;
+            box-shadow: 0 6px 12px rgba(15, 118, 110, 0.25);
+            position: relative;
+        }
+        .map-pin::after {
+            content: "";
+            position: absolute;
+            bottom: -8px;
+            left: 50%;
+            margin-left: -6px;
+            width: 0;
+            height: 0;
+            border: 6px solid transparent;
+            border-top-color: currentColor;
+        }
+        .map-pin-labeled {
+            font-size: 0.75rem;
+        }
+        .map-pin-car {
+            background: #2563eb;
+        }
+        .map-pin-delivery {
+            background: #0d9488;
+        }
+        .map-pin-destination {
+            background: #9333ea;
+        }
     </style>
 {% endblock %}
 {% block content %}

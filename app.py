@@ -3,15 +3,18 @@
 from __future__ import annotations
 
 import base64
+import csv
 import json
 import os
 import re
 import sqlite3
+from collections import defaultdict
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
+from functools import lru_cache
 from math import asin, ceil, cos, radians, sin, sqrt
 from pathlib import Path
-from typing import Callable, Dict, List, Optional, Tuple
+from typing import Any, Callable, Dict, List, Optional, Tuple
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 
@@ -36,6 +39,7 @@ DATABASE = Path(__file__).with_name("car_rental.db")
 UPLOAD_ROOT = Path(__file__).with_name("static").joinpath("uploads")
 USER_DOC_ROOT = UPLOAD_ROOT.joinpath("user_docs")
 TILE_CACHE_ROOT = Path(__file__).with_name("tile_cache")
+STATE_CODE_FILE = Path(__file__).with_name("state_codes.csv")
 ALLOWED_EXTENSIONS = {"png", "jpg", "jpeg", "gif", "webp"}
 DOCUMENT_EXTENSIONS = {"png", "jpg", "jpeg", "pdf"}
 PROMO_CODES: Dict[str, float] = {
@@ -43,7 +47,7 @@ PROMO_CODES: Dict[str, float] = {
     "WEEKEND15": 0.15,
     "FIRSTDRIVE": 0.20,
 }
-COMPANY_COMMISSION_RATE = 0.10
+COMPANY_COMMISSION_RATE = 0.40
 OWNER_INITIAL_PAYOUT_RATE = 0.10
 OWNER_FINAL_PAYOUT_RATE = 0.90
 HOST_SERVICE_FEE_RATE = 0.40
@@ -73,6 +77,50 @@ OSM_TILE_USER_AGENT = "CarRentalNTravel/1.0 (support@carrentalntravel.com)"
 EMPTY_TILE_BYTES = base64.b64decode(
     "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR4nGMAAQAABQABDQottAAAAABJRU5ErkJggg=="
 )
+
+DEFAULT_STATE_CODES: Dict[str, str] = {
+    "andaman and nicobar islands": "AN",
+    "andhra pradesh": "AP",
+    "arunachal pradesh": "AR",
+    "assam": "AS",
+    "bihar": "BR",
+    "chandigarh": "CH",
+    "chhattisgarh": "CG",
+    "dadra and nagar haveli": "DN",
+    "daman and diu": "DD",
+    "dadra and nagar haveli and daman and diu": "DH",
+    "delhi": "DL",
+    "goa": "GA",
+    "gujarat": "GJ",
+    "haryana": "HR",
+    "himachal pradesh": "HP",
+    "jammu and kashmir": "JK",
+    "jammu & kashmir": "JK",
+    "jharkhand": "JH",
+    "karnataka": "KA",
+    "kerala": "KL",
+    "ladakh": "LA",
+    "lakshadweep": "LD",
+    "madhya pradesh": "MP",
+    "maharashtra": "MH",
+    "manipur": "MN",
+    "meghalaya": "ML",
+    "mizoram": "MZ",
+    "nagaland": "NL",
+    "odisha": "OD",
+    "orissa": "OD",
+    "puducherry": "PY",
+    "punjab": "PB",
+    "rajasthan": "RJ",
+    "sikkim": "SK",
+    "tamil nadu": "TN",
+    "telangana": "TS",
+    "tripura": "TR",
+    "uttar pradesh": "UP",
+    "uttarakhand": "UK",
+    "uttaranchal": "UK",
+    "west bengal": "WB",
+}
 
 UPLOAD_ROOT.mkdir(parents=True, exist_ok=True)
 USER_DOC_ROOT.mkdir(parents=True, exist_ok=True)
@@ -314,6 +362,139 @@ def load_city_entries(include_coordinates: bool = False) -> List[Dict[str, objec
         for row in fallback_rows:
             _append(row["city"] or "", "", row["latitude"], row["longitude"])
     return entries
+
+
+@lru_cache(maxsize=16)
+def _load_state_code_mapping_cached(mtime: Optional[float]) -> Dict[str, str]:
+    """Return mapping of state/UT names to codes, memoized by file mtime."""
+    mapping: Dict[str, str] = {
+        key.lower(): value.upper() for key, value in DEFAULT_STATE_CODES.items()
+    }
+    if mtime is not None:
+        try:
+            with STATE_CODE_FILE.open(newline="", encoding="utf-8") as handle:
+                reader = csv.DictReader(handle)
+                for row in reader:
+                    if not row:
+                        continue
+                    raw_state = (
+                        row.get("state")
+                        or row.get("State")
+                        or row.get("name")
+                        or row.get("Name")
+                        or ""
+                    ).strip()
+                    raw_code = (
+                        row.get("code")
+                        or row.get("Code")
+                        or row.get("abbr")
+                        or row.get("Abbr")
+                        or row.get("abbreviation")
+                        or ""
+                    ).strip()
+                    if not raw_state or len(raw_code) != 2:
+                        continue
+                    mapping[raw_state.lower()] = raw_code.upper()
+        except (OSError, csv.Error):
+            pass
+    return mapping
+
+
+def load_state_code_mapping() -> Dict[str, str]:
+    """Return mapping of state/UT names (lowercase) to their two-letter codes."""
+    try:
+        mtime = STATE_CODE_FILE.stat().st_mtime
+    except OSError:
+        mtime = None
+    return _load_state_code_mapping_cached(mtime)
+
+
+@lru_cache(maxsize=1)
+def get_city_state_lookup() -> Dict[str, str]:
+    """Return mapping of city names (lowercase) to their parent state names."""
+    entries = load_city_entries()
+    lookup: Dict[str, str] = {}
+    for entry in entries:
+        name = (entry.get("name") or "").strip().lower()
+        state = (entry.get("state") or "").strip()
+        if name and state and name not in lookup:
+            lookup[name] = state
+    return lookup
+
+
+def extract_state_from_label(label: str) -> Optional[str]:
+    """Extract a recognized state/UT name from a comma-separated label."""
+    text = (label or "").strip()
+    if not text:
+        return None
+    mapping = load_state_code_mapping()
+    reverse_mapping = {code: name for name, code in mapping.items()}
+    parts = [part.strip() for part in re.split(r",|\n", text) if part.strip()]
+    for part in reversed(parts):
+        key = part.lower()
+        if key in mapping:
+            return part
+        code_candidate = re.sub(r"[^A-Za-z]", "", part).upper()
+        if len(code_candidate) == 2 and code_candidate in reverse_mapping:
+            return reverse_mapping[code_candidate]
+    return None
+
+
+def infer_state_code_for_rental(rental: Dict[str, Any]) -> str:
+    """Infer a booking state code using available rental metadata."""
+    mapping = load_state_code_mapping()
+    valid_codes = set(mapping.values())
+    city_state_lookup = get_city_state_lookup()
+    state_candidates: List[str] = []
+
+    def _append_state(candidate: Optional[str]) -> None:
+        if candidate:
+            state_candidates.append(candidate.strip())
+
+    car_city = (rental.get("car_city") or "").strip()
+    if car_city:
+        _append_state(extract_state_from_label(car_city))
+        lower_city = car_city.lower()
+        if lower_city in city_state_lookup:
+            _append_state(city_state_lookup[lower_city])
+
+    delivery_address = (rental.get("delivery_address") or "").strip()
+    _append_state(extract_state_from_label(delivery_address))
+
+    destinations = rental.get("trip_destinations_list") or []
+    if isinstance(destinations, list):
+        for destination in destinations:
+            if isinstance(destination, str):
+                state_name = extract_state_from_label(destination)
+                if state_name:
+                    _append_state(state_name)
+                    break
+            elif isinstance(destination, dict):
+                label = (
+                    destination.get("name")
+                    or destination.get("label")
+                    or destination.get("display")
+                    or ""
+                )
+                state_name = extract_state_from_label(label)
+                if state_name:
+                    _append_state(state_name)
+                    break
+
+    for candidate in state_candidates:
+        key = candidate.lower()
+        if key in mapping:
+            return mapping[key]
+
+    licence_plate = (rental.get("licence_plate") or "").upper()
+    if licence_plate:
+        match = re.search(r"([A-Z]{2})", licence_plate)
+        if match:
+            code_candidate = match.group(1)
+            if code_candidate in valid_codes:
+                return code_candidate
+
+    return "NA"
 
 
 def load_vehicle_type_options() -> List[str]:
@@ -1902,6 +2083,8 @@ def admin_rentals() -> str:
         """
         SELECT rentals.*,
                cars.name AS car_name, cars.brand, cars.model,
+               cars.city AS car_city,
+               cars.licence_plate AS licence_plate,
                COALESCE(renters.account_name, renters.username) AS renter_display_name,
                COALESCE(owners.account_name, owners.username) AS owner_display_name,
                renters.username AS renter_username,
@@ -1918,6 +2101,52 @@ def admin_rentals() -> str:
     car_images = fetch_car_images([row["car_id"] for row in rentals])
     for rental in rentals:
         rental["images"] = car_images.get(rental["car_id"], [])
+        try:
+            rental["trip_destinations_list"] = json.loads(rental.get("trip_destinations") or "[]")
+        except (TypeError, json.JSONDecodeError):
+            rental["trip_destinations_list"] = []
+        state_code = infer_state_code_for_rental(rental)
+        rental["booking_state_code"] = state_code
+        start_time_raw = rental.get("start_time") or rental.get("created_at") or ""
+        start_dt: Optional[datetime]
+        if start_time_raw:
+            try:
+                start_dt = datetime.fromisoformat(start_time_raw)
+            except ValueError:
+                try:
+                    start_dt = datetime.strptime(start_time_raw, "%Y-%m-%d %H:%M:%S")
+                except ValueError:
+                    start_dt = None
+        else:
+            start_dt = None
+        if start_dt is None:
+            start_dt = datetime.utcnow()
+        rental["_booking_datetime"] = start_dt
+        rental["_booking_date_str"] = start_dt.strftime("%Y%m%d")
+        owner_share = max(0.0, float(rental.get("owner_payout_amount") or 0.0))
+        rental["owner_share_amount"] = round(owner_share, 2)
+        rental["owner_advance_amount"] = round(owner_share * OWNER_INITIAL_PAYOUT_RATE, 2)
+        rental["owner_balance_amount"] = max(0.0, round(owner_share - rental["owner_advance_amount"], 2))
+
+    booking_counters: Dict[Tuple[str, str], int] = defaultdict(int)
+    for rental in sorted(
+        rentals,
+        key=lambda item: (
+            item["_booking_datetime"].date(),
+            item["_booking_datetime"],
+            item.get("id") or 0,
+        ),
+    ):
+        date_str = rental["_booking_date_str"]
+        state_code = rental["booking_state_code"]
+        counter_key = (date_str, state_code)
+        booking_counters[counter_key] += 1
+        serial_number = booking_counters[counter_key]
+        rental["booking_identifier"] = f"{date_str}-{state_code}-{serial_number:06d}"
+
+    for rental in rentals:
+        rental.pop("_booking_datetime", None)
+        rental.pop("_booking_date_str", None)
     return render_template(
         "admin_rentals.html",
         rentals=rentals,
@@ -3633,12 +3862,23 @@ def build_owner_dashboard_context(owner_id: int) -> Dict[str, object]:
         initial_paid = float(rental.get("owner_initial_payout_amount") or 0.0) if initial_status == "paid" else 0.0
         final_paid = float(rental.get("owner_final_payout_amount") or 0.0) if final_status == "paid" else 0.0
         owner_net = float(rental.get("host_net_take_home") or 0.0)
-        owner_total_paid = initial_paid + final_paid
+        owner_total_paid = max(0.0, round(initial_paid + final_paid, 2))
         if owner_total_paid <= 0 and owner_status == "paid":
             owner_total_paid = float(rental.get("owner_payout_amount") or owner_net)
         owner_total_paid = min(owner_net, round(owner_total_paid, 2)) if owner_net else round(owner_total_paid, 2)
-        rental["host_amount_received"] = owner_total_paid
-        rental["host_amount_balance"] = max(0.0, round(owner_net - owner_total_paid, 2))
+        expected_initial = min(owner_net, round(owner_net * OWNER_INITIAL_PAYOUT_RATE, 2)) if owner_net else 0.0
+        received_amount = 0.0
+        if (rental.get("owner_final_payout_status") or "").lower() == "paid" or owner_status == "paid":
+            received_amount = owner_net
+        elif ((rental.get("owner_initial_payout_status") or "").lower() == "paid" or (rental.get("payment_status") or "").lower() == "paid") and expected_initial:
+            received_amount = expected_initial
+        else:
+            received_amount = owner_total_paid
+            if expected_initial and received_amount > expected_initial:
+                received_amount = expected_initial
+        received_amount = min(owner_net, round(received_amount, 2)) if owner_net else round(received_amount, 2)
+        rental["host_amount_received"] = received_amount
+        rental["host_amount_balance"] = max(0.0, round(owner_net - received_amount, 2))
         delivery_lat = rental.get("delivery_latitude")
         delivery_lng = rental.get("delivery_longitude")
         rental["delivery_latitude"] = float(delivery_lat) if delivery_lat is not None else None
@@ -3821,11 +4061,28 @@ def owner_trip_list(category: str) -> str:
     trips = []
     for rental in trip_map[category]:
         trip = dict(rental)
-        amount_received = float(trip.get("owner_initial_payout_amount") or 0.0)
-        trip["host_amount_received"] = round(amount_received, 2)
-        trip["host_amount_balance"] = max(
-            0.0, round(float(trip.get("host_net_take_home") or 0.0) - amount_received, 2)
-        )
+        host_net = float(trip.get("host_net_take_home") or 0.0)
+        initial_status = (trip.get("owner_initial_payout_status") or "").lower()
+        final_status = (trip.get("owner_final_payout_status") or "").lower()
+        payout_status = (trip.get("owner_payout_status") or "").lower()
+        payment_status = (trip.get("payment_status") or "").lower()
+        initial_paid = float(trip.get("owner_initial_payout_amount") or 0.0) if initial_status == "paid" else 0.0
+        final_paid = float(trip.get("owner_final_payout_amount") or 0.0) if final_status == "paid" else 0.0
+        total_paid = max(0.0, round(initial_paid + final_paid, 2))
+        if total_paid <= 0 and payout_status == "paid":
+            total_paid = host_net
+        expected_initial = min(host_net, round(host_net * OWNER_INITIAL_PAYOUT_RATE, 2)) if host_net else 0.0
+        if final_status == "paid" or payout_status == "paid":
+            received_amount = host_net
+        elif (initial_status == "paid" or payment_status == "paid") and expected_initial:
+            received_amount = expected_initial
+        else:
+            received_amount = total_paid
+            if expected_initial and received_amount > expected_initial:
+                received_amount = expected_initial
+        received_amount = min(host_net, round(received_amount, 2)) if host_net else round(received_amount, 2)
+        trip["host_amount_received"] = received_amount
+        trip["host_amount_balance"] = max(0.0, round(host_net - received_amount, 2))
         trips.append(trip)
     title_lookup = {
         "active": "Trips currently in progress",

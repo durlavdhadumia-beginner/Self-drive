@@ -11,6 +11,21 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     const DEFAULT_VIEW = { lat: 20.5937, lng: 78.9629, zoom: 5 };
+    const buildLocationIcon = (baseClass = 'map-pin-car', label = '') => {
+        if (typeof L === 'undefined' || !L.divIcon) {
+            return undefined;
+        }
+        return L.divIcon({
+            className: '',
+            html: `<span class="map-pin ${baseClass} ${label ? 'map-pin-labeled' : ''}">${label}</span>`,
+            iconSize: [30, 30],
+            iconAnchor: [15, 28],
+            popupAnchor: [0, -20],
+        });
+    };
+    const carIcon = buildLocationIcon('map-pin-car', 'C');
+    const deliveryIcon = buildLocationIcon('map-pin-delivery', 'D');
+    const destinationIcon = (index) => buildLocationIcon('map-pin-destination', String(index + 1));
 
     mapContainers.forEach((container) => {
         const hasGps = container.getAttribute('data-has-gps') === '1';
@@ -45,13 +60,17 @@ document.addEventListener('DOMContentLoaded', () => {
             if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
                 return;
             }
-            L.marker([lat, lng], options).addTo(map);
+            const markerOptions = { ...options };
+            if (!markerOptions.icon) {
+                delete markerOptions.icon;
+            }
+            L.marker([lat, lng], markerOptions).addTo(map);
             bounds.push([lat, lng]);
             routePoints.push([lat, lng]);
         };
 
         if (Number.isFinite(carLat) && Number.isFinite(carLng)) {
-            addMarker(carLat, carLng, { title: 'Vehicle location' });
+            addMarker(carLat, carLng, { title: 'Vehicle location', icon: carIcon });
         }
 
         destinations.forEach((destination, index) => {
@@ -60,11 +79,14 @@ document.addEventListener('DOMContentLoaded', () => {
             if (!Number.isFinite(destLat) || !Number.isFinite(destLng)) {
                 return;
             }
-            addMarker(destLat, destLng, { title: destination.name || `Destination ${index + 1}` });
+            addMarker(destLat, destLng, {
+                title: destination.name || `Destination ${index + 1}`,
+                icon: destinationIcon(index),
+            });
         });
 
         if (Number.isFinite(deliveryLat) && Number.isFinite(deliveryLng)) {
-            addMarker(deliveryLat, deliveryLng, { title: 'Delivery location' });
+            addMarker(deliveryLat, deliveryLng, { title: 'Delivery location', icon: deliveryIcon });
         }
 
         if (routePoints.length >= 2) {
