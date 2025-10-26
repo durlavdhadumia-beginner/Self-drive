@@ -4618,6 +4618,7 @@ def owner_respond_rental(rental_id: int) -> str:
             url_for("rentals"),
         )
     elif action == "counter" and rental["owner_response"] == "pending" and rental["counter_used"] == 0:
+        delivery_fee_existing = float(rental["delivery_fee"] or 0.0)
         raw_amount = (request.form.get("counter_amount") or "").strip()
         normalised = raw_amount.replace("₹", "").replace(",", "").strip()
         counter_total = parse_float(normalised)
@@ -4626,7 +4627,6 @@ def owner_respond_rental(rental_id: int) -> str:
         note = request.form.get("counter_comment", "").strip()
         if counter_total <= 0:
             return redirect(url_for("owner_cars"))
-        delivery_fee_existing = float(rental.get("delivery_fee") or 0.0)
         counter_total = max(counter_total, delivery_fee_existing)
         counter_total = round(counter_total, 2)
         db.execute(
