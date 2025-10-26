@@ -1,35 +1,56 @@
-if (typeof window !== 'undefined' && typeof window.confirmCounter !== 'function') {
-    window.confirmCounter = (form) => {
-        if (!form) {
+const ensureCounterConfirm = (() => {
+    if (typeof window === 'undefined') {
+        return () => {};
+    }
+    if (typeof window.confirmCounter !== 'function') {
+        window.confirmCounter = (form) => {
+            if (!form) {
+                return true;
+            }
+            const actionInput = form.querySelector('input[name="action"]');
+            if (!actionInput || actionInput.value !== 'counter') {
+                return true;
+            }
+            const amountInput = form.querySelector('input[name="counter_amount"]');
+            if (!amountInput) {
+                return true;
+            }
+            const originalAttr = form.getAttribute('data-original-total');
+            const originalTotal = parseFloat(originalAttr);
+            if (!Number.isFinite(originalTotal)) {
+                return true;
+            }
+            const enteredRaw = (amountInput.value || '').replace(/[\u20B9,]/g, '').trim();
+            const enteredAmount = parseFloat(enteredRaw);
+            if (!Number.isFinite(enteredAmount)) {
+                return true;
+            }
+            if (enteredAmount < originalTotal) {
+                const message = `Do you want to make the revised offer less than the original total amount of Rs ${originalTotal.toFixed(2)}?`;
+                return window.confirm(message);
+            }
             return true;
-        }
-        const actionInput = form.querySelector('input[name="action"]');
-        if (!actionInput || actionInput.value !== 'counter') {
-            return true;
-        }
-        const amountInput = form.querySelector('input[name="counter_amount"]');
-        if (!amountInput) {
-            return true;
-        }
-        const originalAttr = form.getAttribute('data-original-total');
-        const originalTotal = parseFloat(originalAttr);
-        if (!Number.isFinite(originalTotal)) {
-            return true;
-        }
-        const enteredRaw = (amountInput.value || '').replace(/[\u20B9,]/g, '').trim();
-        const enteredAmount = parseFloat(enteredRaw);
-        if (!Number.isFinite(enteredAmount)) {
-            return true;
-        }
-        if (enteredAmount < originalTotal) {
-            const message = `Do you want to make the revised offer less than the original total amount of Rs ${originalTotal.toFixed(2)}?`;
-            return window.confirm(message);
-        }
-        return true;
+        };
+    }
+    const bindForms = () => {
+        document.querySelectorAll('form[data-counter-form]').forEach((form) => {
+            if (form.dataset.counterConfirmBound === '1') {
+                return;
+            }
+            form.addEventListener('submit', (event) => {
+                if (!window.confirmCounter(form)) {
+                    event.preventDefault();
+                    event.stopImmediatePropagation();
+                }
+            }, { capture: true });
+            form.dataset.counterConfirmBound = '1';
+        });
     };
-}
+    return bindForms;
+})();
 
 document.addEventListener('DOMContentLoaded', () => {
+    ensureCounterConfirm();
     const MAX_GALLERY_IMAGES = 8;
     const DEFAULT_MAP_VIEW = { lat: 20.5937, lng: 78.9629, zoom: 5 };
     const buildLocationIcon = (className = 'map-pin-car', label = '') => L.divIcon({
