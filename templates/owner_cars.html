@@ -189,13 +189,15 @@
                                     <div class="text-muted small">Trip start: {{ rental['start_time']|trip_datetime }}</div>
                                     <div class="text-muted small mb-2">Trip end: {{ rental['end_time']|trip_datetime }}</div>
                                     <div class="text-muted small">Rental: Rs {{ (base_amount or 0)|round(2) }}</div>
-                                    <div class="text-muted small">
-                                        {% if rental['delivery_type'] == 'delivery' %}
-                                            Delivery: Rs {{ delivery_fee|round(2) }}
-                                        {% else %}
-                                            Delivery: Pickup only
-                                        {% endif %}
-                                    </div>
+                                        <div class="text-muted small">
+                                            {% if rental['delivery_type'] == 'delivery' %}
+                                                Delivery: Rs {{ delivery_fee|round(2) }}
+                                            {% else %}
+                                                Delivery: Pickup only
+                                            {% endif %}
+                                        </div>
+                                        <div class="fw-semibold text-danger" style="color:#7d1d31;">Total: Rs {{ (base_amount + delivery_fee)|round(2) }}</div>
+                                    <div class="fw-semibold text-danger" style="color:#7d1d31;">Total: Rs {{ (base_amount + delivery_fee)|round(2) }}</div>
                                     <div class="text-muted small text-danger">Service fee ({{ rental['host_service_fee_rate'] }}%): -Rs {{ rental['host_service_fee']|round(2) }}</div>
                                     {% if rental['counter_total_amount'] %}
                                         <div class="fw-semibold text-warning">
@@ -229,7 +231,7 @@
                                             <input type="text" class="form-control form-control-sm" name="reason" placeholder="Reason" required>
                                             <button type="submit" class="btn btn-sm btn-outline-danger">Reject</button>
                                         </form>
-                                        <form method="post" action="{{ url_for('owner_respond_rental', rental_id=rental['id']) }}" class="d-flex flex-column flex-lg-row gap-2">
+                                        <form method="post" action="{{ url_for('owner_respond_rental', rental_id=rental['id']) }}" class="d-flex flex-column flex-lg-row gap-2" data-counter-form data-original-total="{{ (rental['total_amount'] or 0)|round(2) }}">
                                             <input type="hidden" name="action" value="counter">
                                             <div class="flex-grow-1 d-flex gap-2">
                                                 <input type="number" class="form-control form-control-sm" name="counter_amount" placeholder="Total price for renter (Rs)" min="0" step="50" required>
