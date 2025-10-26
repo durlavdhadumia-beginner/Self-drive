@@ -753,34 +753,33 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
-    const counterForms = document.querySelectorAll('form[data-counter-form]');
-    counterForms.forEach((form) => {
-        form.addEventListener('submit', (event) => {
-            const actionInput = form.querySelector('input[name="action"]');
-            if (!actionInput || actionInput.value !== 'counter') {
-                return;
-            }
-            const amountInput = form.querySelector('input[name="counter_amount"]');
-            if (!amountInput) {
-                return;
-            }
-            const originalTotal = Number(form.getAttribute('data-original-total'));
-            if (!Number.isFinite(originalTotal)) {
-                return;
-            }
-            const enteredRaw = (amountInput.value || '').replace(/[₹,]/g, '').trim();
-            const enteredAmount = Number(enteredRaw);
-            if (!Number.isFinite(enteredAmount)) {
-                return;
-            }
-            if (enteredAmount < originalTotal) {
-                const message = `Do you want to make the revised offer less than the original total amount of Rs ${originalTotal.toFixed(2)}?`;
-                if (!window.confirm(message)) {
-                    event.preventDefault();
-                }
-            }
-        });
-    });
+    window.confirmCounter = (form) => {
+        if (!form) {
+            return true;
+        }
+        const actionInput = form.querySelector('input[name="action"]');
+        if (!actionInput || actionInput.value !== 'counter') {
+            return true;
+        }
+        const amountInput = form.querySelector('input[name="counter_amount"]');
+        if (!amountInput) {
+            return true;
+        }
+        const originalTotal = Number(form.getAttribute('data-original-total'));
+        if (!Number.isFinite(originalTotal)) {
+            return true;
+        }
+        const enteredRaw = (amountInput.value || '').replace(/[₹,]/g, '').trim();
+        const enteredAmount = Number(enteredRaw);
+        if (!Number.isFinite(enteredAmount)) {
+            return true;
+        }
+        if (enteredAmount < originalTotal) {
+            const message = `Do you want to make the revised offer less than the original total amount of Rs ${originalTotal.toFixed(2)}?`;
+            return window.confirm(message);
+        }
+        return true;
+    };
 
     const ownerMapElement = document.getElementById('owner-map');
     const initPendingRequestMaps = () => {
