@@ -211,7 +211,12 @@
                                         <div class="text-muted small">Delivery to {{ delivery_label }}{% if rental['delivery_distance_km'] %} &bull; ~{{ rental['delivery_distance_km']|round(1) }} km{% endif %}</div>
                                     {% endif %}
                                     {% if rental['trip_destinations_list'] %}
-                                        <div class="small mt-1 fw-semibold" style="color:#6b21a8;">Destinations: {{ rental['trip_destinations_list']|join(', ') }}</div>
+                                        <div class="small mt-1 fw-semibold" style="color:#6b21a8;">
+                                            Destinations:
+                                            {% for destination in rental['trip_destinations_list'] %}
+                                                <span class="me-1">{{ loop.index }}. {{ destination }}{% if not loop.last %},{% endif %}</span>
+                                            {% endfor %}
+                                        </div>
                                     {% endif %}
                                     {% if rental['delivery_type'] == 'delivery' and rental['delivery_latitude'] is not none and rental['delivery_longitude'] is not none %}
                                         <div class="rounded-4 border overflow-hidden mt-3 mb-3 owner-request-map" data-owner-request-map
@@ -261,7 +266,12 @@
                                         {% endif %}.
                                     </div>
                                     {% if rental['trip_destinations_list'] %}
-                                        <div class="small mt-1 fw-semibold" style="color:#6b21a8;">Destinations: {{ rental['trip_destinations_list']|join(', ') }}</div>
+                                        <div class="small mt-1 fw-semibold" style="color:#6b21a8;">
+                                            Destinations:
+                                            {% for destination in rental['trip_destinations_list'] %}
+                                                <span class="me-1">{{ loop.index }}. {{ destination }}{% if not loop.last %},{% endif %}</span>
+                                            {% endfor %}
+                                        </div>
                                     {% endif %}
                                     {% if rental['delivery_type'] == 'delivery' and rental['delivery_latitude'] is not none and rental['delivery_longitude'] is not none %}
                                         <div class="rounded-4 border overflow-hidden mt-3 owner-request-map" data-owner-request-map
@@ -309,7 +319,12 @@
                                         </div>
                                     {% endif %}
                                     {% if rental['trip_destinations_list'] %}
-                                        <div class="small fw-semibold" style="color:#6b21a8;">Destinations: {{ rental['trip_destinations_list']|join(', ') }}</div>
+                                        <div class="small fw-semibold" style="color:#6b21a8;">
+                                            Destinations:
+                                            {% for destination in rental['trip_destinations_list'] %}
+                                                <span class="me-1">{{ loop.index }}. {{ destination }}{% if not loop.last %},{% endif %}</span>
+                                            {% endfor %}
+                                        </div>
                                     {% endif %}
                                     <div class="text-muted small mb-2">Total due Rs {{ rental['total_amount']|round(2) }} by {{ rental['payment_due_at'] or 'n/a' }}</div>
                                     <div class="text-muted small">We have alerted the renter. Your payout is released once payment is confirmed, with the balance settling after the trip completes.</div>
