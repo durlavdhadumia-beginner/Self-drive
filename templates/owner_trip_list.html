@@ -24,7 +24,11 @@
                             {{ trip['car_name'] or (car and car['name']) or (car and (car['brand'] ~ ' ' ~ car['model'])) or 'Vehicle' }}
                             <span class="text-muted fw-normal"> &mdash; {{ trip['renter_public_name'] }}</span>
                         </h2>
-                        <div class="text-muted small">Booking ID: {{ trip['id'] }}</div>
+                        {% if trip['booking_identifier'] %}
+                            <div class="text-muted small">Booking ID: {{ trip['booking_identifier'] }}</div>
+                        {% else %}
+                            <div class="text-muted small">Booking ID: #{{ trip['id'] }}</div>
+                        {% endif %}
                     </div>
                     <div class="d-flex flex-wrap gap-2">
                         <span class="badge bg-info text-dark text-uppercase small">{{ (trip['status'] or 'unknown')|replace('_', ' ') }}</span>

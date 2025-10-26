@@ -497,6 +497,74 @@ def infer_state_code_for_rental(rental: Dict[str, Any]) -> str:
     return "NA"
 
 
+def _booking_reference_datetime(rental: Dict[str, Any]) -> datetime:
+    """Return the datetime used for booking ID sequencing."""
+    candidates = [
+        rental.get("start_time"),
+        rental.get("owner_response_at"),
+        rental.get("payment_confirmed_at"),
+        rental.get("payment_due_at"),
+        rental.get("end_time"),
+    ]
+    for value in candidates:
+        if not value:
+            continue
+        parsed = parse_iso(value) if isinstance(value, str) else None
+        if parsed:
+            return parsed
+        if isinstance(value, str):
+            for fmt in ("%Y-%m-%d %H:%M:%S", "%Y-%m-%d"):
+                try:
+                    return datetime.strptime(value, fmt)
+                except ValueError:
+                    continue
+    return datetime.utcnow()
+
+
+def generate_booking_identifier_map() -> Dict[int, Dict[str, str]]:
+    """Return mapping of rental id to booking ID data."""
+    db = get_db()
+    rows = db.execute(
+        """
+        SELECT rentals.id,
+               rentals.start_time,
+               rentals.end_time,
+               rentals.owner_response_at,
+               rentals.payment_confirmed_at,
+               rentals.payment_due_at,
+               rentals.trip_destinations,
+               rentals.delivery_address,
+               cars.city AS car_city,
+               cars.licence_plate
+        FROM rentals
+        JOIN cars ON cars.id = rentals.car_id
+        ORDER BY rentals.start_time IS NULL, rentals.start_time, rentals.id
+        """
+    ).fetchall()
+    booking_counters: Dict[Tuple[str, str], int] = defaultdict(int)
+    mapping: Dict[int, Dict[str, str]] = {}
+    for row in rows:
+        rental = dict(row)
+        try:
+            rental["trip_destinations_list"] = json.loads(
+                rental.get("trip_destinations") or "[]"
+            )
+        except (TypeError, json.JSONDecodeError):
+            rental["trip_destinations_list"] = []
+        state_code = infer_state_code_for_rental(rental)
+        sort_dt = _booking_reference_datetime(rental)
+        date_str = sort_dt.strftime("%Y%m%d")
+        counter_key = (date_str, state_code)
+        booking_counters[counter_key] += 1
+        serial_number = booking_counters[counter_key]
+        mapping[row["id"]] = {
+            "booking_identifier": f"{date_str}-{state_code}-{serial_number:06d}",
+            "booking_state_code": state_code,
+            "booking_date": date_str,
+        }
+    return mapping
+
+
 def load_vehicle_type_options() -> List[str]:
     db = get_db()
     rows = db.execute(
@@ -2099,54 +2167,20 @@ def admin_rentals() -> str:
     ).fetchall()
     rentals = [dict(row) for row in rows]
     car_images = fetch_car_images([row["car_id"] for row in rentals])
+    booking_map = generate_booking_identifier_map()
     for rental in rentals:
         rental["images"] = car_images.get(rental["car_id"], [])
         try:
             rental["trip_destinations_list"] = json.loads(rental.get("trip_destinations") or "[]")
         except (TypeError, json.JSONDecodeError):
             rental["trip_destinations_list"] = []
-        state_code = infer_state_code_for_rental(rental)
-        rental["booking_state_code"] = state_code
-        start_time_raw = rental.get("start_time") or rental.get("created_at") or ""
-        start_dt: Optional[datetime]
-        if start_time_raw:
-            try:
-                start_dt = datetime.fromisoformat(start_time_raw)
-            except ValueError:
-                try:
-                    start_dt = datetime.strptime(start_time_raw, "%Y-%m-%d %H:%M:%S")
-                except ValueError:
-                    start_dt = None
-        else:
-            start_dt = None
-        if start_dt is None:
-            start_dt = datetime.utcnow()
-        rental["_booking_datetime"] = start_dt
-        rental["_booking_date_str"] = start_dt.strftime("%Y%m%d")
         owner_share = max(0.0, float(rental.get("owner_payout_amount") or 0.0))
         rental["owner_share_amount"] = round(owner_share, 2)
         rental["owner_advance_amount"] = round(owner_share * OWNER_INITIAL_PAYOUT_RATE, 2)
         rental["owner_balance_amount"] = max(0.0, round(owner_share - rental["owner_advance_amount"], 2))
-
-    booking_counters: Dict[Tuple[str, str], int] = defaultdict(int)
-    for rental in sorted(
-        rentals,
-        key=lambda item: (
-            item["_booking_datetime"].date(),
-            item["_booking_datetime"],
-            item.get("id") or 0,
-        ),
-    ):
-        date_str = rental["_booking_date_str"]
-        state_code = rental["booking_state_code"]
-        counter_key = (date_str, state_code)
-        booking_counters[counter_key] += 1
-        serial_number = booking_counters[counter_key]
-        rental["booking_identifier"] = f"{date_str}-{state_code}-{serial_number:06d}"
-
-    for rental in rentals:
-        rental.pop("_booking_datetime", None)
-        rental.pop("_booking_date_str", None)
+        booking_info = booking_map.get(rental["id"])
+        if booking_info:
+            rental.update(booking_info)
     return render_template(
         "admin_rentals.html",
         rentals=rentals,
@@ -2920,6 +2954,7 @@ def rentals() -> str:
     rows = db.execute(
         """
         SELECT rentals.*, cars.brand, cars.model, cars.licence_plate, cars.image_url, cars.name AS car_name,
+               cars.city AS car_city,
                cars.owner_id AS owner_id, cars.has_gps, cars.latitude AS car_latitude, cars.longitude AS car_longitude,
                owners.username AS owner_username,
                COALESCE(owners.account_name, '') AS owner_account_name
@@ -3007,6 +3042,15 @@ def rentals() -> str:
         rental["display_delivery_fee"] = display_delivery
         rental["counter_take_home_display"] = counter_take_home
         rentals_list.append(rental)
+
+    booking_map = generate_booking_identifier_map()
+    for rental in rentals_list:
+        rental_id = rental.get("id")
+        if rental_id is None:
+            continue
+        booking_info = booking_map.get(int(rental_id))
+        if booking_info:
+            rental.update(booking_info)
 
     rental_ids = [rental["id"] for rental in rentals_list if rental.get("id") is not None]
     if rental_ids:
@@ -3902,6 +3946,14 @@ def build_owner_dashboard_context(owner_id: int) -> Dict[str, object]:
             destinations_with_coords.append(entry)
         rental["trip_destinations_map"] = destinations_with_coords
         rentals_data.append(rental)
+    booking_map = generate_booking_identifier_map()
+    for rental in rentals_data:
+        rental_id = rental.get("id")
+        if rental_id is None:
+            continue
+        info = booking_map.get(int(rental_id))
+        if info:
+            rental.update(info)
     rental_ids = [int(r.get("id")) for r in rentals_data if r.get("id") is not None]
     renter_reviews_by_rental: Dict[int, Dict[str, object]] = {}
     owner_reviews_by_rental: Dict[int, Dict[str, object]] = {}

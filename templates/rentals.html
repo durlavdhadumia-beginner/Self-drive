@@ -35,6 +35,9 @@
                                             <h2 class="h5 mb-1">{{ rental['car_name'] or rental['brand'] ~ ' ' ~ rental['model'] }}</h2>
                                             <p class="text-muted small mb-0">Licence plate: {{ rental['licence_plate'] }}</p>
                                             <p class="text-muted small mb-0">Host: {{ rental['owner_public_name'] }}</p>
+                                            {% if rental['booking_identifier'] %}
+                                                <p class="text-muted small mb-0">Booking ID: {{ rental['booking_identifier'] }}</p>
+                                            {% endif %}
                                         </div>
                                         <div class="d-flex flex-column gap-2 align-items-end">
                                             <span class="badge
