@@ -1,0 +1,177 @@
+{% extends "base.html" %}
+{% block title %}Admin Traffic | DriveNow{% endblock %}
+{% block content %}
+<section class="py-5">
+    <div class="container">
+        <div class="d-flex flex-column flex-md-row align-items-start align-items-md-center justify-content-between gap-3 mb-4">
+            <div>
+                <h1 class="h4 fw-bold mb-1">Traffic analytics</h1>
+                <p class="text-muted mb-0">Monitor visitor volume and geo distribution across the platform.</p>
+            </div>
+            <a href="{{ url_for('admin_dashboard') }}" class="btn btn-outline-secondary">&larr; Back to dashboard</a>
+        </div>
+        <div class="row g-3 mb-4">
+            <div class="col-sm-6 col-lg-3">
+                <div class="card card-zoom h-100">
+                    <div class="card-body">
+                        <div class="text-muted small text-uppercase">Total visits</div>
+                        <div class="display-6 fw-semibold">{{ summary.total }}</div>
+                        <div class="text-muted small">Since tracking began</div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-sm-6 col-lg-3">
+                <div class="card card-zoom h-100">
+                    <div class="card-body">
+                        <div class="text-muted small text-uppercase">Unique visitors</div>
+                        <div class="display-6 fw-semibold">{{ summary.unique }}</div>
+                        <div class="text-muted small">Distinct IP addresses</div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-sm-6 col-lg-3">
+                <div class="card card-zoom h-100">
+                    <div class="card-body">
+                        <div class="text-muted small text-uppercase">Past 24 hours</div>
+                        <div class="display-6 fw-semibold">{{ summary.last_day }}</div>
+                        <div class="text-muted small">Recent visit count</div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-sm-6 col-lg-3">
+                <div class="card card-zoom h-100">
+                    <div class="card-body">
+                        <div class="text-muted small text-uppercase">New visitors</div>
+                        <div class="display-6 fw-semibold">{{ summary.new_visitors }}</div>
+                        <div class="text-muted small">First-time sessions observed</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="row g-4">
+            <div class="col-lg-6">
+                <div class="card card-zoom h-100">
+                    <div class="card-body">
+                        <div class="d-flex justify-content-between align-items-center mb-3">
+                            <h2 class="h5 fw-semibold mb-0">Top pages</h2>
+                            <span class="badge bg-success-subtle text-success">{{ top_pages|length }}</span>
+                        </div>
+                        {% if top_pages %}
+                            <div class="table-responsive">
+                                <table class="table table-sm align-middle mb-0">
+                                    <thead>
+                                        <tr>
+                                            <th>Path</th>
+                                            <th class="text-end">Visits</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {% for page in top_pages %}
+                                            <tr>
+                                                <td class="text-truncate" style="max-width: 260px;">{{ page['path'] }}</td>
+                                                <td class="text-end fw-semibold">{{ page['hits'] }}</td>
+                                            </tr>
+                                        {% endfor %}
+                                    </tbody>
+                                </table>
+                            </div>
+                        {% else %}
+                            <p class="text-muted small mb-0">No page level data captured yet.</p>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+            <div class="col-lg-6">
+                <div class="card card-zoom h-100">
+                    <div class="card-body">
+                        <div class="d-flex justify-content-between align-items-center mb-3">
+                            <h2 class="h5 fw-semibold mb-0">Top locations</h2>
+                            <span class="badge bg-success-subtle text-success">{{ top_locations|length }}</span>
+                        </div>
+                        {% if top_locations %}
+                            <div class="table-responsive">
+                                <table class="table table-sm align-middle mb-0">
+                                    <thead>
+                                        <tr>
+                                            <th>Location</th>
+                                            <th class="text-end">Visits</th>
+                                            <th class="text-end">Unique</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {% for location in top_locations %}
+                                            <tr>
+                                                <td>
+                                                    <div class="fw-semibold">
+                                                        {{ location['city'] or 'Unknown city' }},
+                                                        {{ location['region'] or 'Region' }}
+                                                    </div>
+                                                    <div class="text-muted small">{{ location['country'] or 'Unknown country' }}</div>
+                                                </td>
+                                                <td class="text-end fw-semibold">{{ location['visits'] }}</td>
+                                                <td class="text-end">{{ location['unique_visitors'] }}</td>
+                                            </tr>
+                                        {% endfor %}
+                                    </tbody>
+                                </table>
+                            </div>
+                        {% else %}
+                            <p class="text-muted small mb-0">Location lookups have not been collected yet.</p>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+            <div class="col-12">
+                <div class="card card-zoom">
+                    <div class="card-body">
+                        <h2 class="h5 fw-semibold mb-3">Recent visits</h2>
+                        {% if recent_hits %}
+                            <div class="table-responsive">
+                                <table class="table table-sm align-middle">
+                                    <thead>
+                                        <tr>
+                                            <th>Timestamp</th>
+                                            <th>IP</th>
+                                            <th>Location</th>
+                                            <th>Path</th>
+                                            <th>Referer</th>
+                                            <th>New?</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {% for visit in recent_hits %}
+                                            <tr>
+                                                <td class="text-muted small">{{ visit['created_at'] }}</td>
+                                                <td class="fw-semibold">{{ visit['ip_address'] }}</td>
+                                                <td class="text-muted small">
+                                                    {% if visit['city'] or visit['country'] %}
+                                                        {{ visit['city'] or 'Unknown city' }},
+                                                        {{ visit['country'] or 'Country' }}
+                                                    {% else %}
+                                                        <span class="text-muted">—</span>
+                                                    {% endif %}
+                                                </td>
+                                                <td class="text-truncate" style="max-width: 220px;">{{ visit['path'] }} ({{ visit['method'] }})</td>
+                                                <td class="text-truncate text-muted small" style="max-width: 220px;">{{ visit['referer'] or '—' }}</td>
+                                                <td>
+                                                    {% if visit['is_new_visitor'] %}
+                                                        <span class="badge bg-success-subtle text-success">Yes</span>
+                                                    {% else %}
+                                                        <span class="badge bg-secondary">No</span>
+                                                    {% endif %}
+                                                </td>
+                                            </tr>
+                                        {% endfor %}
+                                    </tbody>
+                                </table>
+                            </div>
+                        {% else %}
+                            <p class="text-muted small mb-0">No request activity recorded yet.</p>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+{% endblock %}

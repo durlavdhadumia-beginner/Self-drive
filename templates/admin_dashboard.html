@@ -9,6 +9,7 @@
             <a href="{{ url_for('admin_rentals') }}" class="btn btn-sm btn-outline-success">Trips register</a>
             <a href="{{ url_for('admin_map') }}" class="btn btn-sm btn-outline-success">Live map</a>
             <a href="{{ url_for('admin_payment_settings') }}" class="btn btn-sm btn-outline-success">Payment settings</a>
+            <a href="{{ url_for('admin_traffic') }}" class="btn btn-sm btn-outline-success">Traffic analytics</a>
         </div>
         <div class="row g-3 mb-4">
             <div class="col-sm-6 col-lg-3" {% if metrics.users is not defined %}style="display:none"{% endif %}>
@@ -41,22 +42,42 @@
             <div class="col-sm-6 col-lg-3">
                 <div class="card card-zoom h-100">
                     <div class="card-body">
-                        <div class="text-muted small text-uppercase">Open complaints</div>
-                        <div class="display-6 fw-semibold">{{ metrics.open_complaints }}</div>
-                        <div class="text-muted small">Needs admin attention</div>
+                        <div class="text-muted small text-uppercase">Unique visitors</div>
+                        <div class="display-6 fw-semibold">{{ metrics.unique_visitors or 0 }}</div>
+                        <div class="text-muted small">Last 24h: {{ metrics.visits_last_day or 0 }}</div>
                     </div>
                 </div>
             </div>
             <div class="col-sm-6 col-lg-3">
                 <div class="card card-zoom h-100">
                     <div class="card-body">
-                        <div class="text-muted small text-uppercase">Feedback inbox</div>
-                        <div class="display-6 fw-semibold">{{ metrics.feedback_total }}</div>
-                        <div class="text-muted small">General platform messages</div>
+                        <div class="text-muted small text-uppercase">Total visits</div>
+                        <div class="display-6 fw-semibold">{{ metrics.visit_total or 0 }}</div>
+                        <div class="text-muted small">Since tracking enabled</div>
                     </div>
                 </div>
             </div>
         </div>
+        {% if traffic_summary.top_locations %}
+        <div class="row g-3 mb-4">
+            <div class="col-lg-6">
+                <div class="card card-zoom h-100">
+                    <div class="card-body">
+                        <h2 class="h5 fw-semibold mb-3">Top visitor locations</h2>
+                        <ul class="list-unstyled mb-0 text-muted small">
+                            {% for loc in traffic_summary.top_locations[:3] %}
+                                <li class="mb-1">
+                                    <span class="fw-semibold text-dark">{{ loc['city'] or 'Unknown city' }}</span>,
+                                    {{ loc['country'] or 'Unknown country' }}
+                                    <span class="badge bg-success-subtle text-success ms-2">{{ loc['visits'] }} visits</span>
+                                </li>
+                            {% endfor %}
+                        </ul>
+                    </div>
+                </div>
+            </div>
+        </div>
+        {% endif %}
         <div class="row g-4">
             <div class="col-lg-6">
                 <div class="card card-zoom h-100">

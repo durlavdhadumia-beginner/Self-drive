@@ -8,6 +8,7 @@ import json
 import os
 import re
 import sqlite3
+import ipaddress
 from collections import defaultdict
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
@@ -17,6 +18,8 @@ from pathlib import Path
 from typing import Any, Callable, Dict, Iterable, List, Optional, Tuple
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
+
+import requests
 
 from flask import (
     Flask,
@@ -78,6 +81,12 @@ OSM_TILE_USER_AGENT = "CarRentalNTravel/1.0 (support@carrentalntravel.com)"
 EMPTY_TILE_BYTES = base64.b64decode(
     "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR4nGMAAQAABQABDQottAAAAABJRU5ErkJggg=="
 )
+
+IP_LOOKUP_ENDPOINT = "https://ipapi.co/{ip}/json/"
+IP_LOOKUP_TIMEOUT = 4.0
+VISIT_LOG_MAX_USER_AGENT = 400
+VISIT_LOG_MAX_REFERER = 500
+VISIT_LOG_EXCLUDE_PREFIXES: Tuple[str, ...] = ("/static/", "/uploads/", "/favicon", "/healthz")
 
 DEFAULT_STATE_CODES: Dict[str, str] = {
     "andaman and nicobar islands": "AN",
@@ -777,6 +786,33 @@ def init_db() -> None:
 
         CREATE INDEX IF NOT EXISTS idx_rental_activity_logs_rental_id ON rental_activity_logs(rental_id);
 
+        CREATE TABLE IF NOT EXISTS ip_location_cache (
+            ip_address TEXT PRIMARY KEY,
+            city TEXT,
+            region TEXT,
+            country TEXT,
+            latitude REAL,
+            longitude REAL,
+            org TEXT,
+            updated_at TEXT NOT NULL
+        );
+
+        CREATE TABLE IF NOT EXISTS visit_logs (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            ip_address TEXT NOT NULL,
+            path TEXT NOT NULL,
+            method TEXT NOT NULL,
+            user_agent TEXT,
+            referer TEXT,
+            city TEXT,
+            region TEXT,
+            country TEXT,
+            latitude REAL,
+            longitude REAL,
+            is_new_visitor INTEGER NOT NULL DEFAULT 0,
+            created_at TEXT NOT NULL
+        );
+
         CREATE TABLE IF NOT EXISTS car_images (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             car_id INTEGER NOT NULL,
@@ -932,6 +968,12 @@ def init_db() -> None:
     db.commit()
     db.execute(
         "CREATE INDEX IF NOT EXISTS idx_cities_name ON cities(name COLLATE NOCASE)"
+    )
+    db.execute(
+        "CREATE INDEX IF NOT EXISTS idx_visit_logs_created_at ON visit_logs(created_at)"
+    )
+    db.execute(
+        "CREATE INDEX IF NOT EXISTS idx_visit_logs_ip ON visit_logs(ip_address)"
     )
     db.commit()
     seed_cities_if_needed(db)
@@ -1366,6 +1408,180 @@ def fetch_rental_activity_logs(rental_ids: Iterable[int]) -> Dict[int, List[Dict
             }
         )
     return logs_by_rental
+
+
+def _is_public_ip(ip_address_text: str) -> bool:
+    try:
+        parsed = ipaddress.ip_address(ip_address_text)
+    except ValueError:
+        return False
+    return not (
+        parsed.is_private
+        or parsed.is_loopback
+        or parsed.is_reserved
+        or parsed.is_link_local
+    )
+
+
+def get_client_ip() -> str:
+    """Best-effort extraction of the client's IP address."""
+    forwarded_for = request.headers.get("X-Forwarded-For", "")
+    if forwarded_for:
+        candidate = forwarded_for.split(",", 1)[0].strip()
+        if candidate:
+            return candidate
+    real_ip = request.headers.get("X-Real-IP", "").strip()
+    if real_ip:
+        return real_ip
+    remote_addr = request.remote_addr or ""
+    return remote_addr.strip()
+
+
+def lookup_ip_location(ip_address_text: str) -> Dict[str, Any]:
+    """Return cached or freshly fetched location metadata for an IP address."""
+    if not ip_address_text or not _is_public_ip(ip_address_text):
+        return {}
+    db = get_db()
+    cached = db.execute(
+        """
+        SELECT city, region, country, latitude, longitude, org
+        FROM ip_location_cache
+        WHERE ip_address = ?
+        """,
+        (ip_address_text,),
+    ).fetchone()
+    if cached:
+        return dict(cached)
+    try:
+        response = requests.get(
+            IP_LOOKUP_ENDPOINT.format(ip=ip_address_text),
+            timeout=IP_LOOKUP_TIMEOUT,
+        )
+    except requests.RequestException:
+        return {}
+    if response.status_code != 200:
+        return {}
+    try:
+        payload = response.json()
+    except ValueError:
+        return {}
+    if payload.get("error") or payload.get("reserved") or payload.get("bogon"):
+        return {}
+    location_data = {
+        "city": (payload.get("city") or "").strip(),
+        "region": (payload.get("region") or payload.get("region_code") or "").strip(),
+        "country": (payload.get("country_name") or payload.get("country") or "").strip(),
+        "latitude": None,
+        "longitude": None,
+        "org": (payload.get("org") or payload.get("asn") or "").strip(),
+    }
+    try:
+        latitude_val = float(payload.get("latitude"))
+        longitude_val = float(payload.get("longitude"))
+    except (TypeError, ValueError):
+        latitude_val = None
+        longitude_val = None
+    location_data["latitude"] = latitude_val
+    location_data["longitude"] = longitude_val
+    try:
+        db.execute(
+            """
+            INSERT OR REPLACE INTO ip_location_cache (
+                ip_address, city, region, country, latitude, longitude, org, updated_at
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                ip_address_text,
+                location_data["city"],
+                location_data["region"],
+                location_data["country"],
+                location_data["latitude"],
+                location_data["longitude"],
+                location_data["org"],
+                naive_utcnow_iso(),
+            ),
+        )
+        db.commit()
+    except sqlite3.Error:
+        pass
+    return location_data
+
+
+def _should_track_request() -> bool:
+    if request.method not in {"GET", "HEAD"}:
+        return False
+    path = request.path or "/"
+    if any(path.startswith(prefix) for prefix in VISIT_LOG_EXCLUDE_PREFIXES):
+        return False
+    if request.endpoint in {"static"}:
+        return False
+    return True
+
+
+def record_visit() -> None:
+    if not _should_track_request():
+        return
+    ip_address_text = get_client_ip()
+    if not ip_address_text:
+        return
+    db = get_db()
+    try:
+        existing = db.execute(
+            "SELECT 1 FROM visit_logs WHERE ip_address = ? LIMIT 1",
+            (ip_address_text,),
+        ).fetchone()
+    except sqlite3.Error:
+        return
+    is_new = 0 if existing else 1
+    location = lookup_ip_location(ip_address_text)
+    user_agent = (request.headers.get("User-Agent") or "")[:VISIT_LOG_MAX_USER_AGENT]
+    referer = (request.headers.get("Referer") or "")[:VISIT_LOG_MAX_REFERER]
+    try:
+        db.execute(
+            """
+            INSERT INTO visit_logs (
+                ip_address,
+                path,
+                method,
+                user_agent,
+                referer,
+                city,
+                region,
+                country,
+                latitude,
+                longitude,
+                is_new_visitor,
+                created_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                ip_address_text,
+                request.path,
+                request.method,
+                user_agent,
+                referer,
+                location.get("city"),
+                location.get("region"),
+                location.get("country"),
+                location.get("latitude"),
+                location.get("longitude"),
+                is_new,
+                naive_utcnow_iso(),
+            ),
+        )
+        db.commit()
+    except sqlite3.Error:
+        db.rollback()
+
+
+@app.before_request
+def _capture_visit_metrics() -> None:
+    try:
+        record_visit()
+    except Exception:
+        # Metrics capture must never break primary request handling.
+        pass
 
 
 def mark_notifications_read(user_id: int) -> None:
@@ -1995,6 +2211,30 @@ def build_admin_dashboard_context() -> dict:
         "open_complaints": db.execute("SELECT COUNT(*) FROM complaints WHERE status = 'open'").fetchone()[0],
         "feedback_total": db.execute("SELECT COUNT(*) FROM support_feedback").fetchone()[0],
     }
+    visit_total = db.execute("SELECT COUNT(*) FROM visit_logs").fetchone()[0]
+    unique_visitors = db.execute("SELECT COUNT(DISTINCT ip_address) FROM visit_logs").fetchone()[0]
+    last_24h_cutoff = (naive_utcnow() - timedelta(days=1)).isoformat()
+    visits_last_day = db.execute(
+        "SELECT COUNT(*) FROM visit_logs WHERE created_at >= ?",
+        (last_24h_cutoff,),
+    ).fetchone()[0]
+    metrics.update(
+        {
+            "visit_total": visit_total,
+            "unique_visitors": unique_visitors,
+            "visits_last_day": visits_last_day,
+        }
+    )
+    top_locations = db.execute(
+        """
+        SELECT country, city, COUNT(*) AS visits
+        FROM visit_logs
+        WHERE country IS NOT NULL AND country <> ''
+        GROUP BY country, city
+        ORDER BY visits DESC
+        LIMIT 5
+        """
+    ).fetchall()
     company_payout = get_company_payout_details()
     pending_payments = db.execute(
         """
@@ -2054,6 +2294,12 @@ def build_admin_dashboard_context() -> dict:
         "recent_feedback": recent_feedback,
         "company_payout": company_payout,
         "commission_rate": int(COMPANY_COMMISSION_RATE * 100),
+        "traffic_summary": {
+            "total": visit_total,
+            "unique": unique_visitors,
+            "last_day": visits_last_day,
+            "top_locations": top_locations,
+        },
     }
 
 
@@ -2299,6 +2545,86 @@ def admin_rentals() -> str:
         "admin_rentals.html",
         rentals=rentals,
         commission_rate=int(COMPANY_COMMISSION_RATE * 100),
+    )
+
+
+@app.route("/admin/traffic")
+@login_required
+@admin_required
+def admin_traffic() -> str:
+    db = get_db()
+    now = naive_utcnow()
+    last_day_cutoff = (now - timedelta(days=1)).isoformat()
+    last_week_cutoff = (now - timedelta(days=7)).isoformat()
+    total_visits = db.execute("SELECT COUNT(*) FROM visit_logs").fetchone()[0]
+    unique_visitors = db.execute(
+        "SELECT COUNT(DISTINCT ip_address) FROM visit_logs"
+    ).fetchone()[0]
+    last_day_visits = db.execute(
+        "SELECT COUNT(*) FROM visit_logs WHERE created_at >= ?",
+        (last_day_cutoff,),
+    ).fetchone()[0]
+    last_week_visits = db.execute(
+        "SELECT COUNT(*) FROM visit_logs WHERE created_at >= ?",
+        (last_week_cutoff,),
+    ).fetchone()[0]
+    new_visitors = db.execute(
+        "SELECT COUNT(*) FROM visit_logs WHERE is_new_visitor = 1"
+    ).fetchone()[0]
+    top_locations = db.execute(
+        """
+        SELECT country,
+               region,
+               city,
+               COUNT(*) AS visits,
+               COUNT(DISTINCT ip_address) AS unique_visitors,
+               MIN(created_at) AS first_seen,
+               MAX(created_at) AS last_seen
+        FROM visit_logs
+        GROUP BY country, region, city
+        ORDER BY visits DESC
+        LIMIT 50
+        """
+    ).fetchall()
+    top_pages = db.execute(
+        """
+        SELECT path, COUNT(*) AS hits
+        FROM visit_logs
+        GROUP BY path
+        ORDER BY hits DESC
+        LIMIT 15
+        """
+    ).fetchall()
+    recent_hits = db.execute(
+        """
+        SELECT ip_address,
+               path,
+               method,
+               created_at,
+               city,
+               region,
+               country,
+               referer,
+               user_agent,
+               is_new_visitor
+        FROM visit_logs
+        ORDER BY created_at DESC
+        LIMIT 150
+        """
+    ).fetchall()
+    summary = {
+        "total": total_visits,
+        "unique": unique_visitors,
+        "last_day": last_day_visits,
+        "last_week": last_week_visits,
+        "new_visitors": new_visitors,
+    }
+    return render_template(
+        "admin_traffic.html",
+        summary=summary,
+        top_locations=top_locations,
+        top_pages=top_pages,
+        recent_hits=recent_hits,
     )
 
 
