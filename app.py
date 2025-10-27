@@ -40,6 +40,7 @@ UPLOAD_ROOT = Path(__file__).with_name("static").joinpath("uploads")
 USER_DOC_ROOT = UPLOAD_ROOT.joinpath("user_docs")
 TILE_CACHE_ROOT = Path(__file__).with_name("tile_cache")
 STATE_CODE_FILE = Path(__file__).with_name("state_codes.csv")
+INDIA_TZ = timezone(timedelta(hours=5, minutes=30))
 ALLOWED_EXTENSIONS = {"png", "jpg", "jpeg", "gif", "webp"}
 DOCUMENT_EXTENSIONS = {"png", "jpg", "jpeg", "pdf"}
 PROMO_CODES: Dict[str, float] = {
