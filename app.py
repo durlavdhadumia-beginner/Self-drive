@@ -14,7 +14,7 @@ from datetime import datetime, timedelta, timezone
 from functools import lru_cache
 from math import asin, ceil, cos, radians, sin, sqrt
 from pathlib import Path
-from typing import Any, Callable, Dict, List, Optional, Tuple
+from typing import Any, Callable, Dict, Iterable, List, Optional, Tuple
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 
@@ -193,8 +193,8 @@ def make_png_response(payload: bytes, max_age: int = 86400):
 
 
 def naive_utcnow() -> datetime:
-    """Return a timezone-naive UTC timestamp compatible with legacy data."""
-    return datetime.now(timezone.utc).replace(tzinfo=None)
+    """Return a timezone-naive India Standard Time timestamp compatible with legacy data."""
+    return datetime.now(INDIA_TZ).replace(tzinfo=None)
 
 
 def naive_utcnow_iso() -> str:
@@ -518,7 +518,7 @@ def _booking_reference_datetime(rental: Dict[str, Any]) -> datetime:
                     return datetime.strptime(value, fmt)
                 except ValueError:
                     continue
-    return datetime.utcnow()
+    return naive_utcnow()
 
 
 def generate_booking_identifier_map() -> Dict[int, Dict[str, str]]:
@@ -760,6 +760,21 @@ def init_db() -> None:
             FOREIGN KEY (car_id) REFERENCES cars(id) ON DELETE CASCADE,
             FOREIGN KEY (renter_id) REFERENCES users(id) ON DELETE CASCADE
         );
+
+        CREATE TABLE IF NOT EXISTS rental_activity_logs (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            rental_id INTEGER NOT NULL,
+            action TEXT NOT NULL,
+            actor_role TEXT NOT NULL,
+            actor_id INTEGER,
+            actor_name TEXT DEFAULT '',
+            message TEXT DEFAULT '',
+            metadata TEXT,
+            created_at TEXT NOT NULL,
+            FOREIGN KEY (rental_id) REFERENCES rentals(id) ON DELETE CASCADE
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_rental_activity_logs_rental_id ON rental_activity_logs(rental_id);
 
         CREATE TABLE IF NOT EXISTS car_images (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -1055,7 +1070,7 @@ def anonymize_user_account(db: sqlite3.Connection, user_id: int, *, release_user
     now_iso = naive_utcnow_iso()
     anonymised_username = user_row["username"]
     if release_username:
-        anonymised_username = f"deleted_{user_id}_{int(datetime.utcnow().timestamp())}"
+        anonymised_username = f"deleted_{user_id}_{int(datetime.now(INDIA_TZ).timestamp())}"
     random_secret = generate_password_hash(os.urandom(16).hex())
     db.execute(
         """
@@ -1255,6 +1270,101 @@ def create_notification(user_id: int, message: str, link: str = "") -> None:
         (user_id, message, link),
     )
     db.commit()
+
+
+def log_rental_activity(
+    rental_id: int,
+    action: str,
+    *,
+    actor_role: str,
+    actor_id: Optional[int] = None,
+    actor_name: str = "",
+    message: str = "",
+    metadata: Optional[Dict[str, Any]] = None,
+) -> None:
+    """Persist a human-readable audit entry for a rental lifecycle event."""
+    db = get_db()
+    metadata_payload: Optional[str] = None
+    if metadata:
+        try:
+            metadata_payload = json.dumps(metadata, ensure_ascii=False)
+        except (TypeError, ValueError):
+            metadata_payload = json.dumps({"note": str(metadata)})
+    db.execute(
+        """
+        INSERT INTO rental_activity_logs (
+            rental_id,
+            action,
+            actor_role,
+            actor_id,
+            actor_name,
+            message,
+            metadata,
+            created_at
+        )
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        """,
+        (
+            rental_id,
+            action.strip().lower(),
+            actor_role.strip().lower(),
+            actor_id,
+            (actor_name or "").strip(),
+            (message or "").strip(),
+            metadata_payload,
+            naive_utcnow_iso(),
+        ),
+    )
+
+
+def fetch_rental_activity_logs(rental_ids: Iterable[int]) -> Dict[int, List[Dict[str, Any]]]:
+    """Return activity log entries grouped by rental id."""
+    rental_ids = [int(rid) for rid in rental_ids if rid is not None]
+    if not rental_ids:
+        return {}
+    db = get_db()
+    placeholders = ",".join("?" for _ in rental_ids)
+    rows = db.execute(
+        f"""
+        SELECT id, rental_id, action, actor_role, actor_id, actor_name, message, metadata, created_at
+        FROM rental_activity_logs
+        WHERE rental_id IN ({placeholders})
+        ORDER BY created_at ASC, id ASC
+        """,
+        rental_ids,
+    ).fetchall()
+    logs_by_rental: Dict[int, List[Dict[str, Any]]] = {rid: [] for rid in rental_ids}
+    for row in rows:
+        metadata_raw = row["metadata"]
+        parsed_metadata: Optional[Dict[str, Any]] = None
+        metadata_display = ""
+        if metadata_raw:
+            try:
+                parsed_metadata_candidate = json.loads(metadata_raw)
+                if isinstance(parsed_metadata_candidate, dict):
+                    parsed_metadata = parsed_metadata_candidate
+                    metadata_display = ", ".join(
+                        f"{key}: {value}"
+                        for key, value in parsed_metadata_candidate.items()
+                    )
+                else:
+                    metadata_display = str(parsed_metadata_candidate)
+            except (json.JSONDecodeError, TypeError):
+                metadata_display = metadata_raw
+        logs_by_rental.setdefault(row["rental_id"], []).append(
+            {
+                "id": row["id"],
+                "action": row["action"],
+                "actor_role": row["actor_role"],
+                "actor_id": row["actor_id"],
+                "actor_name": row["actor_name"],
+                "message": row["message"],
+                "metadata": parsed_metadata,
+                "metadata_display": metadata_display,
+                "created_at": row["created_at"],
+            }
+        )
+    return logs_by_rental
 
 
 def mark_notifications_read(user_id: int) -> None:
@@ -2181,6 +2291,9 @@ def admin_rentals() -> str:
         booking_info = booking_map.get(rental["id"])
         if booking_info:
             rental.update(booking_info)
+    activity_map = fetch_rental_activity_logs([rental["id"] for rental in rentals])
+    for rental in rentals:
+        rental["activity_logs"] = activity_map.get(rental["id"], [])
     return render_template(
         "admin_rentals.html",
         rentals=rentals,
@@ -2283,6 +2396,19 @@ def admin_update_payment(rental_id: int) -> str:
             rental_id,
         ),
     )
+    log_rental_activity(
+        rental_id,
+        "payment_status_updated",
+        actor_role="admin",
+        actor_id=g.user["id"],
+        actor_name=display_name(g.user),
+        message=f"Admin set payment status to {new_status}.",
+        metadata={
+            "payment_status": new_status,
+            "commission": commission,
+            "owner_payout": owner_payout,
+        },
+    )
     db.commit()
     return redirect(url_for("admin_rentals"))
 
@@ -2313,6 +2439,15 @@ def admin_release_owner_payout(rental_id: int) -> str:
         WHERE id = ?
         """,
         (now_iso, now_iso, rental_id),
+    )
+    log_rental_activity(
+        rental_id,
+        "payout_released",
+        actor_role="admin",
+        actor_id=g.user["id"],
+        actor_name=display_name(g.user),
+        message="Admin marked the host payout as released.",
+        metadata={"released_at": now_iso},
     )
     db.commit()
     return redirect(url_for("admin_rentals"))
@@ -3210,16 +3345,29 @@ def rent_car(car_id: int) -> str:
         ),
     )
     rental_id = cursor.lastrowid
+    car_name = car["name"] or f"{car['brand']} {car['model']}"
+    actor_name = display_name(g.user)
+    total_label = f"Rs {round(total_amount):.0f}"
+    rental_label = f"Rs {round(rental_amount):.0f}"
+    log_rental_activity(
+        rental_id,
+        "booking_requested",
+        actor_role="renter",
+        actor_id=g.user["id"],
+        actor_name=actor_name,
+        message=f"Booking request submitted for {car_name} (total {total_label}).",
+        metadata={
+            "start_time": start_iso,
+            "end_time": end_dt.isoformat(),
+            "total_amount": round(total_amount, 2),
+            "delivery_type": delivery_type,
+        },
+    )
     db.execute(
         "UPDATE cars SET is_available = 0, updated_at = ? WHERE id = ?",
         (naive_utcnow_iso(), car_id),
     )
     db.commit()
-
-    car_name = car["name"] or f"{car['brand']} {car['model']}"
-    actor_name = display_name(g.user)
-    total_label = f"Rs {round(total_amount):.0f}"
-    rental_label = f"Rs {round(rental_amount):.0f}"
     if delivery_type == "delivery":
         delivery_label = f"delivery fee Rs {round(delivery_fee):.0f}"
         location_label = delivery_address or "Pinned delivery location"
@@ -3433,7 +3581,9 @@ def renter_respond_rental(rental_id: int) -> str:
     ).fetchone()
     if rental is None:
         abort(404)
+    actor_name = display_name(g.user)
     now = naive_utcnow()
+    actor_name = display_name(g.user)
     car_label = rental["car_name"] or f"{rental['brand']} {rental['model']}"
     if action == "accept_counter" and rental["owner_response"] == "counter":
         counter_amount = rental["counter_amount"] or rental["total_amount"]
@@ -3463,6 +3613,15 @@ def renter_respond_rental(rental_id: int) -> str:
              delivery_fee_existing,
              (now + timedelta(hours=1)).isoformat(), rental_id),
         )
+        log_rental_activity(
+            rental_id,
+            "counter_offer_accepted",
+            actor_role="renter",
+            actor_id=g.user["id"],
+            actor_name=actor_name,
+            message=f"Renter accepted counter offer. New total Rs {new_total:.2f}.",
+            metadata={"total_amount": new_total},
+        )
         db.commit()
         create_notification(
             rental["owner_id"],
@@ -3477,6 +3636,14 @@ def renter_respond_rental(rental_id: int) -> str:
         db.execute(
             "UPDATE cars SET is_available = 1, updated_at = ? WHERE id = ?",
             (now.isoformat(), rental["car_id"]),
+        )
+        log_rental_activity(
+            rental_id,
+            "counter_offer_declined",
+            actor_role="renter",
+            actor_id=g.user["id"],
+            actor_name=actor_name,
+            message="Renter declined the counter offer. Booking cancelled.",
         )
         db.commit()
         create_notification(
@@ -3496,6 +3663,9 @@ def finalize_rental_payment(
     payment_gateway: str = "manual",
     payment_reference: str = "",
     payment_order_id: Optional[str] = None,
+    actor_role: str = "system",
+    actor_id: Optional[int] = None,
+    actor_name: str = "",
 ) -> Dict[str, float]:
     """Mark the rental as paid and return payout breakdown."""
     db = get_db()
@@ -3552,6 +3722,20 @@ def finalize_rental_payment(
             final_status,
             rental["id"],
         ),
+    )
+    log_rental_activity(
+        int(rental["id"]),
+        "payment_recorded",
+        actor_role=actor_role,
+        actor_id=actor_id,
+        actor_name=actor_name,
+        message=f"Payment marked as received via {payment_channel}.",
+        metadata={
+            "payment_channel": payment_channel,
+            "payment_gateway": payment_gateway,
+            "commission": commission,
+            "owner_net": owner_net,
+        },
     )
     db.commit()
     return {
@@ -3749,11 +3933,15 @@ def renter_confirm_payment(rental_id: int) -> str:
         abort(404)
     payment_channel = request.form.get(
         "payment_channel", "upi/netbanking").strip().lower() or "upi/netbanking"
+    actor_name = display_name(g.user)
     payout_breakdown = finalize_rental_payment(
         rental,
         payment_channel=payment_channel,
         payment_gateway="manual",
         payment_reference="manual-confirmation",
+        actor_role="renter",
+        actor_id=g.user["id"],
+        actor_name=actor_name,
     )
     car_label = rental["car_name"] or f"{rental['brand']} {rental['model']}"
     create_notification(
@@ -3783,6 +3971,15 @@ def cancel_rental(rental_id: int) -> str:
     db.execute(
         "UPDATE cars SET is_available = 1, updated_at = ? WHERE id = ?",
         (naive_utcnow_iso(), rental["car_id"]),
+    )
+    actor_name = display_name(g.user)
+    log_rental_activity(
+        rental_id,
+        "booking_cancelled",
+        actor_role="renter",
+        actor_id=g.user["id"],
+        actor_name=actor_name,
+        message="Renter cancelled the booking.",
     )
     db.commit()
     return redirect(url_for("rentals"))
@@ -4577,6 +4774,16 @@ def owner_start_rental(rental_id: int) -> str:
         "UPDATE rentals SET status = 'active', owner_started_at = ? WHERE id = ?",
         (now_iso, rental_id),
     )
+    actor_name = display_name(g.user)
+    log_rental_activity(
+        rental_id,
+        "trip_started",
+        actor_role="owner",
+        actor_id=g.user["id"],
+        actor_name=actor_name,
+        message="Host marked the trip as started.",
+        metadata={"timestamp": now_iso},
+    )
     db.commit()
     car_label = rental["car_name"] or f"{rental['brand']} {rental['model']}"
     create_notification(
@@ -4684,6 +4891,19 @@ def owner_extend_rental(rental_id: int) -> str:
             rental_id,
         ),
     )
+    log_rental_activity(
+        rental_id,
+        "trip_extended",
+        actor_role="owner",
+        actor_id=g.user["id"],
+        actor_name=actor_name,
+        message=f"Host extended the trip by {extra_hours} hour(s).",
+        metadata={
+            "extra_hours": extra_hours,
+            "new_end": new_end.isoformat(),
+            "new_total": new_total,
+        },
+    )
     db.commit()
     car_label = rental["car_name"] or f"{rental['brand']} {rental['model']}"
     create_notification(
@@ -4727,6 +4947,7 @@ def owner_complete_rental(rental_id: int) -> str:
     ).fetchone()
     if rental is None:
         abort(404)
+    actor_name = display_name(g.user)
     now_iso = naive_utcnow_iso()
     commission = float(rental["company_commission_amount"] or 0)
     owner_net = float(rental["owner_payout_amount"] or 0)
@@ -4811,6 +5032,19 @@ def owner_complete_rental(rental_id: int) -> str:
         "UPDATE cars SET is_available = 1, updated_at = ? WHERE id = ?",
         (now_iso, rental["car_id"]),
     )
+    log_rental_activity(
+        rental_id,
+        "trip_completed",
+        actor_role="owner",
+        actor_id=g.user["id"],
+        actor_name=actor_name,
+        message="Host marked the trip as completed.",
+        metadata={
+            "payment_status": payment_status_after,
+            "owner_payout_status": owner_status,
+            "owner_net": owner_net,
+        },
+    )
     db.commit()
     car_label = rental["car_name"] or f"{rental['brand']} {rental['model']}"
     create_notification(
@@ -4893,6 +5127,7 @@ def owner_respond_rental(rental_id: int) -> str:
     if rental is None:
         abort(404)
     now = naive_utcnow()
+    actor_name = display_name(g.user)
     car_label = rental["car_name"] or f"{rental['brand']} {rental['model']}"
     if action == "accept" and rental["owner_response"] in ("pending", "counter"):
         payment_due = (now + timedelta(hours=1)).isoformat()
@@ -4918,6 +5153,15 @@ def owner_respond_rental(rental_id: int) -> str:
             """,
             (now.isoformat(), payment_due, rental_id),
         )
+        log_rental_activity(
+            rental_id,
+            "booking_accepted",
+            actor_role="owner",
+            actor_id=g.user["id"],
+            actor_name=actor_name,
+            message=f"Host accepted booking. Payment due by {payment_due}.",
+            metadata={"payment_due_at": payment_due},
+        )
         db.commit()
         create_notification(
             rental["renter_id"],
@@ -4933,6 +5177,14 @@ def owner_respond_rental(rental_id: int) -> str:
         db.execute(
             "UPDATE cars SET is_available = 1, updated_at = ? WHERE id = ?",
             (now.isoformat(), rental["car_id"]),
+        )
+        log_rental_activity(
+            rental_id,
+            "booking_rejected",
+            actor_role="owner",
+            actor_id=g.user["id"],
+            actor_name=actor_name,
+            message="Host declined the booking request." + (f" Reason: {reason}" if reason else ""),
         )
         db.commit()
         create_notification(
@@ -4955,6 +5207,15 @@ def owner_respond_rental(rental_id: int) -> str:
         db.execute(
             "UPDATE rentals SET owner_response = 'counter', owner_response_at = ?, counter_amount = ?, counter_comment = ?, counter_used = 1 WHERE id = ?",
             (now.isoformat(), counter_total, note, rental_id),
+        )
+        log_rental_activity(
+            rental_id,
+            "counter_offer_sent",
+            actor_role="owner",
+            actor_id=g.user["id"],
+            actor_name=actor_name,
+            message=f"Host proposed a new total of Rs {counter_total:.2f}.",
+            metadata={"counter_total": counter_total, "note": note},
         )
         db.commit()
         create_notification(
@@ -5228,3 +5489,4 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
+INDIA_TZ = timezone(timedelta(hours=5, minutes=30))
