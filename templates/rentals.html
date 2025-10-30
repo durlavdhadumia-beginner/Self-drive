@@ -159,10 +159,7 @@
 
                         {% if rental['status'] != 'cancelled' and rental['owner_response'] == 'accepted' and rental['payment_status'] == 'awaiting_payment' %}
                                             <div class="d-flex flex-column flex-sm-row align-items-sm-center gap-2">
-                                                <form method="post" action="{{ url_for('renter_payment_instructions', rental_id=rental['id']) }}">
-                                                    <input type="hidden" name="payment_channel" value="upi/netbanking">
-                                                    <button type="submit" class="btn btn-sm btn-success">Make payment</button>
-                                                </form>
+                                                <a href="{{ url_for('renter_payment_page', rental_id=rental['id']) }}" class="btn btn-sm btn-success">Make payment</a>
                                                 <span class="text-muted small">Due by {{ rental['payment_due_at'] or 'n/a' }}</span>
                                             </div>
                                             {% endif %}

@@ -73,7 +73,7 @@
                                 </select>
                             </div>
                             <div class="col-12 col-md-6 d-flex align-items-end">
-                                <button type="submit" class="btn btn-success w-100">Make payment</button>
+                                <button type="submit" class="btn btn-success w-100" data-payment-submit>Make payment</button>
                             </div>
                         </form>
                     </div>
@@ -100,6 +100,24 @@
                     content_name: {{ rental.car_label|tojson }},
                     content_ids: ['rental-{{ rental.id }}'],
                 });
+            }
+            const channelSelect = document.getElementById('payment_channel');
+            const submitButton = document.querySelector('[data-payment-submit]');
+            const labelMap = {
+                'cash': 'Confirm booking',
+                'card': 'Make payment',
+                'upi/netbanking': 'Make payment'
+            };
+            const updateButton = () => {
+                if (!channelSelect || !submitButton) {
+                    return;
+                }
+                const value = channelSelect.value || 'upi/netbanking';
+                submitButton.textContent = labelMap[value] || 'Make payment';
+            };
+            if (channelSelect && submitButton) {
+                channelSelect.addEventListener('change', updateButton);
+                updateButton();
             }
         });
     </script>

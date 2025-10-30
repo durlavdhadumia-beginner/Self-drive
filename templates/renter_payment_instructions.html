@@ -54,33 +54,32 @@
                             </div>
                         </div>
 
-                        {% set channel_labels = {
-                            'upi/netbanking': 'UPI / Net banking',
-                            'card': 'Debit / credit card',
-                            'cash': 'Pay cash on pickup / delivery'
-                        } %}
-                        <p class="text-muted small mb-4">
-                            Preferred payment channel: {{ channel_labels.get(payment_channel, 'UPI / Net banking') }}
-                        </p>
+{% set channel_labels = {
+    'upi/netbanking': 'UPI / Net banking',
+    'card': 'Debit / credit card',
+    'cash': 'Pay cash on pickup / delivery'
+} %}
 
-                        {% if cash_selected %}
-                            <div class="alert alert-warning border-0">
-                                <h2 class="h6 fw-semibold mb-2 text-dark">Cash on pickup / delivery</h2>
-                                <ul class="text-muted small mb-2 ps-3">
-                                    <li>We have recorded that you will pay the host in cash during handover.</li>
-                                    <li>Please carry <strong>Rs {{ payment_summary.total_amount|round(2) }}</strong> in exact change.</li>
-                                    <li>The host has been notified about your choice and will acknowledge the payment when you meet.</li>
-                                </ul>
-                                <p class="text-muted small mb-0">
-                                    Need to switch back to online payment? Return to the previous page and choose a different option anytime before the trip starts.
-                                </p>
-                            </div>
-                        {% else %}
-                            <div class="row g-4">
-                                <div class="col-md-6">
-                                    <div class="border rounded-4 p-3 h-100">
-                                        <h2 class="h6 fw-semibold mb-3">Bank transfer <span class="text-danger text-uppercase small fw-semibold">(IMPS Only)</span></h2>
-                                        <ul class="list-unstyled text-muted small mb-0">
+{% if cash_selected %}
+    <div class="border rounded-4 p-4 mb-4 text-center" style="border:2px solid #7c3aed;background:rgba(124,58,237,0.08);">
+        <div class="text-uppercase small fw-semibold text-muted mb-2">Preferred payment channel</div>
+        <div class="h4 fw-bold mb-3" style="color:#5b21b6;">{{ channel_labels['cash'] }}</div>
+        <p class="text-muted small mb-3">
+            We have recorded that you will pay the host in cash during handover. Please carry <strong>Rs {{ payment_summary.total_amount|round(2) }}</strong> in exact change. The host has been notified and will acknowledge the payment when you meet.
+        </p>
+        <p class="text-muted small mb-0">
+            Need to switch back to online payment? Return to the previous page and choose a different option anytime before the trip starts.
+        </p>
+    </div>
+{% else %}
+    <p class="text-muted small mb-4">
+        Preferred payment channel: {{ channel_labels.get(payment_channel, 'UPI / Net banking') }}
+    </p>
+    <div class="row g-4">
+        <div class="col-md-6">
+            <div class="border rounded-4 p-3 h-100">
+                <h2 class="h6 fw-semibold mb-3">Bank transfer <span class="text-danger text-uppercase small fw-semibold">(IMPS Only)</span></h2>
+                <ul class="list-unstyled text-muted small mb-0">
                                             {% if payment_account.bank_name %}<li><strong>Bank:</strong> {{ payment_account.bank_name }}</li>{% endif %}
                                             {% if payment_account.account_holder %}<li><strong>Account holder:</strong> {{ payment_account.account_holder }}</li>{% endif %}
                                             {% if payment_account.account_number %}<li><strong>Account number:</strong> {{ payment_account.account_number }}</li>{% endif %}
@@ -104,40 +103,43 @@
                             </div>
                         {% endif %}
 
-                        <div class="card bg-light border-0 mt-4">
-                            <div class="card-body">
-                                <h2 class="h6 fw-semibold mb-2">Need help?</h2>
-                                <p class="text-muted small mb-2">
-                                    Call us on <a href="tel:{{ support_phone }}">{{ support_phone }}</a><br>
-                                    Email <a href="mailto:{{ support_email }}">{{ support_email }}</a><br>
-                                    Chat via <a href="{{ whatsapp_link }}" target="_blank" rel="noopener" class="text-success ms-1" aria-label="Chat with support on WhatsApp"><i class="bi bi-whatsapp fs-5"></i></a>
-                                </p>
-                            </div>
-                        </div>
+    <div class="card bg-light border-0 mt-4">
+        <div class="card-body">
+            <h2 class="h6 fw-semibold mb-2">Need help?</h2>
+            <p class="text-muted small mb-2">
+                Call us on <a href="tel:{{ support_phone }}">{{ support_phone }}</a><br>
+                Email <a href="mailto:{{ support_email }}">{{ support_email }}</a><br>
+                Chat via <a href="{{ whatsapp_link }}" target="_blank" rel="noopener" class="text-success ms-1" aria-label="Chat with support on WhatsApp"><i class="bi bi-whatsapp fs-5"></i></a>
+            </p>
+        </div>
+    </div>
 
-                        {% if not cash_selected %}
-                        <form method="post" action="{{ url_for('renter_confirm_payment', rental_id=rental.id) }}" class="mt-4" data-payment-confirm
-                              data-whatsapp-base="{{ whatsapp_link }}"
-                              data-booking-id="{{ rental.id }}"
-                              data-vehicle="{{ rental.car_label }}{% if rental.licence_plate %} ({{ rental.licence_plate }}){% endif %}"
-                              data-trip-start="{{ rental.start_time|trip_datetime }}"
-                              data-trip-end="{{ rental.end_time|trip_datetime }}"
-                              data-destinations="{{ rental.trip_destinations_text or 'Not shared' }}"
-                              data-rental-amount="{{ payment_summary.rental_amount|round(2) }}"
-                              data-delivery-amount="{{ payment_summary.delivery_fee|round(2) }}"
-                              data-total-amount="{{ payment_summary.total_amount|round(2) }}"
-                              data-payment-channel="{{ payment_channel }}">
-                            <div class="alert alert-danger text-center fw-semibold mb-3" role="alert">
-                                Please click the payment completed button below only after making the payment.
-                            </div>
-                            <input type="hidden" name="payment_channel" value="{{ payment_channel }}">
-                            <button type="submit" class="btn btn-success w-100">I've completed the payment</button>
-                        </form>
-                        {% else %}
-                        <div class="mt-4">
-                            <a href="{{ url_for('rentals') }}" class="btn btn-success w-100">Return to my trips</a>
-                        </div>
-                        {% endif %}
+    <form method="post" action="{{ url_for('renter_confirm_payment', rental_id=rental.id) }}" class="mt-4" data-payment-confirm
+          data-whatsapp-base="{{ whatsapp_link }}"
+          data-booking-id="{{ rental.id }}"
+          data-vehicle="{{ rental.car_label }}{% if rental.licence_plate %} ({{ rental.licence_plate }}){% endif %}"
+          data-trip-start="{{ rental.start_time|trip_datetime }}"
+          data-trip-end="{{ rental.end_time|trip_datetime }}"
+          data-destinations="{{ rental.trip_destinations_text or 'Not shared' }}"
+          data-rental-amount="{{ payment_summary.rental_amount|round(2) }}"
+          data-delivery-amount="{{ payment_summary.delivery_fee|round(2) }}"
+          data-total-amount="{{ payment_summary.total_amount|round(2) }}"
+          data-payment-channel="{{ payment_channel }}"
+          data-redirect-url="{{ url_for('rentals') }}">
+        {% if cash_selected %}
+            <div class="alert alert-info text-center fw-semibold mb-3" role="alert" style="background:rgba(124,58,237,0.08);color:#5b21b6;">
+                Tap confirm booking to notify our team via WhatsApp. No online payment is required.
+            </div>
+            <input type="hidden" name="payment_channel" value="{{ payment_channel }}">
+            <button type="submit" class="btn btn-primary w-100" style="background:#5b21b6;border-color:#5b21b6;">Confirm booking</button>
+        {% else %}
+            <div class="alert alert-danger text-center fw-semibold mb-3" role="alert">
+                Please click the payment completed button below only after making the payment.
+            </div>
+            <input type="hidden" name="payment_channel" value="{{ payment_channel }}">
+            <button type="submit" class="btn btn-success w-100">I've completed the payment</button>
+        {% endif %}
+    </form>
                     </div>
                 </div>
                 <div class="d-flex justify-content-between">
@@ -156,6 +158,11 @@
         if (!form) {
             return;
         }
+        const channelLabels = {
+            'upi/netbanking': 'UPI / Net banking',
+            'card': 'Debit / credit card',
+            'cash': 'Pay cash on pickup / delivery'
+        };
         const buildMessage = () => {
             const bookingId = form.dataset.bookingId || 'N/A';
             const vehicle = form.dataset.vehicle || 'Vehicle';
@@ -165,7 +172,8 @@
             const rentalAmount = form.dataset.rentalAmount || '0.00';
             const deliveryAmount = form.dataset.deliveryAmount || '0.00';
             const totalAmount = form.dataset.totalAmount || '0.00';
-            const paymentChannel = form.dataset.paymentChannel || 'UPI/Netbanking';
+            const paymentChannel = (form.dataset.paymentChannel || 'upi/netbanking').toLowerCase();
+            const paymentChannelLabel = channelLabels[paymentChannel] || paymentChannel;
             return [
                 `Payment confirmation for booking #${bookingId}`,
                 ``,
@@ -178,11 +186,11 @@
                 `- Delivery: Rs ${deliveryAmount}`,
                 `- Total paid: Rs ${totalAmount}`,
                 ``,
-                `Payment channel: ${paymentChannel}`,
+                `Payment channel: ${paymentChannelLabel}`,
                 `Kindly verify and mark the payment received.`
             ].join('\n');
         };
-        form.addEventListener('submit', () => {
+        form.addEventListener('submit', (event) => {
             const base = form.dataset.whatsappBase;
             if (!base) {
                 return;
@@ -191,6 +199,14 @@
             const encoded = encodeURIComponent(message);
             const whatsappUrl = `${base}?text=${encoded}`;
             window.open(whatsappUrl, '_blank', 'noopener');
+            const paymentChannel = (form.dataset.paymentChannel || 'upi/netbanking').toLowerCase();
+            if (paymentChannel === 'cash') {
+                event.preventDefault();
+                const redirectUrl = form.dataset.redirectUrl || '{{ url_for('rentals') }}';
+                setTimeout(() => {
+                    window.location.href = redirectUrl;
+                }, 600);
+            }
         }, { capture: true });
     })();
 </script>
