@@ -4143,6 +4143,10 @@ def build_renter_payment_context(rental_row: sqlite3.Row) -> Tuple[Dict[str, obj
     rental_dict["trip_destinations_text"] = ", ".join(cleaned_destinations)
     car_label = rental_dict.get("car_name") or f"{rental_dict.get('brand', '')} {rental_dict.get('model', '')}".strip()
     rental_dict["car_label"] = car_label.strip() or "Vehicle"
+    current_channel = (rental_dict.get("payment_channel") or "upi/netbanking").strip().lower()
+    if current_channel not in {"upi/netbanking", "card", "cash"}:
+        current_channel = "upi/netbanking"
+    rental_dict["payment_channel"] = current_channel
     rental_dict["owner_public_name"] = build_public_label(
         rental_dict.get("owner_display_name"),
         fallback_prefix="Host",
@@ -4189,7 +4193,9 @@ def build_renter_payment_context(rental_row: sqlite3.Row) -> Tuple[Dict[str, obj
 @login_required
 @role_required("renter", "owner")
 def renter_payment_instructions(rental_id: int) -> str:
-    payment_channel = request.values.get("payment_channel", "upi/netbanking")
+    raw_channel = (request.values.get("payment_channel") or "upi/netbanking").strip().lower()
+    allowed_channels = {"upi/netbanking", "card", "cash"}
+    payment_channel = raw_channel if raw_channel in allowed_channels else "upi/netbanking"
     db = get_db()
     rental = db.execute(
         """
@@ -4213,6 +4219,40 @@ def renter_payment_instructions(rental_id: int) -> str:
         return redirect(url_for("rentals"))
     if rental["payment_status"] not in {"awaiting_payment", "pending"}:
         return redirect(url_for("rentals"))
+    previous_channel = (rental["payment_channel"] or "upi/netbanking").strip().lower()
+    if previous_channel not in allowed_channels:
+        previous_channel = "upi/netbanking"
+    channel_changed = payment_channel != previous_channel
+    if channel_changed:
+        db.execute(
+            "UPDATE rentals SET payment_channel = ? WHERE id = ?",
+            (payment_channel, rental_id),
+        )
+        if payment_channel == "cash" and (rental["payment_status"] or "").lower() != "paid":
+            db.execute(
+                "UPDATE rentals SET payment_status = 'pending' WHERE id = ?",
+                (rental_id,),
+            )
+        db.commit()
+        actor_name = display_name(g.user)
+        log_rental_activity(
+            rental_id,
+            "payment_channel_updated",
+            actor_role="renter",
+            actor_id=g.user["id"],
+            actor_name=actor_name,
+            message=f"Preferred payment channel set to {payment_channel}.",
+            metadata={"payment_channel": payment_channel},
+        )
+        if payment_channel == "cash":
+            car_label = rental["car_name"] or f"{rental['brand']} {rental['model']}"
+            create_notification(
+                rental["owner_id"],
+                f"{g.user['username']} will pay in cash for {car_label}. Collect payment during handover.",
+                url_for("owner_cars"),
+            )
+        rental = dict(rental)
+        rental["payment_channel"] = payment_channel
     rental_dict, payment_summary = build_renter_payment_context(rental)
     admin_payout = get_primary_admin_payout_details()
     company_payout = get_company_payout_details()
@@ -4253,6 +4293,7 @@ def renter_payment_instructions(rental_id: int) -> str:
         rental=rental_dict,
         payment_summary=payment_summary,
         payment_channel=payment_channel,
+        cash_selected=payment_channel == "cash",
         whatsapp_link=whatsapp_link,
         payment_account=payment_account,
         payment_upi=upi_id,

@@ -326,6 +326,16 @@
                                             {% endfor %}
                                         </div>
                                     {% endif %}
+                                    {% if rental['payment_channel'] %}
+                                        {% if rental['payment_channel'] == 'cash' %}
+                                            {% set payment_channel_label = 'Cash on pickup / delivery' %}
+                                        {% elif rental['payment_channel'] == 'card' %}
+                                            {% set payment_channel_label = 'Debit / credit card' %}
+                                        {% else %}
+                                            {% set payment_channel_label = 'UPI / Net banking' %}
+                                        {% endif %}
+                                        <div class="text-muted small">Payment method: {{ payment_channel_label }}</div>
+                                    {% endif %}
                                     <div class="text-muted small mb-2">Total due Rs {{ rental['total_amount']|round(2) }} by {{ rental['payment_due_at'] or 'n/a' }}</div>
                                     <div class="text-muted small">We have alerted the renter. Your payout is released once payment is confirmed, with the balance settling after the trip completes.</div>
                                 </div>

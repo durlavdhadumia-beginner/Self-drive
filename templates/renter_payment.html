@@ -67,9 +67,9 @@
                             <div class="col-12 col-md-6">
                                 <label class="form-label small" for="payment_channel">Payment channel</label>
                                 <select class="form-select" id="payment_channel" name="payment_channel" required>
-                                    <option value="upi/netbanking" selected>UPI / Net banking</option>
-                                    <option value="card">Debit / Credit card</option>
-                                    <option value="cash">Cash on delivery</option>
+                                    <option value="upi/netbanking" {% if rental.payment_channel == 'upi/netbanking' %}selected{% endif %}>UPI / Net banking</option>
+                                    <option value="card" {% if rental.payment_channel == 'card' %}selected{% endif %}>Debit / Credit card</option>
+                                    <option value="cash" {% if rental.payment_channel == 'cash' %}selected{% endif %}>Pay cash on pickup / delivery</option>
                                 </select>
                             </div>
                             <div class="col-12 col-md-6 d-flex align-items-end">

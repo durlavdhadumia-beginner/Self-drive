@@ -54,34 +54,55 @@
                             </div>
                         </div>
 
+                        {% set channel_labels = {
+                            'upi/netbanking': 'UPI / Net banking',
+                            'card': 'Debit / credit card',
+                            'cash': 'Pay cash on pickup / delivery'
+                        } %}
                         <p class="text-muted small mb-4">
-                            Preferred payment channel: {{ payment_channel|replace('_', ' ')|title }}
+                            Preferred payment channel: {{ channel_labels.get(payment_channel, 'UPI / Net banking') }}
                         </p>
 
-                        <div class="row g-4">
-                            <div class="col-md-6">
-                                <div class="border rounded-4 p-3 h-100">
-                                    <h2 class="h6 fw-semibold mb-3">Bank transfer <span class="text-danger text-uppercase small fw-semibold">(IMPS Only)</span></h2>
-                                    <ul class="list-unstyled text-muted small mb-0">
-                                        {% if payment_account.bank_name %}<li><strong>Bank:</strong> {{ payment_account.bank_name }}</li>{% endif %}
-                                        {% if payment_account.account_holder %}<li><strong>Account holder:</strong> {{ payment_account.account_holder }}</li>{% endif %}
-                                        {% if payment_account.account_number %}<li><strong>Account number:</strong> {{ payment_account.account_number }}</li>{% endif %}
-                                        {% if payment_account.ifsc_code %}<li><strong>IFSC:</strong> {{ payment_account.ifsc_code }}</li>{% endif %}
-                                        {% if payment_account.branch_address %}<li><strong>Branch:</strong> {{ payment_account.branch_address }}</li>{% endif %}
-                                        {% if not payment_account.account_holder and not payment_account.account_number and not payment_account.ifsc_code and not payment_account.bank_name and not payment_account.branch_address %}<li>No bank account has been configured yet. Please contact support before transferring funds.</li>{% endif %}
-                                    </ul>
+                        {% if cash_selected %}
+                            <div class="alert alert-warning border-0">
+                                <h2 class="h6 fw-semibold mb-2 text-dark">Cash on pickup / delivery</h2>
+                                <ul class="text-muted small mb-2 ps-3">
+                                    <li>We have recorded that you will pay the host in cash during handover.</li>
+                                    <li>Please carry <strong>Rs {{ payment_summary.total_amount|round(2) }}</strong> in exact change.</li>
+                                    <li>The host has been notified about your choice and will acknowledge the payment when you meet.</li>
+                                </ul>
+                                <p class="text-muted small mb-0">
+                                    Need to switch back to online payment? Return to the previous page and choose a different option anytime before the trip starts.
+                                </p>
+                            </div>
+                        {% else %}
+                            <div class="row g-4">
+                                <div class="col-md-6">
+                                    <div class="border rounded-4 p-3 h-100">
+                                        <h2 class="h6 fw-semibold mb-3">Bank transfer <span class="text-danger text-uppercase small fw-semibold">(IMPS Only)</span></h2>
+                                        <ul class="list-unstyled text-muted small mb-0">
+                                            {% if payment_account.bank_name %}<li><strong>Bank:</strong> {{ payment_account.bank_name }}</li>{% endif %}
+                                            {% if payment_account.account_holder %}<li><strong>Account holder:</strong> {{ payment_account.account_holder }}</li>{% endif %}
+                                            {% if payment_account.account_number %}<li><strong>Account number:</strong> {{ payment_account.account_number }}</li>{% endif %}
+                                            {% if payment_account.ifsc_code %}<li><strong>IFSC:</strong> {{ payment_account.ifsc_code }}</li>{% endif %}
+                                            {% if payment_account.branch_address %}<li><strong>Branch:</strong> {{ payment_account.branch_address }}</li>{% endif %}
+                                            {% if not payment_account.account_holder and not payment_account.account_number and not payment_account.ifsc_code and not payment_account.bank_name and not payment_account.branch_address %}
+                                                <li>No bank account has been configured yet. Please contact support before transferring funds.</li>
+                                            {% endif %}
+                                        </ul>
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <div class="border rounded-4 p-3 h-100">
+                                        <h2 class="h6 fw-semibold mb-3">UPI</h2>
+                                        <p class="mb-0 text-muted small">
+                                            Use your preferred UPI app and send the amount to:<br>
+                                            <strong class="text-dark fs-5">{{ payment_upi }}</strong>
+                                        </p>
+                                    </div>
                                 </div>
                             </div>
-                            <div class="col-md-6">
-                                <div class="border rounded-4 p-3 h-100">
-                                    <h2 class="h6 fw-semibold mb-3">UPI</h2>
-                                    <p class="mb-0 text-muted small">
-                                        Use your preferred UPI app and send the amount to:<br>
-                                        <strong class="text-dark fs-5">{{ payment_upi }}</strong>
-                                    </p>
-                                </div>
-                            </div>
-                        </div>
+                        {% endif %}
 
                         <div class="card bg-light border-0 mt-4">
                             <div class="card-body">
@@ -94,6 +115,7 @@
                             </div>
                         </div>
 
+                        {% if not cash_selected %}
                         <form method="post" action="{{ url_for('renter_confirm_payment', rental_id=rental.id) }}" class="mt-4" data-payment-confirm
                               data-whatsapp-base="{{ whatsapp_link }}"
                               data-booking-id="{{ rental.id }}"
@@ -111,6 +133,11 @@
                             <input type="hidden" name="payment_channel" value="{{ payment_channel }}">
                             <button type="submit" class="btn btn-success w-100">I've completed the payment</button>
                         </form>
+                        {% else %}
+                        <div class="mt-4">
+                            <a href="{{ url_for('rentals') }}" class="btn btn-success w-100">Return to my trips</a>
+                        </div>
+                        {% endif %}
                     </div>
                 </div>
                 <div class="d-flex justify-content-between">

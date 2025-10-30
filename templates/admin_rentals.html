@@ -58,7 +58,21 @@
                                         <div><strong>End:</strong> {{ rental['end_time']|trip_datetime if rental['end_time'] else 'TBD' }}</div>
                                     </td>
                                     <td>{{ rental['status']|capitalize }}</td>
-                                    <td>{{ rental['payment_status']|replace('_', ' ')|capitalize }}<br><span class="text-muted small">Due: {{ rental['payment_due_at'] or '-' }}</span><br><span class="text-muted small">Total: Rs {{ rental['total_amount']|round|int }}</span></td>
+                                    <td>
+                                        {{ rental['payment_status']|replace('_', ' ')|capitalize }}<br>
+                                        <span class="text-muted small">Due: {{ rental['payment_due_at'] or '-' }}</span><br>
+                                        <span class="text-muted small">Total: Rs {{ rental['total_amount']|round|int }}</span>
+                                        {% if rental['payment_channel'] %}
+                                            {% if rental['payment_channel'] == 'cash' %}
+                                                {% set payment_channel_label = 'Cash on pickup / delivery' %}
+                                            {% elif rental['payment_channel'] == 'card' %}
+                                                {% set payment_channel_label = 'Debit / credit card' %}
+                                            {% else %}
+                                                {% set payment_channel_label = 'UPI / Net banking' %}
+                                            {% endif %}
+                                            <br><span class="text-muted small">Method: {{ payment_channel_label }}</span>
+                                        {% endif %}
+                                    </td>
                                     <td>
                                         <div class="fw-semibold">Owner share (Net take-home): Rs {{ rental['owner_share_amount']|round(2) }}</div>
                                         <div class="text-muted small">Advance amount paid (10%): Rs {{ rental['owner_advance_amount']|round(2) }}</div>
