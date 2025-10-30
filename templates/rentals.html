@@ -262,4 +262,18 @@
 
 {% block scripts %}
     {{ super() }}
+    {% if purchase_event %}
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            if (typeof fbq === 'function') {
+                fbq('track', 'Purchase', {
+                    value: {{ purchase_event.value|tojson }},
+                    currency: {{ purchase_event.currency|tojson }},
+                    content_name: {{ purchase_event.car_label|tojson }},
+                    content_ids: ['rental-{{ purchase_event.id }}'],
+                });
+            }
+        });
+    </script>
+    {% endif %}
 {% endblock %}

@@ -88,3 +88,19 @@
     </div>
 </section>
 {% endblock %}
+{% block scripts %}
+    {{ super() }}
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            if (typeof fbq === 'function') {
+                fbq('track', 'InitiateCheckout', {
+                    value: {{ payment_summary.total_amount|round(2)|tojson }},
+                    currency: 'INR',
+                    num_items: 1,
+                    content_name: {{ rental.car_label|tojson }},
+                    content_ids: ['rental-{{ rental.id }}'],
+                });
+            }
+        });
+    </script>
+{% endblock %}

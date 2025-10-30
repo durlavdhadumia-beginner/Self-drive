@@ -492,6 +492,21 @@
 {% endblock %}
 {% block scripts %}
     {{ super() }}
+    {% if cars %}
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            if (typeof fbq === 'function') {
+                const searchTerm = {{ (request.args.get('city') or request.args.get('query') or '')|tojson }};
+                const vehicleTypes = {{ filters.vehicle_types|default([])|tojson }};
+                fbq('track', 'Search', {
+                    search_string: searchTerm,
+                    content_category: vehicleTypes.join(', '),
+                    num_results: {{ cars|length }},
+                });
+            }
+        });
+    </script>
+    {% endif %}
     <script src="{{ url_for('static', filename='js/destination_inputs.js') }}"></script>
     <script>
         const cityInput = document.getElementById('city-field');

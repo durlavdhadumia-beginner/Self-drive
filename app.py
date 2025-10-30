@@ -3413,6 +3413,7 @@ def search() -> str:
 @role_required("renter", "owner")
 def rentals() -> str:
     db = get_db()
+    payment_success_id = request.args.get("payment_success", type=int)
     rows = db.execute(
         """
         SELECT rentals.*, cars.brand, cars.model, cars.licence_plate, cars.image_url, cars.name AS car_name,
@@ -3552,11 +3553,27 @@ def rentals() -> str:
         if rental.get("owner_response") in ("pending", "counter")
         and rental.get("status") == "booked"
     ]
+    purchase_event = None
+    if payment_success_id:
+        for rental in rentals_list:
+            if rental.get("id") == payment_success_id:
+                try:
+                    total_display = float(rental.get("display_total_amount") or rental.get("total_amount") or 0.0)
+                except (TypeError, ValueError):
+                    total_display = 0.0
+                purchase_event = {
+                    "id": payment_success_id,
+                    "value": round(total_display, 2),
+                    "currency": "INR",
+                    "car_label": rental.get("car_name") or rental.get("brand") or "Vehicle",
+                }
+                break
     return render_template(
         "rentals.html",
         rentals=rentals_list,
         awaiting_payment=awaiting_payment,
         pending_host_action=pending_host_action,
+        purchase_event=purchase_event,
     )
 
 
@@ -4276,7 +4293,7 @@ def renter_confirm_payment(rental_id: int) -> str:
         f"{g.user['username']} confirmed payment for {car_label}. 10% host payout released now; remaining 90% reserved until the trip completes.",
         url_for("owner_cars"),
     )
-    return redirect(url_for("rentals"))
+    return redirect(url_for("rentals", payment_success=rental["id"]))
 
 
 @app.route("/rentals/<int:rental_id>/cancel", methods=["POST"])
