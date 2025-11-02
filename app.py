@@ -15,8 +15,9 @@ from datetime import datetime, timedelta, timezone
 from functools import lru_cache
 from math import asin, ceil, cos, radians, sin, sqrt
 from pathlib import Path
-from typing import Any, Callable, Dict, Iterable, List, Optional, Tuple
+from typing import Any, Callable, Dict, Iterable, List, Mapping, Optional, Tuple
 from urllib.error import HTTPError, URLError
+from urllib.parse import parse_qsl, urlparse
 from urllib.request import Request, urlopen
 
 import requests
@@ -87,6 +88,53 @@ IP_LOOKUP_TIMEOUT = 4.0
 VISIT_LOG_MAX_USER_AGENT = 400
 VISIT_LOG_MAX_REFERER = 500
 VISIT_LOG_EXCLUDE_PREFIXES: Tuple[str, ...] = ("/static/", "/uploads/", "/favicon", "/healthz")
+BOT_USER_AGENT_KEYWORDS: Tuple[str, ...] = (
+    "bot",
+    "spider",
+    "crawler",
+    "slurp",
+    "preview",
+    "httpclient",
+    "libwww",
+    "curl",
+    "wget",
+    "python-requests",
+    "axios",
+    "postmanruntime",
+    "facebookexternalhit",
+    "pingdom",
+    "monitor",
+    "uptime",
+)
+FACEBOOK_AD_QUERY_KEYS = frozenset({"fbclid"})
+FACEBOOK_REFERRER_HOSTS: Tuple[str, ...] = (
+    "facebook.com",
+    "instagram.com",
+    "meta.com",
+)
+FACEBOOK_UTM_SOURCES = frozenset({"facebook", "fb", "instagram", "ig", "meta"})
+GOOGLE_AD_QUERY_KEYS = frozenset({"gclid", "gbraid", "wbraid"})
+GOOGLE_REFERRER_HOSTS: Tuple[str, ...] = (
+    "googleadservices.com",
+    "googleads.g.doubleclick.net",
+    "doubleclick.net",
+    "youtube.com",
+    "youtu.be",
+    "tpc.googlesyndication.com",
+    "ads.google.com",
+)
+GOOGLE_UTM_SOURCES = frozenset({"google", "youtube", "gads", "adwords"})
+PAID_UTM_MEDIUMS = frozenset(
+    {"cpc", "ppc", "paid", "paid_social", "paidsearch", "paid_search", "display", "video"}
+)
+CAMPAIGN_TRAFFIC_SOURCES: Tuple[str, ...] = ("facebook_ads", "google_ads")
+CAMPAIGN_FILTER_SQL = (
+    f"traffic_source IN ({', '.join('?' for _ in CAMPAIGN_TRAFFIC_SOURCES)}) AND is_bot = 0"
+)
+CAMPAIGN_SOURCE_LABELS: Dict[str, str] = {
+    "facebook_ads": "Facebook / Instagram Ads",
+    "google_ads": "Google / YouTube Ads",
+}
 
 DEFAULT_STATE_CODES: Dict[str, str] = {
     "andaman and nicobar islands": "AN",
@@ -810,6 +858,8 @@ def init_db() -> None:
             latitude REAL,
             longitude REAL,
             is_new_visitor INTEGER NOT NULL DEFAULT 0,
+            traffic_source TEXT NOT NULL DEFAULT 'other',
+            is_bot INTEGER NOT NULL DEFAULT 0,
             created_at TEXT NOT NULL
         );
 
@@ -945,7 +995,9 @@ def init_db() -> None:
         "ALTER TABLE rentals ADD COLUMN completed_at TEXT",
         "ALTER TABLE rentals ADD COLUMN cancel_reason TEXT DEFAULT ''",
         "ALTER TABLE user_profiles ADD COLUMN profile_verified_at TEXT",
-        "ALTER TABLE user_documents ADD COLUMN doc_type TEXT DEFAULT ''"
+        "ALTER TABLE user_documents ADD COLUMN doc_type TEXT DEFAULT ''",
+        "ALTER TABLE visit_logs ADD COLUMN traffic_source TEXT NOT NULL DEFAULT 'other'",
+        "ALTER TABLE visit_logs ADD COLUMN is_bot INTEGER NOT NULL DEFAULT 0"
     ]
     for statement in alter_statements:
         try:
@@ -953,6 +1005,44 @@ def init_db() -> None:
         except sqlite3.OperationalError:
             pass
     db.commit()
+    try:
+        db.execute(
+            "UPDATE visit_logs SET traffic_source = 'other' WHERE traffic_source IS NULL OR traffic_source = ''"
+        )
+    except sqlite3.OperationalError:
+        pass
+    try:
+        db.execute(
+            "UPDATE visit_logs SET is_bot = 0 WHERE is_bot IS NULL"
+        )
+    except sqlite3.OperationalError:
+        pass
+    try:
+        db.execute(
+            """
+            UPDATE visit_logs
+            SET traffic_source = 'facebook_ads'
+            WHERE traffic_source = 'other'
+              AND instr(lower(COALESCE(referer, '')), 'fbclid=') > 0
+            """
+        )
+    except sqlite3.OperationalError:
+        pass
+    try:
+        db.execute(
+            """
+            UPDATE visit_logs
+            SET traffic_source = 'google_ads'
+            WHERE traffic_source = 'other'
+              AND (
+                    instr(lower(COALESCE(referer, '')), 'gclid=') > 0
+                    OR instr(lower(COALESCE(referer, '')), 'gbraid=') > 0
+                    OR instr(lower(COALESCE(referer, '')), 'wbraid=') > 0
+                )
+            """
+        )
+    except sqlite3.OperationalError:
+        pass
     try:
         db.execute(
             "UPDATE users SET account_name = username WHERE account_name IS NULL OR account_name = ''"
@@ -1508,6 +1598,56 @@ def lookup_ip_location(ip_address_text: str) -> Dict[str, Any]:
     return location_data
 
 
+def _is_probable_bot_agent(user_agent: str) -> bool:
+    if not user_agent:
+        return True
+    lowered = user_agent.lower()
+    return any(keyword in lowered for keyword in BOT_USER_AGENT_KEYWORDS)
+
+
+def classify_campaign_source(referer: str, args: Mapping[str, str]) -> str:
+    normalized: Dict[str, str] = {}
+    for key, value in args.items():
+        if value is None:
+            continue
+        key_lower = key.lower()
+        if key_lower not in normalized:
+            normalized[key_lower] = (value or "").lower()
+    parsed_referer = urlparse(referer or "")
+    referer_host = (parsed_referer.netloc or "").lower().split(":")[0]
+    if referer_host.startswith("www."):
+        referer_host = referer_host[4:]
+    referer_params = parse_qsl(parsed_referer.query or "", keep_blank_values=True)
+    for key, value in referer_params:
+        key_lower = key.lower()
+        if key_lower not in normalized:
+            normalized[key_lower] = (value or "").lower()
+    if any(key in normalized for key in FACEBOOK_AD_QUERY_KEYS):
+        return "facebook_ads"
+    if any(key in normalized for key in GOOGLE_AD_QUERY_KEYS):
+        return "google_ads"
+    utm_source = normalized.get("utm_source", "")
+    utm_medium = normalized.get("utm_medium", "")
+    if referer_host:
+        if referer_host.endswith(FACEBOOK_REFERRER_HOSTS) and (
+            utm_source in FACEBOOK_UTM_SOURCES or utm_medium in PAID_UTM_MEDIUMS
+        ):
+            return "facebook_ads"
+        if referer_host.endswith(GOOGLE_REFERRER_HOSTS) and (
+            utm_source in GOOGLE_UTM_SOURCES or utm_medium in PAID_UTM_MEDIUMS
+        ):
+            return "google_ads"
+    if utm_source in FACEBOOK_UTM_SOURCES and (
+        utm_medium in PAID_UTM_MEDIUMS or "utm_campaign" in normalized
+    ):
+        return "facebook_ads"
+    if utm_source in GOOGLE_UTM_SOURCES and (
+        utm_medium in PAID_UTM_MEDIUMS or "utm_campaign" in normalized
+    ):
+        return "google_ads"
+    return "other"
+
+
 def _should_track_request() -> bool:
     if request.method not in {"GET", "HEAD"}:
         return False
@@ -1534,9 +1674,15 @@ def record_visit() -> None:
     except sqlite3.Error:
         return
     is_new = 0 if existing else 1
+    user_agent_header = request.headers.get("User-Agent") or ""
+    referer_header = request.headers.get("Referer") or ""
+    user_agent = user_agent_header[:VISIT_LOG_MAX_USER_AGENT]
+    referer = referer_header[:VISIT_LOG_MAX_REFERER]
+    traffic_source = classify_campaign_source(referer_header, request.args)
+    is_bot_flag = 1 if _is_probable_bot_agent(user_agent_header) else 0
+    if is_bot_flag and traffic_source == "other":
+        return
     location = lookup_ip_location(ip_address_text)
-    user_agent = (request.headers.get("User-Agent") or "")[:VISIT_LOG_MAX_USER_AGENT]
-    referer = (request.headers.get("Referer") or "")[:VISIT_LOG_MAX_REFERER]
     try:
         db.execute(
             """
@@ -1552,8 +1698,10 @@ def record_visit() -> None:
                 latitude,
                 longitude,
                 is_new_visitor,
+                traffic_source,
+                is_bot,
                 created_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 ip_address_text,
@@ -1567,6 +1715,8 @@ def record_visit() -> None:
                 location.get("latitude"),
                 location.get("longitude"),
                 is_new,
+                traffic_source,
+                is_bot_flag,
                 naive_utcnow_iso(),
             ),
         )
@@ -2211,12 +2361,18 @@ def build_admin_dashboard_context() -> dict:
         "open_complaints": db.execute("SELECT COUNT(*) FROM complaints WHERE status = 'open'").fetchone()[0],
         "feedback_total": db.execute("SELECT COUNT(*) FROM support_feedback").fetchone()[0],
     }
-    visit_total = db.execute("SELECT COUNT(*) FROM visit_logs").fetchone()[0]
-    unique_visitors = db.execute("SELECT COUNT(DISTINCT ip_address) FROM visit_logs").fetchone()[0]
+    visit_total = db.execute(
+        f"SELECT COUNT(*) FROM visit_logs WHERE {CAMPAIGN_FILTER_SQL}",
+        CAMPAIGN_TRAFFIC_SOURCES,
+    ).fetchone()[0]
+    unique_visitors = db.execute(
+        f"SELECT COUNT(DISTINCT ip_address) FROM visit_logs WHERE {CAMPAIGN_FILTER_SQL}",
+        CAMPAIGN_TRAFFIC_SOURCES,
+    ).fetchone()[0]
     last_24h_cutoff = (naive_utcnow() - timedelta(days=1)).isoformat()
     visits_last_day = db.execute(
-        "SELECT COUNT(*) FROM visit_logs WHERE created_at >= ?",
-        (last_24h_cutoff,),
+        f"SELECT COUNT(*) FROM visit_logs WHERE {CAMPAIGN_FILTER_SQL} AND created_at >= ?",
+        (*CAMPAIGN_TRAFFIC_SOURCES, last_24h_cutoff),
     ).fetchone()[0]
     metrics.update(
         {
@@ -2226,14 +2382,15 @@ def build_admin_dashboard_context() -> dict:
         }
     )
     top_locations = db.execute(
-        """
+        f"""
         SELECT country, city, COUNT(*) AS visits
         FROM visit_logs
-        WHERE country IS NOT NULL AND country <> ''
+        WHERE {CAMPAIGN_FILTER_SQL} AND country IS NOT NULL AND country <> ''
         GROUP BY country, city
         ORDER BY visits DESC
         LIMIT 5
-        """
+        """,
+        CAMPAIGN_TRAFFIC_SOURCES,
     ).fetchall()
     company_payout = get_company_payout_details()
     pending_payments = db.execute(
@@ -2556,23 +2713,31 @@ def admin_traffic() -> str:
     now = naive_utcnow()
     last_day_cutoff = (now - timedelta(days=1)).isoformat()
     last_week_cutoff = (now - timedelta(days=7)).isoformat()
-    total_visits = db.execute("SELECT COUNT(*) FROM visit_logs").fetchone()[0]
+    total_visits = db.execute(
+        f"SELECT COUNT(*) FROM visit_logs WHERE {CAMPAIGN_FILTER_SQL}",
+        CAMPAIGN_TRAFFIC_SOURCES,
+    ).fetchone()[0]
     unique_visitors = db.execute(
-        "SELECT COUNT(DISTINCT ip_address) FROM visit_logs"
+        f"SELECT COUNT(DISTINCT ip_address) FROM visit_logs WHERE {CAMPAIGN_FILTER_SQL}",
+        CAMPAIGN_TRAFFIC_SOURCES,
     ).fetchone()[0]
     last_day_visits = db.execute(
-        "SELECT COUNT(*) FROM visit_logs WHERE created_at >= ?",
-        (last_day_cutoff,),
+        f"SELECT COUNT(*) FROM visit_logs WHERE {CAMPAIGN_FILTER_SQL} AND created_at >= ?",
+        (*CAMPAIGN_TRAFFIC_SOURCES, last_day_cutoff),
     ).fetchone()[0]
     last_week_visits = db.execute(
-        "SELECT COUNT(*) FROM visit_logs WHERE created_at >= ?",
-        (last_week_cutoff,),
+        f"SELECT COUNT(*) FROM visit_logs WHERE {CAMPAIGN_FILTER_SQL} AND created_at >= ?",
+        (*CAMPAIGN_TRAFFIC_SOURCES, last_week_cutoff),
     ).fetchone()[0]
     new_visitors = db.execute(
-        "SELECT COUNT(*) FROM visit_logs WHERE is_new_visitor = 1"
+        f"""
+        SELECT COUNT(*) FROM visit_logs
+        WHERE {CAMPAIGN_FILTER_SQL} AND is_new_visitor = 1
+        """,
+        CAMPAIGN_TRAFFIC_SOURCES,
     ).fetchone()[0]
     top_locations = db.execute(
-        """
+        f"""
         SELECT country,
                region,
                city,
@@ -2581,22 +2746,26 @@ def admin_traffic() -> str:
                MIN(created_at) AS first_seen,
                MAX(created_at) AS last_seen
         FROM visit_logs
+        WHERE {CAMPAIGN_FILTER_SQL}
         GROUP BY country, region, city
         ORDER BY visits DESC
         LIMIT 50
-        """
+        """,
+        CAMPAIGN_TRAFFIC_SOURCES,
     ).fetchall()
     top_pages = db.execute(
-        """
+        f"""
         SELECT path, COUNT(*) AS hits
         FROM visit_logs
+        WHERE {CAMPAIGN_FILTER_SQL}
         GROUP BY path
         ORDER BY hits DESC
         LIMIT 15
-        """
+        """,
+        CAMPAIGN_TRAFFIC_SOURCES,
     ).fetchall()
     recent_hits = db.execute(
-        """
+        f"""
         SELECT ip_address,
                path,
                method,
@@ -2606,12 +2775,45 @@ def admin_traffic() -> str:
                country,
                referer,
                user_agent,
-               is_new_visitor
+               is_new_visitor,
+               traffic_source
         FROM visit_logs
+        WHERE {CAMPAIGN_FILTER_SQL}
         ORDER BY created_at DESC
         LIMIT 150
-        """
+        """,
+        CAMPAIGN_TRAFFIC_SOURCES,
     ).fetchall()
+    campaign_overview: List[dict[str, Any]] = []
+    for source in CAMPAIGN_TRAFFIC_SOURCES:
+        source_total = db.execute(
+            "SELECT COUNT(*) FROM visit_logs WHERE traffic_source = ? AND is_bot = 0",
+            (source,),
+        ).fetchone()[0]
+        source_unique = db.execute(
+            "SELECT COUNT(DISTINCT ip_address) FROM visit_logs WHERE traffic_source = ? AND is_bot = 0",
+            (source,),
+        ).fetchone()[0]
+        source_last_day = db.execute(
+            "SELECT COUNT(*) FROM visit_logs WHERE traffic_source = ? AND is_bot = 0 AND created_at >= ?",
+            (source, last_day_cutoff),
+        ).fetchone()[0]
+        source_new_visitors = db.execute(
+            "SELECT COUNT(*) FROM visit_logs WHERE traffic_source = ? AND is_bot = 0 AND is_new_visitor = 1",
+            (source,),
+        ).fetchone()[0]
+        share = round((source_total / total_visits) * 100, 1) if total_visits else 0.0
+        campaign_overview.append(
+            {
+                "source": source,
+                "label": CAMPAIGN_SOURCE_LABELS.get(source, source.replace("_", " ").title()),
+                "total": source_total,
+                "unique": source_unique,
+                "last_day": source_last_day,
+                "new_visitors": source_new_visitors,
+                "share": share,
+            }
+        )
     summary = {
         "total": total_visits,
         "unique": unique_visitors,
@@ -2625,6 +2827,8 @@ def admin_traffic() -> str:
         top_locations=top_locations,
         top_pages=top_pages,
         recent_hits=recent_hits,
+        campaign_overview=campaign_overview,
+        campaign_labels=CAMPAIGN_SOURCE_LABELS,
     )
 
 

@@ -42,18 +42,18 @@
             <div class="col-sm-6 col-lg-3">
                 <div class="card card-zoom h-100">
                     <div class="card-body">
-                        <div class="text-muted small text-uppercase">Unique visitors</div>
+                        <div class="text-muted small text-uppercase">Campaign unique humans</div>
                         <div class="display-6 fw-semibold">{{ metrics.unique_visitors or 0 }}</div>
-                        <div class="text-muted small">Last 24h: {{ metrics.visits_last_day or 0 }}</div>
+                        <div class="text-muted small">Last 24h (campaign): {{ metrics.visits_last_day or 0 }}</div>
                     </div>
                 </div>
             </div>
             <div class="col-sm-6 col-lg-3">
                 <div class="card card-zoom h-100">
                     <div class="card-body">
-                        <div class="text-muted small text-uppercase">Total visits</div>
+                        <div class="text-muted small text-uppercase">Campaign visits (human)</div>
                         <div class="display-6 fw-semibold">{{ metrics.visit_total or 0 }}</div>
-                        <div class="text-muted small">Since tracking enabled</div>
+                        <div class="text-muted small">Since campaign tracking began</div>
                     </div>
                 </div>
             </div>
@@ -63,7 +63,7 @@
             <div class="col-lg-6">
                 <div class="card card-zoom h-100">
                     <div class="card-body">
-                        <h2 class="h5 fw-semibold mb-3">Top visitor locations</h2>
+                        <h2 class="h5 fw-semibold mb-3">Top campaign locations</h2>
                         <ul class="list-unstyled mb-0 text-muted small">
                             {% for loc in traffic_summary.top_locations[:3] %}
                                 <li class="mb-1">

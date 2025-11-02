@@ -5,8 +5,8 @@
     <div class="container">
         <div class="d-flex flex-column flex-md-row align-items-start align-items-md-center justify-content-between gap-3 mb-4">
             <div>
-                <h1 class="h4 fw-bold mb-1">Traffic analytics</h1>
-                <p class="text-muted mb-0">Monitor visitor volume and geo distribution across the platform.</p>
+                <h1 class="h4 fw-bold mb-1">Campaign traffic analytics</h1>
+                <p class="text-muted mb-0">Counts include only human visits tagged from Facebook/Instagram and Google/YouTube ad campaigns.</p>
             </div>
             <a href="{{ url_for('admin_dashboard') }}" class="btn btn-outline-secondary">&larr; Back to dashboard</a>
         </div>
@@ -14,7 +14,7 @@
             <div class="col-sm-6 col-lg-3">
                 <div class="card card-zoom h-100">
                     <div class="card-body">
-                        <div class="text-muted small text-uppercase">Total visits</div>
+                        <div class="text-muted small text-uppercase">Campaign visits (human)</div>
                         <div class="display-6 fw-semibold">{{ summary.total }}</div>
                         <div class="text-muted small">Since tracking began</div>
                     </div>
@@ -23,7 +23,7 @@
             <div class="col-sm-6 col-lg-3">
                 <div class="card card-zoom h-100">
                     <div class="card-body">
-                        <div class="text-muted small text-uppercase">Unique visitors</div>
+                        <div class="text-muted small text-uppercase">Unique humans</div>
                         <div class="display-6 fw-semibold">{{ summary.unique }}</div>
                         <div class="text-muted small">Distinct IP addresses</div>
                     </div>
@@ -32,28 +32,50 @@
             <div class="col-sm-6 col-lg-3">
                 <div class="card card-zoom h-100">
                     <div class="card-body">
-                        <div class="text-muted small text-uppercase">Past 24 hours</div>
+                        <div class="text-muted small text-uppercase">Campaign visits (24h)</div>
                         <div class="display-6 fw-semibold">{{ summary.last_day }}</div>
-                        <div class="text-muted small">Recent visit count</div>
+                        <div class="text-muted small">Visits across the last day</div>
                     </div>
                 </div>
             </div>
             <div class="col-sm-6 col-lg-3">
                 <div class="card card-zoom h-100">
                     <div class="card-body">
-                        <div class="text-muted small text-uppercase">New visitors</div>
+                        <div class="text-muted small text-uppercase">New human visitors</div>
                         <div class="display-6 fw-semibold">{{ summary.new_visitors }}</div>
                         <div class="text-muted small">First-time sessions observed</div>
                     </div>
                 </div>
             </div>
         </div>
+        {% if campaign_overview %}
+        <div class="row g-3 mb-4">
+            {% for item in campaign_overview %}
+                <div class="col-md-6 col-xl-4">
+                    <div class="card card-zoom h-100">
+                        <div class="card-body">
+                            <div class="d-flex justify-content-between align-items-start mb-2">
+                                <div>
+                                    <div class="text-muted small text-uppercase">{{ item.label }}</div>
+                                    <div class="display-6 fw-semibold">{{ item.total }}</div>
+                                </div>
+                                <span class="badge bg-success-subtle text-success">{{ "%.1f"|format(item.share) }}%</span>
+                            </div>
+                            <div class="text-muted small">Unique humans: <span class="fw-semibold text-dark">{{ item.unique }}</span></div>
+                            <div class="text-muted small">Past 24&nbsp;hours: <span class="fw-semibold text-dark">{{ item.last_day }}</span></div>
+                            <div class="text-muted small">New visitors: <span class="fw-semibold text-dark">{{ item.new_visitors }}</span></div>
+                        </div>
+                    </div>
+                </div>
+            {% endfor %}
+        </div>
+        {% endif %}
         <div class="row g-4">
             <div class="col-lg-6">
                 <div class="card card-zoom h-100">
                     <div class="card-body">
                         <div class="d-flex justify-content-between align-items-center mb-3">
-                            <h2 class="h5 fw-semibold mb-0">Top pages</h2>
+                            <h2 class="h5 fw-semibold mb-0">Top pages (campaign)</h2>
                             <span class="badge bg-success-subtle text-success">{{ top_pages|length }}</span>
                         </div>
                         {% if top_pages %}
@@ -85,7 +107,7 @@
                 <div class="card card-zoom h-100">
                     <div class="card-body">
                         <div class="d-flex justify-content-between align-items-center mb-3">
-                            <h2 class="h5 fw-semibold mb-0">Top locations</h2>
+                            <h2 class="h5 fw-semibold mb-0">Top locations (campaign)</h2>
                             <span class="badge bg-success-subtle text-success">{{ top_locations|length }}</span>
                         </div>
                         {% if top_locations %}
@@ -124,7 +146,7 @@
             <div class="col-12">
                 <div class="card card-zoom">
                     <div class="card-body">
-                        <h2 class="h5 fw-semibold mb-3">Recent visits</h2>
+                        <h2 class="h5 fw-semibold mb-3">Recent campaign visits</h2>
                         {% if recent_hits %}
                             <div class="table-responsive">
                                 <table class="table table-sm align-middle">
@@ -134,6 +156,7 @@
                                             <th>IP</th>
                                             <th>Location</th>
                                             <th>Path</th>
+                                            <th>Source</th>
                                             <th>Referer</th>
                                             <th>New?</th>
                                         </tr>
@@ -146,13 +169,16 @@
                                                 <td class="text-muted small">
                                                     {% if visit['city'] or visit['country'] %}
                                                         {{ visit['city'] or 'Unknown city' }},
-                                                        {{ visit['country'] or 'Country' }}
+                                                        {{ visit['country'] or 'Unknown country' }}
                                                     {% else %}
-                                                        <span class="text-muted">—</span>
+                                                        <span class="text-muted">&mdash;</span>
                                                     {% endif %}
                                                 </td>
                                                 <td class="text-truncate" style="max-width: 220px;">{{ visit['path'] }} ({{ visit['method'] }})</td>
-                                                <td class="text-truncate text-muted small" style="max-width: 220px;">{{ visit['referer'] or '—' }}</td>
+                                                {% set source_key = visit['traffic_source'] %}
+                                                {% set source_label = campaign_labels.get(source_key) %}
+                                                <td class="text-muted small">{{ source_label or source_key.replace('_', ' ')|title }}</td>
+                                                <td class="text-truncate text-muted small" style="max-width: 220px;">{% if visit['referer'] %}{{ visit['referer'] }}{% else %}<span class="text-muted">&mdash;</span>{% endif %}</td>
                                                 <td>
                                                     {% if visit['is_new_visitor'] %}
                                                         <span class="badge bg-success-subtle text-success">Yes</span>
