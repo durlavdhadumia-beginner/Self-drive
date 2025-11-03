@@ -170,16 +170,27 @@
     };
     const syncAdmin = () => {
         const roleValue = getSelectedRole();
-        const wantsAdmin = (roleValue === 'admin') || (adminToggle && adminToggle.checked);
-        if (adminToggle && roleValue === 'admin' && !adminToggle.checked) {
-            adminToggle.checked = true;
+        if (adminToggle) {
+            const wasRoleLocked = adminToggle.dataset.roleLocked === "1";
+            if (roleValue === 'admin') {
+                adminToggle.checked = true;
+                adminToggle.dataset.roleLocked = "1";
+            } else if (wasRoleLocked) {
+                adminToggle.checked = false;
+                adminToggle.dataset.roleLocked = "0";
+            }
         }
+        const wantsAdmin = (roleValue === 'admin') || (adminToggle && adminToggle.checked);
         if (adminRow) {
             adminRow.classList.toggle('d-none', !wantsAdmin);
         }
     };
     if (adminToggle) {
-        adminToggle.addEventListener('change', syncAdmin);
+        adminToggle.dataset.roleLocked = getSelectedRole() === 'admin' ? "1" : "0";
+        adminToggle.addEventListener('change', () => {
+            adminToggle.dataset.roleLocked = "0";
+            syncAdmin();
+        });
     }
     roleInputs.forEach((input) => {
         input.addEventListener('change', syncAdmin);
