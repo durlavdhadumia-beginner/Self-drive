@@ -191,6 +191,24 @@
                                     </tbody>
                                 </table>
                             </div>
+                            {% if pagination.total %}
+                                <div class="d-flex flex-column flex-md-row justify-content-md-between align-items-md-center gap-2 mt-3">
+                                    <span class="text-muted small">
+                                        Showing {{ pagination.start_index }}&ndash;{{ pagination.end_index }} of {{ pagination.total }} visits
+                                    </span>
+                                    <nav aria-label="Recent campaign visits pages">
+                                        <ul class="pagination pagination-sm mb-0">
+                                            <li class="page-item {% if not pagination.has_prev %}disabled{% endif %}">
+                                                <a class="page-link" href="{{ url_for('admin_traffic', page=pagination.prev_page) if pagination.has_prev else '#' }}" {% if not pagination.has_prev %}tabindex="-1" aria-disabled="true"{% endif %}>Previous</a>
+                                            </li>
+                                            <li class="page-item disabled"><span class="page-link">Page {{ pagination.page }} of {{ pagination.pages }}</span></li>
+                                            <li class="page-item {% if not pagination.has_next %}disabled{% endif %}">
+                                                <a class="page-link" href="{{ url_for('admin_traffic', page=pagination.next_page) if pagination.has_next else '#' }}" {% if not pagination.has_next %}tabindex="-1" aria-disabled="true"{% endif %}>Next</a>
+                                            </li>
+                                        </ul>
+                                    </nav>
+                                </div>
+                            {% endif %}
                         {% else %}
                             <p class="text-muted small mb-0">No request activity recorded yet.</p>
                         {% endif %}

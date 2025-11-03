@@ -1,4 +1,4 @@
-﻿"""Self-drive car rental platform with geolocation search and owner management."""
+"""Self-drive car rental platform with geolocation search and owner management."""
 
 from __future__ import annotations
 
@@ -726,7 +726,8 @@ def init_db() -> None:
             name TEXT NOT NULL,
             state TEXT,
             latitude REAL,
-            longitude REAL
+            longitude REAL,
+            pincode TEXT
         );
 
         CREATE TABLE IF NOT EXISTS user_payout_details (
@@ -1003,6 +1004,7 @@ def init_db() -> None:
         "ALTER TABLE rentals ADD COLUMN cancel_reason TEXT DEFAULT ''",
         "ALTER TABLE user_profiles ADD COLUMN profile_verified_at TEXT",
         "ALTER TABLE user_documents ADD COLUMN doc_type TEXT DEFAULT ''",
+        "ALTER TABLE cities ADD COLUMN pincode TEXT",
         "ALTER TABLE visit_logs ADD COLUMN traffic_source TEXT NOT NULL DEFAULT 'other'",
         "ALTER TABLE visit_logs ADD COLUMN is_bot INTEGER NOT NULL DEFAULT 0"
     ]
@@ -2720,10 +2722,18 @@ def admin_traffic() -> str:
     now = naive_utcnow()
     last_day_cutoff = (now - timedelta(days=1)).isoformat()
     last_week_cutoff = (now - timedelta(days=7)).isoformat()
+    page = request.args.get("page", default=1, type=int) or 1
+    if page < 1:
+        page = 1
+    per_page = 25
     total_visits = db.execute(
         f"SELECT COUNT(*) FROM visit_logs WHERE {CAMPAIGN_FILTER_SQL}",
         CAMPAIGN_TRAFFIC_SOURCES,
     ).fetchone()[0]
+    total_pages = max(1, ceil(total_visits / per_page)) if total_visits else 1
+    if page > total_pages:
+        page = total_pages
+    offset = (page - 1) * per_page if total_visits else 0
     unique_visitors = db.execute(
         f"SELECT COUNT(DISTINCT ip_address) FROM visit_logs WHERE {CAMPAIGN_FILTER_SQL}",
         CAMPAIGN_TRAFFIC_SOURCES,
@@ -2787,9 +2797,9 @@ def admin_traffic() -> str:
         FROM visit_logs
         WHERE {CAMPAIGN_FILTER_SQL}
         ORDER BY created_at DESC
-        LIMIT 150
+        LIMIT ? OFFSET ?
         """,
-        CAMPAIGN_TRAFFIC_SOURCES,
+        (*CAMPAIGN_TRAFFIC_SOURCES, per_page, offset),
     ).fetchall()
     campaign_overview: List[dict[str, Any]] = []
     for source in CAMPAIGN_TRAFFIC_SOURCES:
@@ -2828,6 +2838,18 @@ def admin_traffic() -> str:
         "last_week": last_week_visits,
         "new_visitors": new_visitors,
     }
+    pagination = {
+        "page": page,
+        "per_page": per_page,
+        "total": total_visits,
+        "pages": total_pages,
+        "has_prev": page > 1,
+        "has_next": (page < total_pages) and bool(total_visits),
+        "prev_page": page - 1 if page > 1 else None,
+        "next_page": page + 1 if page < total_pages else None,
+        "start_index": offset + 1 if total_visits else 0,
+        "end_index": min(offset + per_page, total_visits) if total_visits else 0,
+    }
     return render_template(
         "admin_traffic.html",
         summary=summary,
@@ -2836,6 +2858,7 @@ def admin_traffic() -> str:
         recent_hits=recent_hits,
         campaign_overview=campaign_overview,
         campaign_labels=CAMPAIGN_SOURCE_LABELS,
+        pagination=pagination,
     )
 
 
@@ -5791,7 +5814,7 @@ def owner_respond_rental(rental_id: int) -> str:
     elif action == "counter" and rental["owner_response"] == "pending" and rental["counter_used"] == 0:
         delivery_fee_existing = float(rental["delivery_fee"] or 0.0)
         raw_amount = (request.form.get("counter_amount") or "").strip()
-        normalised = raw_amount.replace("₹", "").replace(",", "").strip()
+        normalised = raw_amount.replace("?", "").replace(",", "").strip()
         counter_total = parse_float(normalised)
         if counter_total is None:
             return redirect(url_for("owner_cars"))
