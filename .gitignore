@@ -1,5 +1,5 @@
-car_rental.db
 __pycache__/
 *.pyc
 static/uploads/
 tile_cache/
+data/

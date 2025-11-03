@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import csv
 import io
+import os
 import sqlite3
 import sys
 import urllib.request
@@ -18,7 +19,10 @@ from typing import Iterable, Tuple
 PRIMARY_DATA_URL = (
     "https://raw.githubusercontent.com/dr5hn/countries-states-cities-database/master/csv/cities.csv"
 )
-DB_PATH = Path(__file__).with_name("car_rental.db")
+APP_ROOT = Path(__file__).resolve().parent
+DATA_ROOT = Path(os.environ.get("CARRENTAL_DATA_DIR") or APP_ROOT.joinpath("data"))
+DB_PATH = Path(os.environ.get("CARRENTAL_DB_PATH") or DATA_ROOT.joinpath("car_rental.db"))
+DB_PATH.parent.mkdir(parents=True, exist_ok=True)
 
 
 def download_primary_dataset() -> str:

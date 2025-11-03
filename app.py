@@ -39,11 +39,18 @@ from werkzeug.security import check_password_hash, generate_password_hash
 from werkzeug.utils import secure_filename
 
 
-DATABASE = Path(__file__).with_name("car_rental.db")
-UPLOAD_ROOT = Path(__file__).with_name("static").joinpath("uploads")
+APP_ROOT = Path(__file__).resolve().parent
+DATA_ROOT = Path(
+    os.environ.get("CARRENTAL_DATA_DIR") or APP_ROOT.joinpath("data")
+)
+DATABASE = Path(
+    os.environ.get("CARRENTAL_DB_PATH") or DATA_ROOT.joinpath("car_rental.db")
+)
+DATABASE.parent.mkdir(parents=True, exist_ok=True)
+UPLOAD_ROOT = APP_ROOT.joinpath("static", "uploads")
 USER_DOC_ROOT = UPLOAD_ROOT.joinpath("user_docs")
-TILE_CACHE_ROOT = Path(__file__).with_name("tile_cache")
-STATE_CODE_FILE = Path(__file__).with_name("state_codes.csv")
+TILE_CACHE_ROOT = APP_ROOT.joinpath("tile_cache")
+STATE_CODE_FILE = APP_ROOT.joinpath("state_codes.csv")
 INDIA_TZ = timezone(timedelta(hours=5, minutes=30))
 ALLOWED_EXTENSIONS = {"png", "jpg", "jpeg", "gif", "webp"}
 DOCUMENT_EXTENSIONS = {"png", "jpg", "jpeg", "pdf"}
