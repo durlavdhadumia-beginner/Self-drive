@@ -1,5 +1,73 @@
 {% extends "base.html" %}
 {% block title %}Create Account | DriveNow{% endblock %}
+{% block head %}
+{{ super() }}
+<style>
+    .role-option-group {
+        display: grid;
+        gap: 0.85rem;
+    }
+    .role-option {
+        position: relative;
+    }
+    .role-option-input {
+        position: absolute;
+        opacity: 0;
+        pointer-events: none;
+    }
+    .role-option-label {
+        display: flex;
+        align-items: center;
+        gap: 0.9rem;
+        background: #fff;
+        border: 1px solid #d9e2eb;
+        border-radius: 0.9rem;
+        padding: 0.9rem 1.1rem;
+        cursor: pointer;
+        transition: all 0.15s ease-in-out;
+        box-shadow: 0 6px 16px rgba(15, 118, 110, 0.04);
+    }
+    .role-option-checkbox {
+        width: 1.35rem;
+        height: 1.35rem;
+        border: 2px solid var(--zoom-green);
+        border-radius: 0.4rem;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 0.9rem;
+        color: #fff;
+        background: transparent;
+        transition: all 0.15s ease-in-out;
+    }
+    .role-option-checkbox::after {
+        content: "";
+    }
+    .role-option-input:checked + .role-option-label {
+        border-color: var(--zoom-green);
+        box-shadow: 0 8px 24px rgba(13, 159, 92, 0.15);
+        background: rgba(13, 159, 92, 0.08);
+    }
+    .role-option-input:checked + .role-option-label .role-option-checkbox {
+        background: var(--zoom-green);
+        color: #fff;
+    }
+    .role-option-input:checked + .role-option-label .role-option-checkbox::after {
+        content: "✓";
+        font-weight: 700;
+    }
+    .role-option-label span.role-option-text {
+        font-weight: 500;
+        color: #0f172a;
+    }
+    @media (max-width: 575.98px) {
+        .role-option-label {
+            flex-direction: row;
+            align-items: flex-start;
+        }
+    }
+</style>
+{% endblock %}
 {% block content %}
 <section class="py-5" style="background:linear-gradient(135deg, rgba(10,92,54,0.08), rgba(13,159,92,0.04));">
     <div class="container">
@@ -35,13 +103,38 @@
                                 <input type="password" class="form-control form-control-lg" id="confirm_password" name="confirm_password" required autocomplete="new-password">
                             </div>
                             <div class="col-12">
-                                <label for="role" class="form-label">I am signing up as</label>
-                                <select class="form-select form-select-lg" id="role" name="role">
-                                    <option value="renter" {% if form_data.get('role', 'renter') == 'renter' %}selected{% endif %}>Customer (book self-drive vehicles)</option>
-                                    <option value="owner" {% if form_data.get('role') == 'owner' %}selected{% endif %}>Vehicle owner / host</option>
-                                    <option value="both" {% if form_data.get('role') == 'both' %}selected{% endif %}>Both customer and host</option>
-                                    <option value="admin" {% if form_data.get('role') == 'admin' %}selected{% endif %}>Admin (manage platform)</option>
-                                </select>
+                                <p class="form-label mb-2">I am signing up as</p>
+                                {% set selected_role = form_data.get('role', 'renter') %}
+                                <div class="role-option-group">
+                                    <div class="role-option">
+                                        <input class="role-option-input" type="radio" name="role" id="role-renter" value="renter" {% if selected_role == 'renter' %}checked{% endif %}>
+                                        <label class="role-option-label" for="role-renter">
+                                            <span class="role-option-checkbox" aria-hidden="true"></span>
+                                            <span class="role-option-text">Customer (book self-drive vehicles)</span>
+                                        </label>
+                                    </div>
+                                    <div class="role-option">
+                                        <input class="role-option-input" type="radio" name="role" id="role-owner" value="owner" {% if selected_role == 'owner' %}checked{% endif %}>
+                                        <label class="role-option-label" for="role-owner">
+                                            <span class="role-option-checkbox" aria-hidden="true"></span>
+                                            <span class="role-option-text">Vehicle owner / Host</span>
+                                        </label>
+                                    </div>
+                                    <div class="role-option">
+                                        <input class="role-option-input" type="radio" name="role" id="role-both" value="both" {% if selected_role == 'both' %}checked{% endif %}>
+                                        <label class="role-option-label" for="role-both">
+                                            <span class="role-option-checkbox" aria-hidden="true"></span>
+                                            <span class="role-option-text">Both customer and host</span>
+                                        </label>
+                                    </div>
+                                    <div class="role-option">
+                                        <input class="role-option-input" type="radio" name="role" id="role-admin" value="admin" {% if selected_role == 'admin' %}checked{% endif %}>
+                                        <label class="role-option-label" for="role-admin">
+                                            <span class="role-option-checkbox" aria-hidden="true"></span>
+                                            <span class="role-option-text">Admin (manage platform)</span>
+                                        </label>
+                                    </div>
+                                </div>
                             </div>
                             <div class="col-12">
                                 <div class="form-check">
@@ -70,9 +163,13 @@
 <script>
     const adminToggle = document.getElementById('admin_request');
     const adminRow = document.getElementById('admin-code-row');
-    const roleSelect = document.getElementById('role');
+    const roleInputs = Array.from(document.querySelectorAll('input[name="role"]'));
+    const getSelectedRole = () => {
+        const checked = roleInputs.find((input) => input.checked);
+        return checked ? checked.value : 'renter';
+    };
     const syncAdmin = () => {
-        const roleValue = roleSelect ? roleSelect.value : 'renter';
+        const roleValue = getSelectedRole();
         const wantsAdmin = (roleValue === 'admin') || (adminToggle && adminToggle.checked);
         if (adminToggle && roleValue === 'admin' && !adminToggle.checked) {
             adminToggle.checked = true;
@@ -84,9 +181,9 @@
     if (adminToggle) {
         adminToggle.addEventListener('change', syncAdmin);
     }
-    if (roleSelect) {
-        roleSelect.addEventListener('change', syncAdmin);
-    }
+    roleInputs.forEach((input) => {
+        input.addEventListener('change', syncAdmin);
+    });
     syncAdmin();
 </script>
 {% endblock %}
