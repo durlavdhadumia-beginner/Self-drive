@@ -33,7 +33,7 @@
                     <div class="d-flex flex-wrap gap-2">
                         <span class="badge bg-info text-dark text-uppercase small">{{ (trip['status'] or 'unknown')|replace('_', ' ') }}</span>
                         <span class="badge bg-secondary text-uppercase small">{{ (trip['payment_status'] or 'pending')|replace('_', ' ') }}</span>
-                        {% if trip['owner_response'] in ('pending', 'counter') %}
+                        {% if trip['owner_response'] == 'pending' %}
                             <span class="badge bg-warning text-dark text-uppercase small">{{ trip['owner_response']|replace('_', ' ') }}</span>
                         {% endif %}
                     </div>
@@ -76,11 +76,6 @@
                     </div>
                 </div>
 
-                {% if trip['owner_response'] == 'counter' and trip['counter_amount'] %}
-                    <div class="alert alert-warning mt-3 mb-0 small">
-                        Counter offer awaiting renter: Rs {{ trip['counter_amount']|round(2) }} &mdash; comment: {{ trip['counter_comment'] or 'No note provided' }}
-                    </div>
-                {% endif %}
             </div>
             {% endfor %}
         </div>

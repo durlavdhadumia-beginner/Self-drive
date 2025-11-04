@@ -179,7 +179,7 @@
                 <div class="card card-zoom mb-4">
                     <div class="card-body">
                         <h2 class="h5 fw-semibold mb-3">Pending booking requests</h2>
-                        {% if pending_requests or counter_requests %}
+                        {% if pending_requests %}
                             {% for rental in pending_requests %}
                                 <div class="border rounded-4 p-3 mb-3">
                                     {% set base_amount = rental['host_rental_amount'] if rental['host_rental_amount'] is not none else (rental['total_amount'] or 0) - (rental['delivery_fee'] or 0) %}
@@ -196,17 +196,10 @@
                                             Delivery: Pickup only
                                         {% endif %}
                                     </div>
-                                    {% set total_display = rental['counter_total_amount'] if rental['counter_total_amount'] else (base_amount + delivery_fee) %}
+                                    {% set total_display = (base_amount + delivery_fee) %}
                                     <div class="fw-semibold text-danger" style="color:#7d1d31;">Total: Rs {{ (total_display or 0)|round(2) }}</div>
                                     <div class="text-muted small text-danger">Service fee ({{ rental['host_service_fee_rate'] }}%): -Rs {{ rental['host_service_fee']|round(2) }}</div>
-                                    {% if rental['counter_total_amount'] %}
-                                        <div class="fw-semibold text-warning">
-                                            Requested take-home if accepted: ~Rs {{ rental['counter_net_take_home']|round(2) }}
-                                        </div>
-                                        <div class="text-muted small">Renter will see Rs {{ rental['counter_total_amount']|round(2) }} (includes delivery and platform fee).</div>
-                                    {% else %}
-                                        <div class="fw-semibold text-success">Net take-home: Rs {{ rental['host_net_take_home']|round(2) }}</div>
-                                    {% endif %}
+                                    <div class="fw-semibold text-success">Net take-home: Rs {{ rental['host_net_take_home']|round(2) }}</div>
                                     {% if rental['delivery_type'] == 'delivery' %}
                                         <div class="text-muted small">Delivery to {{ delivery_label }}{% if rental['delivery_distance_km'] %} &bull; ~{{ rental['delivery_distance_km']|round(1) }} km{% endif %}</div>
                                     {% endif %}
@@ -236,51 +229,7 @@
                                             <input type="text" class="form-control form-control-sm" name="reason" placeholder="Reason" required>
                                             <button type="submit" class="btn btn-sm btn-outline-danger">Reject</button>
                                         </form>
-                                        <form method="post" action="{{ url_for('owner_respond_rental', rental_id=rental['id']) }}" class="d-flex flex-column flex-lg-row gap-2" data-counter-form data-original-total="{{ (rental['total_amount'] or 0)|round(2) }}" onsubmit="return window.confirmCounter ? window.confirmCounter(this) : true;">
-                                            <input type="hidden" name="action" value="counter">
-                                            <div class="flex-grow-1 d-flex gap-2">
-                                                <input type="number" class="form-control form-control-sm" name="counter_amount" placeholder="Total price for renter (Rs)" min="0" step="50" required>
-                                                <input type="text" class="form-control form-control-sm" name="counter_comment" placeholder="Note (optional)">
-                                            </div>
-                                            <button type="submit" class="btn btn-sm btn-outline-secondary align-self-start">Counter once</button>
-                                        </form>
-                                        <div class="form-text text-muted small">
-                                            Current net take-home at the listed price: Rs {{ rental['host_net_take_home']|round(2) }}.
-                                            Enter the total amount you want the renter to pay. We will calculate the expected take-home after the {{ rental['host_service_fee_rate'] }}% service fee.
-                                        </div>
                                     </div>
-                                </div>
-                            {% endfor %}
-                            {% for rental in counter_requests %}
-                                <div class="border rounded-4 p-3 mb-3 bg-warning-subtle">
-                                    <div class="fw-semibold">{{ rental['car_name'] }} - {{ rental['renter_public_name'] }}</div>
-                                    <div class="text-muted small">Trip start: {{ rental['start_time']|trip_datetime }}</div>
-                                    <div class="text-muted small">Trip end: {{ rental['end_time']|trip_datetime }}</div>
-                                    {% set counter_total = rental['counter_total_amount'] or rental['counter_amount'] %}
-                                    {% set counter_take_home = rental['counter_net_take_home'] %}
-                                    <div class="text-muted small">
-                                        Waiting for renter to respond to your counter offer:
-                                        Total Rs {{ counter_total|round(2) }}
-                                        {% if counter_take_home %}
-                                            (You receive ~Rs {{ counter_take_home|round(2) }} after fees)
-                                        {% endif %}.
-                                    </div>
-                                    {% if rental['trip_destinations_list'] %}
-                                        <div class="small mt-1 fw-semibold" style="color:#6b21a8;">
-                                            Destinations:
-                                            {% for destination in rental['trip_destinations_list'] %}
-                                                <span class="me-1">{{ loop.index }}. {{ destination }}{% if not loop.last %},{% endif %}</span>
-                                            {% endfor %}
-                                        </div>
-                                    {% endif %}
-                                    {% if rental['delivery_type'] == 'delivery' and rental['delivery_latitude'] is not none and rental['delivery_longitude'] is not none %}
-                                        <div class="rounded-4 border overflow-hidden mt-3 owner-request-map" data-owner-request-map
-                                             data-delivery-lat="{{ rental['delivery_latitude'] }}" data-delivery-lng="{{ rental['delivery_longitude'] }}"
-                                             data-car-lat="{{ rental['car_latitude'] if rental['car_latitude'] is not none else '' }}"
-                                             data-car-lng="{{ rental['car_longitude'] if rental['car_longitude'] is not none else '' }}"
-                                             data-destinations='{{ rental['trip_destinations_map']|tojson }}'
-                                             style="height: 220px;"></div>
-                                    {% endif %}
                                 </div>
                             {% endfor %}
                         {% else %}
@@ -733,59 +682,6 @@
     <script>window.OWNER_CITY_ENTRIES = {{ city_entries|tojson|safe }};</script>
     <script src="{{ url_for('static', filename='vendor/leaflet/leaflet.js') }}"></script>
     <script src="{{ url_for('static', filename='js/owner_dashboard.js') }}"></script>
-    <script>
-        (function () {
-            const ensureInlineCounterConfirm = () => {
-                if (typeof window.confirmCounter !== 'function') {
-                    window.confirmCounter = (form) => {
-                        if (!form) {
-                            return true;
-                        }
-                        const actionInput = form.querySelector('input[name="action"]');
-                        if (!actionInput || actionInput.value !== 'counter') {
-                            return true;
-                        }
-                        const amountInput = form.querySelector('input[name="counter_amount"]');
-                        if (!amountInput) {
-                            return true;
-                        }
-                        const originalAttr = form.getAttribute('data-original-total');
-                        const originalTotal = parseFloat(originalAttr);
-                        if (!Number.isFinite(originalTotal)) {
-                            return true;
-                        }
-                        const enteredRaw = (amountInput.value || '').replace(/[\u20B9,]/g, '').trim();
-                        const enteredAmount = parseFloat(enteredRaw);
-                        if (!Number.isFinite(enteredAmount)) {
-                            return true;
-                        }
-                        if (enteredAmount < originalTotal) {
-                            const message = `Do you want to make the revised offer less than the original total amount of Rs ${originalTotal.toFixed(2)}?`;
-                            return window.confirm(message);
-                        }
-                        return true;
-                    };
-                }
-                document.querySelectorAll('form[data-counter-form]').forEach((form) => {
-                    if (form.dataset.counterConfirmInline === '1') {
-                        return;
-                    }
-                    form.addEventListener('submit', (event) => {
-                        if (!window.confirmCounter(form)) {
-                            event.preventDefault();
-                            event.stopImmediatePropagation();
-                        }
-                    }, true);
-                    form.dataset.counterConfirmInline = '1';
-                });
-            };
-            if (document.readyState === 'complete' || document.readyState === 'interactive') {
-                ensureInlineCounterConfirm();
-            } else {
-                document.addEventListener('DOMContentLoaded', ensureInlineCounterConfirm);
-            }
-        })();
-    </script>
 {% endblock %}
 
 

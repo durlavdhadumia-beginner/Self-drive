@@ -55,8 +55,6 @@
                                                 <span class="badge bg-success-subtle text-success">Accepted by host</span>
                                             {% elif rental['owner_response'] == 'rejected' %}
                                                 <span class="badge bg-danger-subtle text-danger">Declined by host</span>
-                                            {% elif rental['owner_response'] == 'counter' %}
-                                                <span class="badge bg-warning text-dark">Counter offer pending</span>
                                             {% endif %}
                                             {% if rental['payment_status'] == 'awaiting_payment' %}
                                                 <span class="badge bg-warning text-dark">Payment pending</span>
@@ -82,16 +80,6 @@
                                             {% set delivery_fee = rental['display_delivery_fee'] %}
                                             {% set delivery_label = rental['delivery_address'] or 'Pinned delivery location' %}
                                             <div class="bg-light rounded-4 px-3 py-3 h-100">
-                                                {% if rental['owner_response'] == 'counter' %}
-                                                    <div class="alert border-0 shadow-sm mb-3 fw-bold text-uppercase text-center" style="background-color:#f3e8ff;color:#5b21b6;font-size:1.1rem;">
-                                                        Owner has made a revised price offer as below.
-                                                    </div>
-                                                    {% if rental['counter_take_home_display'] %}
-                                                        <div class="text-muted small text-center mb-2">
-                                                            Host receives approximately Rs {{ rental['counter_take_home_display']|round(2) }} after platform fees.
-                                                        </div>
-                                                    {% endif %}
-                                                {% endif %}
                                                 <div>Rental: Rs {{ (base_amount or 0)|round(2) }}</div>
                                                 <div>
                                                     {% if rental['delivery_type'] == 'delivery' %}
@@ -146,17 +134,6 @@
 
                                     <div class="mt-auto">
                                         <div class="d-flex flex-column flex-lg-row flex-wrap gap-2 mb-3">
-                                            {% if rental['status'] != 'cancelled' and rental['owner_response'] == 'counter' %}
-                                                <form method="post" action="{{ url_for('renter_respond_rental', rental_id=rental['id']) }}" class="d-flex gap-2">
-                                                    <input type="hidden" name="action" value="accept_counter">
-                                                    <button type="submit" class="btn btn-sm btn-success">Accept counter offer</button>
-                                                </form>
-                                                <form method="post" action="{{ url_for('renter_respond_rental', rental_id=rental['id']) }}" class="d-flex gap-2">
-                                                    <input type="hidden" name="action" value="decline_counter">
-                                                    <button type="submit" class="btn btn-sm btn-outline-danger">Decline counter</button>
-                                                </form>
-                                            {% endif %}
-
                         {% if rental['status'] != 'cancelled' and rental['owner_response'] == 'accepted' and rental['payment_status'] == 'awaiting_payment' %}
                                             <div class="d-flex flex-column flex-sm-row align-items-sm-center gap-2">
                                                 <a href="{{ url_for('renter_payment_page', rental_id=rental['id']) }}" class="btn btn-sm btn-success">Make payment</a>

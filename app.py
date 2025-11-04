@@ -3726,18 +3726,9 @@ def rentals() -> str:
         display_total = round(total_amount, 2)
         display_base = base_rental_amount
         display_delivery = round(delivery_fee_value, 2)
-        counter_take_home = None
-        if rental.get("owner_response") == "counter" and rental.get("counter_amount"):
-            counter_total = float(rental["counter_amount"] or 0.0)
-            if counter_total > 0:
-                counter_total = round(counter_total, 2)
-                display_total = counter_total
-                display_base = max(0.0, round(counter_total - display_delivery, 2))
-                counter_take_home = max(0.0, round(counter_total * (1 - HOST_SERVICE_FEE_RATE), 2))
         rental["display_total_amount"] = display_total
         rental["display_rental_amount"] = display_base
         rental["display_delivery_fee"] = display_delivery
-        rental["counter_take_home_display"] = counter_take_home
         rentals_list.append(rental)
 
     booking_map = generate_booking_identifier_map()
@@ -3784,7 +3775,7 @@ def rentals() -> str:
     pending_host_action = [
         rental
         for rental in rentals_list
-        if rental.get("owner_response") in ("pending", "counter")
+        if rental.get("owner_response") == "pending"
         and rental.get("status") == "booked"
     ]
     purchase_event = None
@@ -4145,92 +4136,6 @@ def renter_review(rental_id: int) -> str:
 @login_required
 @role_required("renter", "owner")
 def renter_respond_rental(rental_id: int) -> str:
-    db = get_db()
-    action = request.form.get("action")
-    rental = db.execute(
-        """
-        SELECT rentals.*, cars.name AS car_name, cars.brand, cars.model, cars.owner_id, owners.username AS owner_username
-        FROM rentals
-        JOIN cars ON cars.id = rentals.car_id
-        JOIN users AS owners ON owners.id = cars.owner_id
-        WHERE rentals.id = ? AND rentals.renter_id = ?
-        """,
-        (rental_id, g.user["id"]),
-    ).fetchone()
-    if rental is None:
-        abort(404)
-    actor_name = display_name(g.user)
-    now = naive_utcnow()
-    actor_name = display_name(g.user)
-    car_label = rental["car_name"] or f"{rental['brand']} {rental['model']}"
-    if action == "accept_counter" and rental["owner_response"] == "counter":
-        counter_amount = rental["counter_amount"] or rental["total_amount"]
-        new_total = round(counter_amount, 2)
-        delivery_fee_existing = float(rental["delivery_fee"] or 0.0)
-        base_rental_updated = max(0.0, round(new_total - delivery_fee_existing, 2))
-        db.execute(
-            """
-            UPDATE rentals
-            SET owner_response = 'accepted',
-                renter_response = 'accepted',
-                renter_response_at = ?,
-                total_amount = ?,
-                rental_amount = ?,
-                delivery_fee = ?,
-                payment_status = 'awaiting_payment',
-                payment_due_at = ?,
-                payment_channel = 'manual',
-                company_commission_amount = 0,
-                owner_payout_amount = 0,
-                owner_payout_status = 'pending',
-                owner_payout_released_at = NULL
-            WHERE id = ?
-            """,
-            (now.isoformat(), new_total,
-             base_rental_updated,
-             delivery_fee_existing,
-             (now + timedelta(hours=1)).isoformat(), rental_id),
-        )
-        log_rental_activity(
-            rental_id,
-            "counter_offer_accepted",
-            actor_role="renter",
-            actor_id=g.user["id"],
-            actor_name=actor_name,
-            message=f"Renter accepted counter offer. New total Rs {new_total:.2f}.",
-            metadata={"total_amount": new_total},
-        )
-        db.commit()
-        create_notification(
-            rental["owner_id"],
-            f"{g.user['username']} accepted your revised price for {car_label}.",
-            url_for("owner_cars"),
-        )
-    elif action == "decline_counter" and rental["owner_response"] == "counter":
-        db.execute(
-            "UPDATE rentals SET renter_response = 'declined', renter_response_at = ?, status = 'cancelled', cancel_reason = 'Counter offer declined' WHERE id = ?",
-            (now.isoformat(), rental_id),
-        )
-        db.execute(
-            "UPDATE cars SET is_available = 1, updated_at = ? WHERE id = ?",
-            (now.isoformat(), rental["car_id"]),
-        )
-        log_rental_activity(
-            rental_id,
-            "counter_offer_declined",
-            actor_role="renter",
-            actor_id=g.user["id"],
-            actor_name=actor_name,
-            message="Renter declined the counter offer. Booking cancelled.",
-        )
-        db.commit()
-        create_notification(
-            rental["owner_id"],
-            f"{g.user['username']} declined your price suggestion for {car_label}.",
-            url_for("owner_cars"),
-        )
-    else:
-        return redirect(url_for("rentals"))
     return redirect(url_for("rentals"))
 
 
@@ -4648,10 +4553,9 @@ def build_owner_dashboard_context(owner_id: int) -> Dict[str, object]:
         WHERE cars.owner_id = ? AND rentals.status IN ('booked', 'active', 'completed')
         ORDER BY CASE
             WHEN rentals.owner_response = 'pending' THEN 0
-            WHEN rentals.owner_response = 'counter' THEN 1
-            WHEN rentals.status = 'active' THEN 2
-            WHEN rentals.status = 'booked' THEN 3
-            ELSE 4
+            WHEN rentals.status = 'active' THEN 1
+            WHEN rentals.status = 'booked' THEN 2
+            ELSE 3
         END, rentals.start_time DESC
         """,
         (owner_id,),
@@ -4706,16 +4610,9 @@ def build_owner_dashboard_context(owner_id: int) -> Dict[str, object]:
         rental["host_service_fee"] = service_fee_amount
         rental["host_service_fee_rate"] = int(HOST_SERVICE_FEE_RATE * 100)
         rental["host_net_take_home"] = max(0.0, round(total_amount - service_fee_amount, 2))
-        counter_total = float(rental.get("counter_amount") or 0.0)
-        if counter_total > 0:
-            counter_total = round(counter_total, 2)
-            rental["counter_total_amount"] = counter_total
-            rental["counter_net_take_home"] = max(0.0, round(counter_total * (1 - HOST_SERVICE_FEE_RATE), 2))
-            rental["counter_base_amount"] = max(0.0, round(counter_total - delivery_fee_value, 2))
-        else:
-            rental["counter_total_amount"] = None
-            rental["counter_net_take_home"] = None
-            rental["counter_base_amount"] = None
+        rental["counter_total_amount"] = None
+        rental["counter_net_take_home"] = None
+        rental["counter_base_amount"] = None
         initial_status = (rental.get("owner_initial_payout_status") or "").lower()
         final_status = (rental.get("owner_final_payout_status") or "").lower()
         owner_status = (rental.get("owner_payout_status") or "").lower()
@@ -4849,7 +4746,6 @@ def build_owner_dashboard_context(owner_id: int) -> Dict[str, object]:
         vt for vt in vehicle_type_values if vt not in POPULAR_VEHICLE_TYPES]
     fuel_types = build_fuel_type_list()
     pending_requests = [r for r in rentals_data if r.get("owner_response") == "pending"]
-    counter_requests = [r for r in rentals_data if r.get("owner_response") == "counter"]
     awaiting_payments = [r for r in rentals_data if r.get("payment_status") == "awaiting_payment"]
     ready_to_start = [
         r
@@ -4882,7 +4778,6 @@ def build_owner_dashboard_context(owner_id: int) -> Dict[str, object]:
         "pending_payments": awaiting_payments,
         "pending_total_amount": pending_total_amount,
         "pending_requests": pending_requests,
-        "counter_requests": counter_requests,
         "awaiting_payments": awaiting_payments,
         "ready_to_start": ready_to_start,
         "active_trips": active_trips,
@@ -4921,7 +4816,7 @@ def owner_trip_list(category: str) -> str:
     category = category.lower()
     trip_map = {
         "active": context["active_trips"],
-        "pending": context["pending_requests"] + context["counter_requests"],
+        "pending": context["pending_requests"],
         "in-progress": context["ready_to_start"] + context["active_trips"],
     }
     if category not in trip_map:
@@ -5748,7 +5643,7 @@ def owner_respond_rental(rental_id: int) -> str:
     now = naive_utcnow()
     actor_name = display_name(g.user)
     car_label = rental["car_name"] or f"{rental['brand']} {rental['model']}"
-    if action == "accept" and rental["owner_response"] in ("pending", "counter"):
+    if action == "accept" and rental["owner_response"] == "pending":
         payment_due = (now + timedelta(hours=1)).isoformat()
         db.execute(
             """
@@ -5809,37 +5704,6 @@ def owner_respond_rental(rental_id: int) -> str:
         create_notification(
             rental["renter_id"],
             f"{g.user['username']} declined your booking for {car_label}.",
-            url_for("rentals"),
-        )
-    elif action == "counter" and rental["owner_response"] == "pending" and rental["counter_used"] == 0:
-        delivery_fee_existing = float(rental["delivery_fee"] or 0.0)
-        raw_amount = (request.form.get("counter_amount") or "").strip()
-        normalised = raw_amount.replace("?", "").replace(",", "").strip()
-        counter_total = parse_float(normalised)
-        if counter_total is None:
-            return redirect(url_for("owner_cars"))
-        note = request.form.get("counter_comment", "").strip()
-        if counter_total <= 0:
-            return redirect(url_for("owner_cars"))
-        counter_total = max(counter_total, delivery_fee_existing)
-        counter_total = round(counter_total, 2)
-        db.execute(
-            "UPDATE rentals SET owner_response = 'counter', owner_response_at = ?, counter_amount = ?, counter_comment = ?, counter_used = 1 WHERE id = ?",
-            (now.isoformat(), counter_total, note, rental_id),
-        )
-        log_rental_activity(
-            rental_id,
-            "counter_offer_sent",
-            actor_role="owner",
-            actor_id=g.user["id"],
-            actor_name=actor_name,
-            message=f"Host proposed a new total of Rs {counter_total:.2f}.",
-            metadata={"counter_total": counter_total, "note": note},
-        )
-        db.commit()
-        create_notification(
-            rental["renter_id"],
-            f"{g.user['username']} suggested a new price of Rs {counter_total:.0f} for {car_label}. Review and confirm.",
             url_for("rentals"),
         )
     else:
