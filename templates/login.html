@@ -40,3 +40,13 @@
     </div>
 </section>
 {% endblock %}
+{% block scripts %}
+{{ super() }}
+{% if show_signup_conversion %}
+<script>
+    if (typeof gtag === 'function') {
+        gtag('event', 'conversion', {'send_to': 'AW-17699412396/cwgSC3-B6LkbEKyz3vdB'});
+    }
+</script>
+{% endif %}
+{% endblock %}

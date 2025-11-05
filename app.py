@@ -5831,6 +5831,7 @@ def register() -> str:
             except sqlite3.IntegrityError:
                 error = "Username is already taken."
             else:
+                session["signup_conversion"] = True
                 return redirect(url_for("login", message="Account created. Please sign in."))
     return render_template(
         "register.html",
@@ -5846,6 +5847,7 @@ def login() -> str:
         return redirect(url_for("home"))
     error = None
     message = request.args.get("message")
+    show_signup_conversion = bool(session.pop("signup_conversion", False))
     if request.method == "POST":
         identifier = request.form.get("username", "").strip()
         password = request.form.get("password", "")
@@ -5892,7 +5894,7 @@ def login() -> str:
                 session.clear()
                 session["user_id"] = user_row["id"]
                 return redirect(url_for("home"))
-    return render_template("login.html", error=error, message=message)
+    return render_template("login.html", error=error, message=message, show_signup_conversion=show_signup_conversion)
 
 
 @app.route("/logout")
