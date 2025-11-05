@@ -208,6 +208,11 @@ app.config.update(
     SECRET_KEY="replace-with-a-secure-random-value",
     UPLOAD_FOLDER=str(UPLOAD_ROOT),
     MAX_CONTENT_LENGTH=32 * 1024 * 1024,  # 32 MB per request
+    GOOGLE_ADS_SIGNUP_SEND_TO=os.environ.get(
+        "GOOGLE_ADS_SIGNUP_SEND_TO", "AW-17699412396/cwgSC3-B6LkbEKyz3vdB"
+    ),
+    GOOGLE_ADS_PROFILE_SEND_TO=os.environ.get("GOOGLE_ADS_PROFILE_SEND_TO", ""),
+    GOOGLE_ADS_LISTING_SEND_TO=os.environ.get("GOOGLE_ADS_LISTING_SEND_TO", ""),
 )
 app.logger.setLevel("INFO")
 
@@ -2251,7 +2256,14 @@ def profile() -> str:
             error = f"Please add the following to finish your profile: {missing_text}."
             message = None
         else:
-            message = "Profile updated successfully."
+            return redirect(
+                url_for(
+                    "profile",
+                    message="Profile updated successfully.",
+                    profile_completed="1",
+                )
+            )
+    profile_conversion = request.args.get("profile_completed") == "1"
     return render_template(
         "profile.html",
         profile=profile_row,
@@ -2266,6 +2278,7 @@ def profile() -> str:
         documents=documents,
         missing_fields=missing_fields,
         missing_keys=missing_keys,
+        profile_conversion=profile_conversion,
     )
 
 
@@ -4514,7 +4527,14 @@ def cancel_rental(rental_id: int) -> str:
 @role_required("owner")
 def owner_cars() -> str:
     context = build_owner_dashboard_context(g.user["id"])
-    return render_template("owner_cars.html", **context)
+    page_message = request.args.get("message")
+    listing_conversion = request.args.get("listing_created") == "1"
+    return render_template(
+        "owner_cars.html",
+        page_message=page_message,
+        show_listing_conversion=listing_conversion,
+        **context,
+    )
 
 
 def build_owner_dashboard_context(owner_id: int) -> Dict[str, object]:
@@ -4955,7 +4975,13 @@ def owner_add_car() -> str:
         delivery_values[distance] = float(price_value)
     save_car_delivery_options(car_id, delivery_values)
     db.commit()
-    return redirect(url_for("owner_cars"))
+    return redirect(
+        url_for(
+            "owner_cars",
+            message="Vehicle listed successfully.",
+            listing_created="1",
+        )
+    )
 
 
 @app.route("/owner/cars/<int:car_id>/availability", methods=["POST"])

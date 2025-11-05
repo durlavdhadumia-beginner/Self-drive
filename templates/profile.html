@@ -311,4 +311,12 @@
         });
     })();
 </script>
+{% if profile_conversion and config.get('GOOGLE_ADS_PROFILE_SEND_TO') %}
+    {% set profile_send_to = config.get('GOOGLE_ADS_PROFILE_SEND_TO') %}
+<script>
+    if (typeof gtag === 'function') {
+        gtag('event', 'conversion', {'send_to': {{ profile_send_to|tojson }}});
+    }
+</script>
+{% endif %}
 {% endblock %}

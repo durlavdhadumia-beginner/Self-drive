@@ -42,10 +42,11 @@
 {% endblock %}
 {% block scripts %}
 {{ super() }}
-{% if show_signup_conversion %}
+{% if show_signup_conversion and config.get('GOOGLE_ADS_SIGNUP_SEND_TO') %}
+    {% set signup_send_to = config.get('GOOGLE_ADS_SIGNUP_SEND_TO') %}
 <script>
     if (typeof gtag === 'function') {
-        gtag('event', 'conversion', {'send_to': 'AW-17699412396/cwgSC3-B6LkbEKyz3vdB'});
+        gtag('event', 'conversion', {'send_to': {{ signup_send_to|tojson }}});
     }
 </script>
 {% endif %}
