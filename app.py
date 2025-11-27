@@ -194,6 +194,11 @@ TILE_CACHE_ROOT.mkdir(parents=True, exist_ok=True)
 COMPANY_SUPPORT_EMAIL = "support@carrentalntravel.com"
 COMPANY_SUPPORT_PHONE = "+91 98540 50567"
 COMPANY_SUPPORT_WHATSAPP = "+919854050567"
+COMPANY_REGISTERED_ADDRESS = (
+    "#2, Ground Floor, Shantaram Complex, near UCO Bank,\n"
+    "Sonapur New Market, Sonapur, Kamrup Metro,\n"
+    "Assam - 782402"
+)
 COMPANY_UPI_ID = "carrentalntravel@ybl"
 COMPANY_BANK_DETAILS: Dict[str, str] = {
     "bank_name": "HDFC Bank, Guwahati Branch",
@@ -1008,6 +1013,7 @@ def init_db() -> None:
         "ALTER TABLE rentals ADD COLUMN completed_at TEXT",
         "ALTER TABLE rentals ADD COLUMN cancel_reason TEXT DEFAULT ''",
         "ALTER TABLE user_profiles ADD COLUMN profile_verified_at TEXT",
+        "ALTER TABLE user_profiles ADD COLUMN email_contact TEXT DEFAULT ''",
         "ALTER TABLE user_documents ADD COLUMN doc_type TEXT DEFAULT ''",
         "ALTER TABLE cities ADD COLUMN pincode TEXT",
         "ALTER TABLE visit_logs ADD COLUMN traffic_source TEXT NOT NULL DEFAULT 'other'",
@@ -1343,6 +1349,88 @@ def get_primary_admin_payout_details() -> dict:
     data["ifsc_code"] = (data.get("ifsc_code") or "").strip().upper()
     data["upi_id"] = (data.get("upi_id") or "").strip()
     return data
+
+
+def normalize_phone_value(value: str | None) -> str:
+    """Return a normalized phone number with a country code when possible."""
+    raw = (value or "").strip()
+    if not raw:
+        return ""
+    contact_type, normalized_value = normalize_contact(raw)
+    if contact_type == "phone":
+        return f"+{normalized_value}"
+    digits = re.sub(r"\D", "", raw)
+    if digits:
+        if digits.startswith("91") and len(digits) == 12:
+            return f"+{digits}"
+        if len(digits) == 10:
+            return f"+91{digits}"
+        return f"+{digits}"
+    return raw
+
+
+def normalize_email_value(value: str | None) -> str:
+    """Return a lower-cased email contact if valid."""
+    raw = (value or "").strip()
+    if not raw:
+        return ""
+    contact_type, normalized_value = normalize_contact(raw)
+    if contact_type == "email":
+        return normalized_value
+    return raw.lower()
+
+
+def get_company_contact_details() -> dict:
+    """Resolve support contact channels, preferring admin profile data."""
+    cached = getattr(g, "company_contact", None)
+    if cached:
+        return cached
+    db = get_db()
+    contact = {
+        "phone": normalize_phone_value(COMPANY_SUPPORT_PHONE),
+        "email": normalize_email_value(COMPANY_SUPPORT_EMAIL),
+        "whatsapp": normalize_phone_value(COMPANY_SUPPORT_WHATSAPP),
+        "address": COMPANY_REGISTERED_ADDRESS,
+    }
+    try:
+        admin_row = db.execute(
+            """
+            SELECT
+                COALESCE(NULLIF(profile.phone, ''), '') AS phone,
+                COALESCE(NULLIF(profile.email_contact, ''), '') AS email_contact,
+                COALESCE(NULLIF(profile.address, ''), '') AS address
+            FROM users
+            LEFT JOIN user_profiles AS profile ON profile.user_id = users.id
+            WHERE users.is_admin = 1
+            ORDER BY
+                CASE WHEN COALESCE(profile.phone, '') != '' THEN 0 ELSE 1 END,
+                CASE WHEN COALESCE(profile.email_contact, '') != '' THEN 0 ELSE 1 END,
+                users.id ASC
+            LIMIT 1
+            """
+        ).fetchone()
+    except sqlite3.OperationalError:
+        admin_row = None
+    if admin_row:
+        admin_phone = normalize_phone_value(admin_row["phone"])
+        admin_email = normalize_email_value(admin_row["email_contact"])
+        admin_address = (admin_row["address"] or "").strip()
+        if admin_phone:
+            contact["phone"] = admin_phone
+            contact["whatsapp"] = admin_phone
+        if admin_email:
+            contact["email"] = admin_email
+        if admin_address:
+            contact["address"] = admin_address
+    whatsapp_digits = re.sub(r"\D", "", contact["whatsapp"])
+    contact["whatsapp_link"] = (
+        f"https://wa.me/{whatsapp_digits}"
+        if whatsapp_digits
+        else f"https://wa.me/{COMPANY_SUPPORT_WHATSAPP.lstrip('+')}"
+    )
+    contact["phone_tel"] = re.sub(r"\s+", "", contact["phone"]) or contact["phone"]
+    g.company_contact = contact
+    return contact
 
 
 def seed_cities_if_needed(conn: sqlite3.Connection) -> None:
@@ -2010,6 +2098,17 @@ app.jinja_env.globals.update(
     company_upi=COMPANY_UPI_ID,
     company_bank=COMPANY_BANK_DETAILS,
 )
+
+
+@app.context_processor
+def inject_support_contacts() -> dict:
+    contact = get_company_contact_details()
+    return {
+        "support_phone": contact["phone"],
+        "support_email": contact["email"],
+        "support_whatsapp": contact["whatsapp"],
+        "support_address": contact["address"],
+    }
 
 
 def parse_datetime(value: Optional[str]) -> Optional[str]:
@@ -4439,7 +4538,8 @@ def renter_payment_instructions(rental_id: int) -> str:
         company_payout.get("upi_id"),
         COMPANY_UPI_ID,
     )
-    whatsapp_link = f"https://wa.me/{COMPANY_SUPPORT_WHATSAPP.lstrip('+')}"
+    support_contact = get_company_contact_details()
+    whatsapp_link = support_contact["whatsapp_link"]
     return render_template(
         "renter_payment_instructions.html",
         rental=rental_dict,

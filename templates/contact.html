@@ -34,9 +34,7 @@
                                 </a>
                             </li>
                             <li class="mb-0"><strong>Registered address:</strong><br>
-                                #2, Ground Floor, Shantaram Complex, near UCO Bank,<br>
-                                Sonapur New Market, Sonapur, Kamrup Metro,<br>
-                                Assam &mdash; 782402
+                                {{ support_address | replace('\n', '<br>') | safe }}
                             </li>
                         </ul>
                     </div>
@@ -49,7 +47,7 @@
                 <p class="text-muted mb-3">
                     Prefer to share details online? Fill out our support form and the right team will respond with next steps.
                 </p>
-                <a href="mailto:support@carrentalntravel.com" class="btn btn-success">Email Support</a>
+                <a href="mailto:{{ support_email }}" class="btn btn-success">Email Support</a>
             </div>
         </div>
     </div>
